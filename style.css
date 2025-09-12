@@ -1,0 +1,31 @@
+body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
+h1 { text-align: center; }
+.version-number { text-align: center; font-style: italic; color: #666; margin-top: -15px; margin-bottom: 20px; }
+.container { max-width: 1200px; margin: auto; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+section { margin-bottom: 30px; }
+label { display: block; margin-top: 10px; }
+input, select, button { padding: 5px; margin-top: 5px; width: 100%; max-width: 300px; }
+.checkbox-inline { display: inline-block; margin-right: 15px; }
+.chart-container { width: 100%; max-width: 1000px; margin: auto; }
+button { margin-top: 15px; cursor: pointer; border: none; border-radius: 5px; }
+.run-button { background-color: #007BFF; color: #fff; }
+.run-button:hover { background-color: #0056b3; }
+.debug-button { background-color: #dc3545; color: #fff; }
+.debug-button:hover { background-color: #c82333; }
+.subsettings { margin-left: 20px; margin-top: 10px; padding: 10px; border-left: 3px solid #007BFF; background: #f9f9ff; border-radius: 5px; }
+table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+th { background-color: #f2f2f2; }
+.roi-summary p { font-weight: bold; }
+.roi-summary ul { list-style-type: none; padding-left: 10px; }
+.line-count-info { font-size: 0.8em; color: red; margin-top: 5px; }
+.recommendation-section { margin-top: 25px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9; }
+.recommendation-section h4 { margin-top: 0; }
+.recommendation-section p { margin-bottom: 5px; }
+#error-message-container { color: #dc3545; font-weight: bold; margin-top: 10px; }
+#baseline-note { font-style: italic; color: #666; font-size: 0.9em; margin-top: 10px; }
+#export-controls { margin-bottom: 20px; display: flex; gap: 10px; }
+.export-button { background-color: #28a745; color: white; max-width: 150px; }
+.export-button:hover { background-color: #218838; }
+.settings-controls { display: flex; flex-direction: column; gap: 10px; max-width: 300px; }
+.settings-controls button { max-width: 100%; }

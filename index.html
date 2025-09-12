@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Home Battery & Solar ROI Analyzer</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+<div class="container">
+<h1>Home Battery & Solar ROI Analyzer</h1>
+<div class="version-number">Version V3.5</div>
+
+<section>
+    <h2>1a. Save/Load Settings</h2>
+    <div class="settings-controls">
+        <label>Load Settings from JSON: <input type="file" id="loadSettings" accept=".json"></label>
+        <button id="saveSettings" class="export-button">Save Current Settings</button>
+    </div>
+</section>
+
+<section>
+<h2>1. Data Input</h2>
+<div id="csvInputSection">
+<label>Electricity Usage CSV: <input type="file" id="usageCsv" accept=".csv"></label>
+<div id="usageCounts" class="line-count-info"></div>
+<label><input type="checkbox" id="noExistingSolar"> No existing solar system</label>
+<label id="solarCsvLabel">Solar Generation CSV: <input type="file" id="solarCsv" accept=".csv"></label>
+<div id="solarCounts" class="line-count-info"></div>
+<label><input type="checkbox" id="manualInputToggle"> Use manual daily averages instead of CSV upload</label>
+<label style="margin-top: 15px;"><input type="checkbox" id="debugToggle"> Enable/Disable Debug Tools</label>
+<button id="showDataDebugTable" class="debug-button">Show Debug Table</button>
+<div id="dataDebugTableContainer" style="display:none;"></div>
+</div>
+<div id="manualInputSection" style="display:none;">
+<label>Daily Peak Consumption (kWh): <input type="number" step="0.01" id="dailyPeak" value="10"></label>
+<label>Daily Shoulder Consumption (kWh): <input type="number" step="0.01" id="dailyShoulder" value="5"></label>
+<label>Daily Off-Peak Consumption (kWh): <input type="number" step="0.01" id="dailyOffPeak" value="3"></label>
+<label>Daily Solar Generation (kWh/day): <input type="number" step="0.01" id="dailySolar" value="12"></label>
+</div>
+</section>
+
+<section>
+<h2>2. Existing System</h2>
+<label>Existing Solar Panel Size (kW): <input type="number" step="0.1" id="existingSolarKW" value="0"></label>
+<label>Existing Solar Inverter Size (kWh): <input type="number" step="0.1" id="existingSolarInverter" value="0"></label>
+<label>Existing Battery Size (kWh): <input type="number" step="0.1" id="existingBattery" value="0"></label>
+<label>Existing Battery Inverter (kW): <input type="number" step="0.1" id="existingBatteryInverter" value="0"></label>
+<button id="showExistingSystemDebugTable" class="debug-button">Show Debug Table</button>
+<div id="existingSystemDebugTableContainer" style="display:none;"></div>
+</section>
+
+<section>
+<h2>3. New System</h2>
+<label>Additional Solar Panel Size (kW): <input type="number" step="0.1" id="newSolarKW" value="4"></label>
+<label>Cost of Additional Solar ($): <input type="number" step="0.01" id="costSolar" value="2500"></label>
+<label>Additional Battery Size (kWh): <input type="number" step="0.1" id="newBattery" value="24"></label>
+<label>Additional Battery Inverter (kW): <input type="number" step="0.1" id="newBatteryInverter" value="8"></label>
+<label>Cost of Additional Battery ($): <input type="number" step="0.01" id="costBattery" value="9500"></label>
+<label><input type="checkbox" id="gridOffPeakCharge" checked> Allow battery charging from grid during off-peak</label>
+<div class="subsettings">
+    <label>Grid Charge Threshold (kWh): <input type="number" step="0.1" id="gridChargeThreshold" value="20"></label>
+    <label>Grid Charge Start Time (Hour): <input type="number" step="1" id="gridChargeStartTime" value="22" min="0" max="23"></label>
+</div>
+<label style="margin-top: 20px;"><input type="checkbox" id="enableBlackoutSizing"> Add Blackout Protection Sizing</label>
+<div id="blackoutSettingsContainer" class="subsettings" style="display:none;">
+    <label>Blackout Duration (Hours): <input type="number" step="1" id="blackoutDuration" value="3"></label>
+    <label>Usage Coverage During Blackout (%): <input type="number" step="5" id="blackoutCoverage" value="85"></label>
+</div>
+<button id="showNewSystemDebugTable" class="debug-button">Show Debug Table</button>
+<div id="newSystemDebugTableContainer" style="display:none;">
+    <div id="newSystemEstimatesTable"></div>
+    <div id="recommendationContainer"></div>
+    <canvas id="peakPeriodHistogram"></canvas>
+    <canvas id="maxHourlyHistogram" style="margin-top: 30px;"></canvas>
+</div>
+</section>
+
+<section>
+<h2>4. Financial Inputs</h2>
+<label><input type="checkbox" id="enableLoan" checked> Enable Loan Financing</label>
+<div id="loanSettingsContainer" class="subsettings">
+    <label>Loan Amount ($): <input type="number" step="100" id="loanAmount" value="12000"></label>
+    <label>Annual Interest Rate (%): <input type="number" step="0.1" id="loanInterestRate" value="6.5"></label>
+    <label>Loan Term (Years): <input type="number" step="1" id="loanTerm" value="7"></label>
+    <button id="showLoanDebugTable" class="debug-button">Show Debug Table</button>
+    <div id="loanDebugTableContainer" style="display:none;"></div>
+</div>
+
+<label style="margin-top: 20px;"><input type="checkbox" id="enableDiscountRate" checked> Enable Opportunity Cost / NPV</label>
+<div id="discountRateSettingsContainer" class="subsettings">
+    <label>Opportunity Cost / Discount Rate (%): <input type="number" step="0.1" id="discountRate" value="5.0"></label>
+    <button id="showOpportunityCostDebugTable" class="debug-button">Show Opportunity Cost Debug Table</button>
+    <div id="opportunityCostDebugTableContainer" style="display:none;"></div>
+</div>
+</section>
+
+<section>
+<h2>5. Providers & Tariffs</h2>
+<p>A -ve fit provides credits as it decreases the charges</p>
+<label>Annual Tariff Escalation (% per year): <input type="number" step="0.1" id="tariffEscalation" value="2"></label>
+<label>Start of FIT Degradation Year: <input type="number" id="fitDegradationStartYear" value="1"></label>
+<label>Years to Reach Minimum FIT: <input type="number" id="fitDegradationEndYear" value="10"></label>
+<label>FIT Minimum Rate ($/kWh): <input type="number" step="0.001" id="fitMinimumRate" value="-0.03"></label>
+<br>
+<div>
+    <label class="checkbox-inline"><input type="checkbox" class="providerCheckbox" value="Origin" checked> Origin Energy</label>
+    <div id="originSettings" class="subsettings">
+        <label>Daily Charge ($): <input type="number" step="0.001" id="originDailyCharge" value="1.1605"></label>
+        <label>Peak Rate ($/kWh): <input type="number" step="0.001" id="originPeakRate" value="0.59653"></label>
+        <label>Shoulder Rate ($/kWh): <input type="number" step="0.001" id="originShoulderRate" value="0.29425"></label>
+        <label>Off-Peak Rate ($/kWh): <input type="number" step="0.001" id="originOffPeakRate" value="0.35233"></label>
+        <label>Export Tier 1 Rate ($/kWh): <input type="number" step="0.001" id="originExport1Rate" value="-0.10"></label>
+        <label>Export Tier 1 Limit (kWh/day): <input type="number" step="0.1" id="originExport1Limit" value="14"></label>
+        <label>Export Tier 2 Rate ($/kWh): <input type="number" step="0.001" id="originExport2Rate" value="-0.02"></label>
+    </div>
+
+    <label class="checkbox-inline"><input type="checkbox" class="providerCheckbox" value="GloBird" checked> GloBird</label>
+    <div id="globirdSettings" class="subsettings">
+        <label>Daily Charge ($): <input type="number" step="0.001" id="globirdDailyCharge" value="1.36400"></label>
+        <label>Peak Usage ($/kWh): <input type="number" step="0.001" id="globirdPeakRate" value="0.52800"></label>
+        <label>Shoulder Usage ($/kWh): <input type="number" step="0.001" id="globirdShoulderRate" value="0.39600"></label>
+        <label>Off-Peak Usage ($/kWh): <input type="number" step="0.001" id="globirdOffPeakRate" value="0.00000"></label>
+        <label>Solar/Gen Feed-in (4pm-9pm) ($/kWh): <input type="number" step="0.001" id="globirdExport4pm9pmRate" value="-0.03000"></label>
+        <label>Solar/Gen Feed-in (9pm-10am, 2pm-4pm) ($/kWh): <input type="number" step="0.001" id="globirdExport9pm10am2pm4pmRate" value="-0.00300"></label>
+        <label>Solar/Gen Feed-in (10am-2pm) ($/kWh): <input type="number" step="0.001" id="globirdExport10am2pmRate" value="0.00000"></label>
+        <label>Super Export top up (First 10 kWh/Day) ($/kWh): <input type="number" step="0.001" id="globirdSuperExportRate" value="-0.12000"></label>
+        <label>Super Export Limit (kWh/day): <input type="number" step="0.1" id="globirdSuperExportLimit" value="10"></label>
+        <label>ZeroHero Daily Credit ($): <input type="number" step="0.01" id="globirdZeroHeroCredit" value="-1.00"></label>
+    </div>
+
+    <label class="checkbox-inline"><input type="checkbox" class="providerCheckbox" value="Amber"> Amber</label>
+    <div id="amberSettings" class="subsettings" style="display:none;">
+        <label>Daily Charge ($): <input type="number" step="0.001" id="amberDailyCharge" value="1.091"></label>
+        <label>Import Rate ($/kWh): <input type="number" step="0.001" id="amberImportRate" value="0.355"></label>
+        <label>Export Rate ($/kWh): <input type="number" step="0.001" id="amberExportRate" value="-0.007"></label>
+        <label>Membership Fee ($/month): <input type="number" step="0.01" id="amberMembership" value="25"></label>
+    </div>
+    
+    <label class="checkbox-inline"><input type="checkbox" class="providerCheckbox" value="AGL"> AGL Energy</label>
+    <div id="aglSettings" class="subsettings" style="display:none;">
+        <label>Daily Charge ($): <input type="number" step="0.001" id="aglDailyCharge" value="1.2"></label>
+        <label>Peak Rate ($/kWh): <input type="number" step="0.001" id="aglPeakRate" value="0.5"></label>
+        <label>Shoulder Rate ($/kWh): <input type="number" step="0.001" id="aglShoulderRate" value="0.3"></label>
+        <label>Off-Peak Rate ($/kWh): <input type="number" step="0.001" id="aglOffPeakRate" value="0.2"></label>
+        <label>Export Rate ($/kWh): <input type="number" step="0.001" id="aglExportRate" value="-0.05"></label>
+    </div>
+</div>
+<button id="showProvidersDebugTable" class="debug-button">Show Debug Table</button>
+<div id="providersDebugTableContainer" style="display:none;"></div>
+</section>
+
+<section>
+<h2>6. Analysis Period</h2>
+<label>Analysis Years (System Lifespan): <input type="number" id="numYears" value="15" placeholder="e.g., 15"></label>
+<label>Solar Degradation (% per year): <input type="number" step="0.1" id="solarDegradation" value="0.5"></label>
+<label>Battery Degradation (% per year): <input type="number" step="0.1" id="batteryDegradation" value="2"></label>
+<button id="showAnalysisPeriodDebugTable" class="debug-button">Show Debug Table</button>
+<div id="analysisPeriodDebugTableContainer" style="display:none;"></div>
+</section>
+
+<section>
+<button id="runAnalysis" class="run-button">Run ROI Analysis</button>
+<div id="error-message-container"></div>
+</section>
+
+<section id="results-section">
+<h2>7. Results</h2>
+<div id="export-controls" style="display: none;">
+    <button id="exportPdf" class="export-button">Export to PDF</button>
+    <button id="exportCsv" class="export-button">Export to CSV</button>
+</div>
+<div id="roiSummary" class="roi-summary"></div>
+<div id="baseline-note"></div>
+<div id="results"></div>
+<div class="chart-container">
+<canvas id="savingsChart"></canvas>
+</div>
+</section>
+</div>
+
+<script src="script.js" defer></script>
+</body>
+</html>
