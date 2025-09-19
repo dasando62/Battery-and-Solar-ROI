@@ -5,21 +5,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Home Battery & Solar ROI Analyzer</title>
 <link rel="stylesheet" href="style.css">
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
 </head>
 <body>
+
 <div class="container">
 <h1>Home Battery & Solar ROI Analyzer</h1>
-<div class="version-number">Version V3.5</div>
+<div class="version-number">Version V7.7</div>
 
 <section>
-    <h2>1a. Save/Load Settings</h2>
-    <div class="settings-controls">
-        <label>Load Settings from JSON: <input type="file" id="loadSettings" accept=".json"></label>
-        <button id="saveSettings" class="export-button">Save Current Settings</button>
-    </div>
+    <h2>Save/Load Settings</h2>
+<div class="settings-controls">
+    <label>Configuration File:
+        <input type="file" id="loadSettings" accept=".json">
+    </label>
+    <div id="settingsFileStatus" class="line-count-info"></div>
+    <button id="saveSettings" class="export-button">Save Current Settings</button>
+</div>
 </section>
 
 <section>
@@ -36,11 +38,79 @@
 <div id="dataDebugTableContainer" style="display:none;"></div>
 </div>
 <div id="manualInputSection" style="display:none;">
-<label>Daily Peak Consumption (kWh): <input type="number" step="0.01" id="dailyPeak" value="10"></label>
-<label>Daily Shoulder Consumption (kWh): <input type="number" step="0.01" id="dailyShoulder" value="5"></label>
-<label>Daily Off-Peak Consumption (kWh): <input type="number" step="0.01" id="dailyOffPeak" value="3"></label>
-<label>Daily Solar Generation (kWh/day): <input type="number" step="0.01" id="dailySolar" value="12"></label>
+    <p>Enter your estimated average daily values for each season. All values are in kWh.</p>
+    
+    <label><strong>Average Daily Solar Generation per kW of Panels (kWh):</strong>
+        <input type="number" step="0.1" id="manualSolarProfile" value="4.0">
+    </label>
+    <hr>
+
+    <details class="collapsible-section" open>
+        <summary>☀️ Summer (Dec, Jan, Feb)</summary>
+        <div class="subsettings">
+            <label>Average Daily Peak Consumption (kWh): <input type="number" step="0.01" id="summerDailyPeak" value="10"></label>
+            <label>Average Daily Shoulder Consumption (kWh): <input type="number" step="0.01" id="summerDailyShoulder" value="5"></label>
+            <label>Average Daily Off-Peak Consumption (kWh): <input type="number" step="0.01" id="summerDailyOffPeak" value="3"></label>
+            <label>Average Daily Solar Generation (kWh/day): <input type="number" step="0.01" id="summerDailySolar" value="25"></label>
+        </div>
+    </details>
+
+    <details class="collapsible-section">
+        <summary>🍂 Autumn (Mar, Apr, May)</summary>
+        <div class="subsettings">
+            <label>Average Daily Peak Consumption (kWh): <input type="number" step="0.01" id="autumnDailyPeak" value="8"></label>
+            <label>Average Daily Shoulder Consumption (kWh): <input type="number" step="0.01" id="autumnDailyShoulder" value="6"></label>
+            <label>Average Daily Off-Peak Consumption (kWh): <input type="number" step="0.01" id="autumnDailyOffPeak" value="4"></label>
+            <label>Average Daily Solar Generation (kWh/day): <input type="number" step="0.01" id="autumnDailySolar" value="20"></label>
+        </div>
+    </details>
+
+    <details class="collapsible-section">
+        <summary>❄️ Winter (Jun, Jul, Aug)</summary>
+        <div class="subsettings">
+            <label>Average Daily Peak Consumption (kWh): <input type="number" step="0.01" id="winterDailyPeak" value="12"></label>
+            <label>Average Daily Shoulder Consumption (kWh): <input type="number" step="0.01" id="winterDailyShoulder" value="7"></label>
+            <label>Average Daily Off-Peak Consumption (kWh): <input type="number" step="0.01" id="winterDailyOffPeak" value="5"></label>
+            <label>Average Daily Solar Generation (kWh/day): <input type="number" step="0.01" id="winterDailySolar" value="15"></label>
+        </div>
+    </details>
+
+    <details class="collapsible-section">
+        <summary>🌸 Spring (Sep, Oct, Nov)</summary>
+        <div class="subsettings">
+            <label>Average Daily Peak Consumption (kWh): <input type="number" step="0.01" id="springDailyPeak" value="7"></label>
+            <label>Average Daily Shoulder Consumption (kWh): <input type="number" step="0.01" id="springDailyShoulder" value="5"></label>
+            <label>Average Daily Off-Peak Consumption (kWh): <input type="number" step="0.01" id="springDailyOffPeak" value="3"></label>
+            <label>Average Daily Solar Generation (kWh/day): <input type="number" step="0.01" id="springDailySolar" value="22"></label>
+        </div>
+    </details>
 </div>
+</section>
+
+<section>
+    <details class="collapsible-section">
+        <summary>Advanced CSV Options</summary>
+        <div class="subsettings">
+            <p>If your CSV files use different column headers, specify them here, separated by commas.</p>
+            <label><b>Energy Usage CSV</b></label>
+			            <label>Type Column Header:
+                <input type="text" id="UsageTypeHeader" value="Usage Type"> <!--standard data in this column is a text string either Consumption or Feed In--->
+            </label>
+			<label>Consumption Column Header:
+                <input type="text" id="consumptionHeader" value="Usage in kWh,Amount Used"> <!--standard data in this column is either consumption or feed in values in KWh--->
+            </label>
+            <label>Electricity Date/Time Header:
+                <input type="text" id="elecDateTimeHeader" value="From (date/time)"> <!--standard data in this column is ISO formatted date/time--->
+            </label>
+            <label><b>Solar Generation CSV</b></label>
+			<label>Solar Generation Column Header:
+                <input type="text" id="solarGenerationHeader" value="Generation,Total Generation (kWh)"> <!--standard data in this column is value in KWh--->
+            </label>
+            <label>Solar Date/Time Header:
+                <input type="text" id="solarDateTimeHeader" value="Date/Time"> <!--default date format is dd.mm.yyyy--->
+            </label>
+        </div>
+    </details>
 </section>
 
 <section>
@@ -60,16 +130,24 @@
 <label>Additional Battery Size (kWh): <input type="number" step="0.1" id="newBattery" value="24"></label>
 <label>Additional Battery Inverter (kW): <input type="number" step="0.1" id="newBatteryInverter" value="8"></label>
 <label>Cost of Additional Battery ($): <input type="number" step="0.01" id="costBattery" value="9500"></label>
+<label><input type="checkbox" id="replaceExistingSystem"> This is a replacement for the existing system (not an addition)</label>
 <label><input type="checkbox" id="gridOffPeakCharge" checked> Allow battery charging from grid during off-peak</label>
 <div class="subsettings">
-    <label>Grid Charge Threshold (kWh): <input type="number" step="0.1" id="gridChargeThreshold" value="20"></label>
-    <label>Grid Charge Start Time (Hour): <input type="number" step="1" id="gridChargeStartTime" value="22" min="0" max="23"></label>
+    <label>Grid Charge Threshold (%): <input type="number" id="gridChargeThreshold" min="0" max="100" value="80"></label>
+    <!--<label>Grid Charge Start Time (Hour): <input type="number" step="1" id="gridChargeStartTime" value="22" min="0" max="23"></label>--> <!--no longer needed-->
 </div>
 <label style="margin-top: 20px;"><input type="checkbox" id="enableBlackoutSizing"> Add Blackout Protection Sizing</label>
 <div id="blackoutSettingsContainer" class="subsettings" style="display:none;">
     <label>Blackout Duration (Hours): <input type="number" step="1" id="blackoutDuration" value="3"></label>
     <label>Usage Coverage During Blackout (%): <input type="number" step="5" id="blackoutCoverage" value="85"></label>
 </div>
+<div class="subsettings">
+    <label>
+        Energy Self-Sufficiency (%):
+        <input type="number" id="recommendationCoverageTarget" min="10" max="200" value="90">
+    </label>
+</div>
+
 <button id="showNewSystemDebugTable" class="debug-button">Show Debug Table</button>
 <div id="newSystemDebugTableContainer" style="display:none;">
     <div id="newSystemEstimatesTable"></div>
@@ -109,7 +187,26 @@
 <div>
     <label class="checkbox-inline"><input type="checkbox" class="providerCheckbox" value="Origin" checked> Origin Energy</label>
     <div id="originSettings" class="subsettings">
+		<label>Upfront Rebate ($): <input type="number" step="1" id="originRebate" value="0"></label>
+		<div class="grid-charge-settings">
+		<label><input type="checkbox" id="originGridChargeEnable" checked> Enable Grid Charging</label>
+		<div class="subsettings">
+			<!--<label>Grid Charge Threshold (%): <input type="number" id="originGridChargeThreshold" min="0" max="100" value="80"></label>--> <!--no longer needed-->
+			<label>Start Time (Hour): <input type="number" id="originGridChargeStartTime" min="0" max="23" value="22"></label>
+			<label>End Time (Hour or "Threshold"): <input type="text" id="originGridChargeEndTime" value="Threshold"></label>
+			<p class="input-explainer">Enter an hour (e.g., 5 for 5am) or the text "Threshold" to charge until the battery's capacity has reached the grid charge threshold.</p>
+		</div>
+	</div>
         <label>Daily Charge ($): <input type="number" step="0.001" id="originDailyCharge" value="1.1605"></label>
+		<!--<label>Peak Hours (e.g., 7,8,9,16,17): <input type="text" id="originPeakHours" value="7,8,9,16,17,18,19,20,21"></label>
+		<label>Shoulder Hours (e.g., 10,11,12): <input type="text" id="originShoulderHours" value="10,11,12,13,14,15"></label>
+		<label>Off-Peak Hours (e.g., 22,23,0,1): <input type="text" id="originOffPeakHours" value="0,1,2,3,4,5,6,22,23"></label>--->
+		<label>Peak Hours (e.g., 7am-9am,4pm-5pm): <input type="text" id="originPeakHours" value="7am-10am, 4pm-10pm"></label>
+		<div id="originPeakHours_formatted" class="formatted-hours-display"></div>
+		<label>Shoulder Hours (e.g., 10am-12pm): <input type="text" id="originShoulderHours" value="10am-4pm"></label>
+		<div id="originShoulderHours_formatted" class="formatted-hours-display"></div>
+		<label>Off-Peak Hours (e.g., 12am-1am,10pm-12am): <input type="text" id="originOffPeakHours" value="10pm-7am"></label>
+		<div id="originOffPeakHours_formatted" class="formatted-hours-display"></div>
         <label>Peak Rate ($/kWh): <input type="number" step="0.001" id="originPeakRate" value="0.59653"></label>
         <label>Shoulder Rate ($/kWh): <input type="number" step="0.001" id="originShoulderRate" value="0.29425"></label>
         <label>Off-Peak Rate ($/kWh): <input type="number" step="0.001" id="originOffPeakRate" value="0.35233"></label>
@@ -120,7 +217,26 @@
 
     <label class="checkbox-inline"><input type="checkbox" class="providerCheckbox" value="GloBird" checked> GloBird</label>
     <div id="globirdSettings" class="subsettings">
+		<label>Upfront Rebate ($): <input type="number" step="1" id="globirdRebate" value="0"></label>
+		<div class="grid-charge-settings">
+		<label><input type="checkbox" id="globirdGridChargeEnable" checked> Enable Grid Charging</label>
+		<div class="subsettings">
+			<!--<label>Grid Charge Threshold (%): <input type="number" id="globirdGridChargeThreshold" min="0" max="100" value="80"></label>--> <!--no longer needed-->
+			<label>Start Time (Hour): <input type="number" id="globirdGridChargeStartTime" min="0" max="23" value="22"></label>
+			<label>End Time (Hour or "Threshold"): <input type="text" id="globirdGridChargeEndTime" value="Threshold"></label>
+			<p class="input-explainer">Enter an hour (e.g., 5 for 5am) or the text "Threshold" to charge until the battery's capacity has reached the grid charge threshold.</p>
+		</div>
+	</div>
         <label>Daily Charge ($): <input type="number" step="0.001" id="globirdDailyCharge" value="1.36400"></label>
+		<!--<label>Peak Hours: <input type="text" id="globirdPeakHours" value="15,16,17,18,19,20,21,22"></label>
+		<label>Shoulder Hours: <input type="text" id="globirdShoulderHours" value="7,8,9,10,22,23"></label>
+		<label>Off-Peak Hours: <input type="text" id="globirdOffPeakHours" value="0,1,2,3,4,5,6,11,12,13,14"></label>--->
+		<label>Peak Hours (e.g., 7am-9am,4pm-5pm): <input type="text" id="globirdPeakHours" value="3pm-11pm"></label>
+		<div id="globirdPeakHours_formatted" class="formatted-hours-display"></div>
+		<label>Shoulder Hours (e.g., 10am-12pm): <input type="text" id="globirdShoulderHours" value="7am-11am, 10pm-12am"></label>
+		<div id="globirdShoulderHours_formatted" class="formatted-hours-display"></div>
+		<label>Off-Peak Hours (e.g., 12am-1am,10pm-12am): <input type="text" id="globirdOffPeakHours" value="12am-7am, 11am-3pm"></label>
+		<div id="globirdOffPeakHours_formatted" class="formatted-hours-display"></div>
         <label>Peak Usage ($/kWh): <input type="number" step="0.001" id="globirdPeakRate" value="0.52800"></label>
         <label>Shoulder Usage ($/kWh): <input type="number" step="0.001" id="globirdShoulderRate" value="0.39600"></label>
         <label>Off-Peak Usage ($/kWh): <input type="number" step="0.001" id="globirdOffPeakRate" value="0.00000"></label>
@@ -134,6 +250,16 @@
 
     <label class="checkbox-inline"><input type="checkbox" class="providerCheckbox" value="Amber"> Amber</label>
     <div id="amberSettings" class="subsettings" style="display:none;">
+		<label>Upfront Rebate ($): <input type="number" step="1" id="amberRebate" value="0"></label>
+		<div class="grid-charge-settings">
+		<label><input type="checkbox" id="amberGridChargeEnable" checked> Enable Grid Charging</label>
+		<div class="subsettings">
+			<!--<label>Grid Charge Threshold (%): <input type="number" id="amberGridChargeThreshold" min="0" max="100" value="80"></label>--> <!--no longer needed-->
+			<label>Start Time (Hour): <input type="number" id="amberGridChargeStartTime" min="0" max="23" value="22"></label>
+			<label>End Time (Hour or "Threshold"): <input type="text" id="amberGridChargeEndTime" value="Threshold"></label>
+			<p class="input-explainer">Enter an hour (e.g., 5 for 5am) or the text "Threshold" to charge until the battery's capacity has reached the grid charge threshold.</p>
+		</div>
+	</div>
         <label>Daily Charge ($): <input type="number" step="0.001" id="amberDailyCharge" value="1.091"></label>
         <label>Import Rate ($/kWh): <input type="number" step="0.001" id="amberImportRate" value="0.355"></label>
         <label>Export Rate ($/kWh): <input type="number" step="0.001" id="amberExportRate" value="-0.007"></label>
@@ -142,7 +268,26 @@
     
     <label class="checkbox-inline"><input type="checkbox" class="providerCheckbox" value="AGL"> AGL Energy</label>
     <div id="aglSettings" class="subsettings" style="display:none;">
+		<label>Upfront Rebate ($): <input type="number" step="1" id="aglRebate" value="0"></label>
+		<div class="grid-charge-settings">
+		<label><input type="checkbox" id="aglGridChargeEnable" checked> Enable Grid Charging</label>
+		<div class="subsettings">
+			<!--<label>Grid Charge Threshold (%): <input type="number" id="aglGridChargeThreshold" min="0" max="100" value="80"></label>--> <!--no longer needed-->
+			<label>Start Time (Hour): <input type="number" id="aglGridChargeStartTime" min="0" max="23" value="22"></label>
+			<label>End Time (Hour or "Threshold"): <input type="text" id="aglGridChargeEndTime" value="Threshold"></label>
+			<p class="input-explainer">Enter an hour (e.g., 5 for 5am) or the text "Threshold" to charge until the battery's capacity has reached the grid charge threshold.</p>
+		</div>
+	</div>
         <label>Daily Charge ($): <input type="number" step="0.001" id="aglDailyCharge" value="1.2"></label>
+		<!--<label>Peak Hours: <input type="text" id="aglPeakHours" value="15,16,17,18,19,20,21,22"></label>
+		<label>Shoulder Hours: <input type="text" id="aglShoulderHours" value="7,8,9,10,22,23"></label>
+		<label>Off-Peak Hours: <input type="text" id="aglOffPeakHours" value="0,1,2,3,4,5,6,11,12,13,14"></label>--->
+		<label>Peak Hours (e.g., 7am-9am,4pm-5pm): <input type="text" id="aglPeakHours" value="3pm-11pm"></label>
+		<div id="aglPeakHours_formatted" class="formatted-hours-display"></div>
+		<label>Shoulder Hours (e.g., 10am-12pm): <input type="text" id="aglShoulderHours" value="7am-11am, 10pm-12am"></label>
+		<div id="aglShoulderHours_formatted" class="formatted-hours-display"></div>
+		<label>Off-Peak Hours (e.g., 12am-1am,10pm-12am): <input type="text" id="aglOffPeakHours" value="12am-7am, 11am-3pm"></label>
+		<div id="aglOffPeakHours_formatted" class="formatted-hours-display"></div>
         <label>Peak Rate ($/kWh): <input type="number" step="0.001" id="aglPeakRate" value="0.5"></label>
         <label>Shoulder Rate ($/kWh): <input type="number" step="0.001" id="aglShoulderRate" value="0.3"></label>
         <label>Off-Peak Rate ($/kWh): <input type="number" step="0.001" id="aglOffPeakRate" value="0.2"></label>
@@ -168,20 +313,32 @@
 </section>
 
 <section id="results-section">
-<h2>7. Results</h2>
-<div id="export-controls" style="display: none;">
-    <button id="exportPdf" class="export-button">Export to PDF</button>
-    <button id="exportCsv" class="export-button">Export to CSV</button>
-</div>
-<div id="roiSummary" class="roi-summary"></div>
-<div id="baseline-note"></div>
-<div id="results"></div>
-<div class="chart-container">
-<canvas id="savingsChart"></canvas>
-</div>
+    <h2>7. Results</h2>
+    <div id="export-controls" style="display: none;">
+        <button id="exportPdf" class="export-button">Export to PDF</button>
+        <button id="exportCsv" class="export-button">Export to CSV</button>
+    </div>
+
+    <button id="showRawDataDebug" class="results-debug-button" style="display: none;">Show Raw Data Tables</button>
+    
+    <div id="roiSummary" class="roi-summary"></div>
+    <div id="baseline-note"></div>
+    <div id="results"></div>
+
+    <div id="raw-data-debug-container" style="display:none; margin-top: 30px;">
+        <div id="raw-data-tables-container"></div>
+    </div>
+    
+    <div class="chart-container">
+        <canvas id="savingsChart"></canvas>
+    </div>
 </section>
 </div>
+<script src="js/chart.umd.min.js"></script>
+<script src="js/jspdf.umd.min.js"></script>
+<script src="js/html2canvas.min.js"></script>
 
-<script src="js/main.js" type=""module"></script>
+<script type="module" src="js/main.js"></script>
+
 </body>
 </html>
