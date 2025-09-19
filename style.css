@@ -6,7 +6,7 @@ section { margin-bottom: 30px; }
 label { display: block; margin-top: 10px; }
 input, select, button { padding: 5px; margin-top: 5px; width: 100%; max-width: 300px; }
 .checkbox-inline { display: inline-block; margin-right: 15px; }
-.chart-container { width: 100%; max-width: 1000px; margin: auto; }
+.chart-container { position: relative; height: 400px; width: 100%; max-width: 1000px; margin: 30px auto; }
 button { margin-top: 15px; cursor: pointer; border: none; border-radius: 5px; }
 .run-button { background-color: #007BFF; color: #fff; }
 .run-button:hover { background-color: #0056b3; }
