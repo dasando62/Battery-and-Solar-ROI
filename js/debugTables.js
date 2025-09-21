@@ -14,7 +14,7 @@ export function hideAllDebugContainers() {
 	
 }
 
-export function createBreakdownTableHTML(title, data, provider, year, escalationRate, fitConfig) {
+export function createBreakdownTableHTML(title, data, provider, year, escalationRate, fitConfig, getDegradedFitRate) {
     const escalationFactor = Math.pow(1 + escalationRate, year - 1);
     const dailyCharge = provider.dailyCharge * escalationFactor;
     const peakRate = (provider.importRates.find(r => r.name === 'Peak')?.rate || 0) * escalationFactor;

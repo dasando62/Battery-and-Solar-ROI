@@ -133,6 +133,18 @@ export function setupUiEvents() {
             alert("An unexpected error occurred. Check the console.");
         }
     });
+	    // --- Raw Data Table Toggle ---
+    const rawDataDebugButton = document.getElementById('showRawDataDebug');
+    if (rawDataDebugButton) {
+        rawDataDebugButton.addEventListener('click', () => {
+            const container = document.getElementById('raw-data-debug-container');
+            if (container) {
+                const isHidden = container.style.display === 'none';
+                container.style.display = isHidden ? 'block' : 'none';
+                rawDataDebugButton.textContent = isHidden ? 'Hide Raw Data Tables' : 'Show Raw Data Tables';
+            }
+        });
+    }
     // Debug Buttons
     document.getElementById("showDataDebugTable")?.addEventListener("click", () => renderDebugDataTable(state));
     document.getElementById("showExistingSystemDebugTable")?.addEventListener("click", () => renderExistingSystemDebugTable(state));

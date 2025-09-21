@@ -13,7 +13,7 @@ function getRateForHour(hour, rates) {
 function getFitDegradationConfig() {
     return { startYear: getNumericInput("fitDegradationStartYear", 1), endYear: getNumericInput("fitDegradationEndYear", 10), minRate: getNumericInput("fitMinimumRate", -0.03) };
 }
-function getDegradedFitRate(baseRate, year, fitConfig) {
+export function getDegradedFitRate(baseRate, year, fitConfig) {
     if (typeof baseRate !== 'number') return 0;
     const { startYear, endYear, minRate } = fitConfig;
     if (year < startYear) return baseRate;
@@ -100,33 +100,44 @@ export function simulateDay(hourlyConsumption, hourlySolar, provider, batteryCon
     results.tier2ExportKWh = Math.max(0, dailyTotalExport - tier1Limit);
     return results;
 }
+
 export function runSimulation(config, simulationData) {
     const fitConfig = getFitDegradationConfig();
     const baselineProviderName = config.selectedProviders[0];
     const baselineProviderData = config.providers[baselineProviderName];
+
     const finalResults = { baselineCosts: {} };
     const rawData = { baseline: { year1: {}, year2: {} }, system: {} };
+
     config.selectedProviders.forEach(p => {
         finalResults[p] = { annualCosts: [], cumulativeSavingsPerYear: [], npv: 0, roiYear: null };
         rawData.system[p] = { year1: {}, year2: {} };
     });
+    
     const daysPerQuarter = { 'Q1_Summer': 90, 'Q2_Autumn': 91, 'Q3_Winter': 92, 'Q4_Spring': 92 };
+
     for (let y = 1; y <= config.numYears; y++) {
         const solarFactor = Math.pow(1 - config.solarDegradation, y - 1);
         const batteryFactor = Math.pow(1 - config.batteryDegradation, y - 1);
         const escalationFactor = Math.pow(1 + config.tariffEscalation, y - 1);
+
+        // --- Annual Baseline Calculation ---
         let annualBaselineCost = 0;
         for (const quarter in simulationData) {
             const qData = simulationData[quarter];
             const hourlyConsumption = generateHourlyConsumptionProfileFromDailyTOU(qData.avgPeak, qData.avgShoulder, qData.avgOffPeak);
             const hourlySolar = (config.useManual ? generateHourlySolarProfileFromDaily(qData.avgSolar, quarter) : config.hourlySolarProfilePerKw.map(kwh => kwh * config.existingSolarKW)).map(s => s * solarFactor);
             const dailyBreakdown = simulateDay(hourlyConsumption, hourlySolar, baselineProviderData, null, 1);
+            
             const importCalculator = tariffComponents[baselineProviderData.importComponent].calculate;
             const exportCalculator = tariffComponents[baselineProviderData.exportComponent].calculate;
+
             let dailyEnergyCost = importCalculator(baselineProviderData.importData, dailyBreakdown, 1);
             dailyEnergyCost += exportCalculator(baselineProviderData.exportData, dailyBreakdown, y, fitConfig, getDegradedFitRate, getRateForHour);
+            
             const dailySupplyCharge = baselineProviderData.dailyCharge;
             annualBaselineCost += (dailySupplyCharge + dailyEnergyCost) * daysPerQuarter[quarter];
+            
             if (y <= 2) {
                 const yearKey = y === 1 ? 'year1' : 'year2';
                 const seasonName = quarter.split('_')[1];
@@ -134,31 +145,47 @@ export function runSimulation(config, simulationData) {
             }
         }
         finalResults.baselineCosts[y] = annualBaselineCost * escalationFactor;
+
+        // --- "With System" Calculation for each selected provider ---
         config.selectedProviders.forEach(p => {
             const providerData = config.providers[p];
             const systemCostForProvider = config.initialSystemCost - (providerData.rebate || 0);
-            let annualCost = 0;
+            
+            let annualCost = (providerData.monthlyFee || 0) * 12;
+
             for (const quarter in simulationData) {
                 const qData = simulationData[quarter];
                 const baseHourlyConsumption = generateHourlyConsumptionProfileFromDailyTOU(qData.avgPeak, qData.avgShoulder, qData.avgOffPeak);
                 const totalSystemKw = config.replaceExistingSystem ? config.newSolarKW : config.existingSolarKW + config.newSolarKW;
                 const baseHourlySolar = (config.useManual ? generateHourlySolarProfileFromDaily((config.replaceExistingSystem ? 0 : qData.avgSolar) + (config.newSolarKW * config.manualSolarProfile), quarter) : config.hourlySolarProfilePerKw.map(kwh => kwh * totalSystemKw)).map(s => s * solarFactor);
-                const batteryConfig = { capacity: (config.newBatteryKWH * batteryFactor), inverterKW: (config.newBatteryInverterKW * batteryFactor), gridChargeThreshold: config.gridChargeThreshold };
-                const dailyBreakdown = simulateDay(baseHourlyConsumption, baseHourlySolar, providerData, batteryConfig, 1);
+                
+                const batteryConfig = { 
+                    capacity: (config.newBatteryKWH * batteryFactor), 
+                    inverterKW: (config.newBatteryInverterKW * batteryFactor),
+                    gridChargeThreshold: config.gridChargeThreshold
+                };
+                
+                const dailyBreakdown = simulateDay(baseHourlyConsumption, baseHourlySolar, providerData, batteryConfig, escalationFactor);
+                
                 const importCalculator = tariffComponents[providerData.importComponent].calculate;
                 const exportCalculator = tariffComponents[providerData.exportComponent].calculate;
-                let dailyEnergyCost = dailyBreakdown.gridChargeCost;
+
+                let dailyEnergyCost = dailyBreakdown.gridChargeCost; 
                 dailyEnergyCost += importCalculator(providerData.importData, dailyBreakdown, 1);
                 dailyEnergyCost += exportCalculator(providerData.exportData, dailyBreakdown, y, fitConfig, getDegradedFitRate, getRateForHour);
+                
                 const dailySupplyCharge = (providerData.dailyCharge || 0);
                 annualCost += (dailySupplyCharge + dailyEnergyCost) * daysPerQuarter[quarter];
+                
                 if (y <= 2) {
                     const yearKey = y === 1 ? 'year1' : 'year2';
                     const seasonName = quarter.split('_')[1];
                     rawData.system[p][yearKey][seasonName] = { days: daysPerQuarter[quarter], ...dailyBreakdown };
                 }
             }
-            const finalAnnualCost = (annualCost + (providerData.monthlyFee || 0) * 12) * escalationFactor;
+            
+            const finalAnnualCost = annualCost * escalationFactor;
+            
             finalResults[p].annualCosts.push(finalAnnualCost);
             const annualSavings = finalResults.baselineCosts[y] - finalAnnualCost;
             const netCashFlow = annualSavings - (y <= config.loanTerm ? config.annualLoanRepayment : 0);
@@ -173,7 +200,12 @@ export function runSimulation(config, simulationData) {
             }
         });
     }
-    return { financials: finalResults, rawData: rawData, config: config };
+
+    return {
+        financials: finalResults,
+        rawData: rawData,
+        config: config
+    };
 }
 
 export function calculateSizingRecommendations(coverageTarget, simulationData) {
