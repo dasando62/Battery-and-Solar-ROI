@@ -1,7 +1,5 @@
 // js/tariffComponents.js
 //Version 7.7
-// This file contains the library of calculation "recipes" for different tariff rules.
-
 function calculateFlatRateImport(importData, dailyBreakdown, escalationFactor) {
     const totalImport = dailyBreakdown.peakKWh + dailyBreakdown.shoulderKWh + dailyBreakdown.offPeakKWh;
     return totalImport * (importData.rate || 0) * escalationFactor;
@@ -26,7 +24,6 @@ function calculateMultiTierFit(exportData, dailyBreakdown, year, fitConfig, getD
     credit += dailyBreakdown.tier2ExportKWh * getDegradedFitRate(tier2Rule.rate, year, fitConfig);
     return credit;
 }
-
 function calculateGloBirdComplexFit(exportData, dailyBreakdown, year, fitConfig, getDegradedFitRate, getRateForHour) {
     let credit = 0;
     const totalExport = dailyBreakdown.hourlyExports.reduce((a, b) => a + b, 0);
@@ -35,13 +32,11 @@ function calculateGloBirdComplexFit(exportData, dailyBreakdown, year, fitConfig,
     for (let h = 0; h < 24; h++) {
         if (dailyBreakdown.hourlyExports[h] > 0) {
             const rateForHour = getRateForHour(h, exportData.touRates);
-            // THE FIX IS HERE: Changed 'y' to 'year' to match the function's parameter
             credit += dailyBreakdown.hourlyExports[h] * getDegradedFitRate(rateForHour, year, fitConfig);
         }
     }
     return credit;
 }
-
 export const tariffComponents = {
     FLAT_RATE_IMPORT: { calculate: calculateFlatRateImport },
     TIME_OF_USE_IMPORT: { calculate: calculateTimeOfUseImport },

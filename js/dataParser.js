@@ -1,4 +1,5 @@
 // js/dataParser.js
+//Version 7.8
 import { state } from './state.js';
 
 function getHeaderPossibilities(inputId) {

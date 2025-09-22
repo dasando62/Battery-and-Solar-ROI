@@ -1,13 +1,10 @@
 // js/uiRender.js
-// This module is responsible for all DOM rendering of the main results.
-
+//Version 7.7
 import { state } from './state.js';
+import { createBreakdownTableHTML } from './debugTables.js';
+import { getNumericInput } from './utils.js';
+import { getDegradedFitRate } from './analysis.js';
 
-/**
- * Renders the high-level summary text (Payback Period, NPV).
- * @param {object} financials - The financial results for all providers.
- * @param {object} config - The main configuration object.
- */
 function renderFinancialSummary(financials, config) {
     let summaryHTML = "<h3>Return on Investment Summary</h3>";
     config.selectedProviders.forEach(pKey => {
@@ -21,12 +18,6 @@ function renderFinancialSummary(financials, config) {
     document.getElementById("roiSummary").innerHTML = summaryHTML;
 }
 
-/**
- * Renders the main financial breakdown table (year-by-year costs and savings).
- * @param {object} financials - The financial results for all providers.
- * @param {object} baselineCosts - The calculated annual baseline costs.
- * @param {object} config - The main configuration object.
- */
 function renderFinancialTable(financials, baselineCosts, config) {
     const baselineProviderName = config.providers[config.selectedProviders[0]].name;
     let tableHTML = `<h3>Financial Breakdown by Year</h3><table><thead><tr><th>Year</th><th>Baseline Cost (${baselineProviderName})</th>`;
@@ -48,18 +39,12 @@ function renderFinancialTable(financials, baselineCosts, config) {
     document.getElementById("results").innerHTML = tableHTML;
 }
 
-/**
- * Renders the cumulative savings chart.
- * @param {object} financials - The financial results for all providers.
- * @param {object} config - The main configuration object.
- */
 function renderCharts(financials, config) {
     if (state.savingsChart) {
         state.savingsChart.destroy();
     }
     const ctx = document.getElementById("savingsChart")?.getContext("2d");
     if (!ctx) return;
-
     const datasets = config.selectedProviders.map(pKey => ({
         label: `${config.providers[pKey].name} Cumulative Savings`,
         data: financials[pKey]?.cumulativeSavingsPerYear || [],
@@ -67,7 +52,6 @@ function renderCharts(financials, config) {
         fill: false,
         yAxisID: 'y'
     }));
-
     const costDatasets = config.selectedProviders.map(pKey => {
         const providerData = config.providers[pKey];
         const systemCostForProvider = config.initialSystemCost - (providerData.rebate || 0);
@@ -81,7 +65,6 @@ function renderCharts(financials, config) {
             yAxisID: 'y'
         };
     });
-
     state.savingsChart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -95,21 +78,44 @@ function renderCharts(financials, config) {
     });
 }
 
+function renderRawDataTables(rawData, config) {
+    const container = document.getElementById('raw-data-tables-container');
+    if (!container) return;
 
-/**
- * Main orchestrator function for rendering all UI components.
- * @param {object} resultsObject - The complete results object from the simulation engine.
- */
+    let rawTablesHTML = '';
+    const fitConfig = {
+        startYear: getNumericInput("fitDegradationStartYear", 1),
+        endYear: getNumericInput("fitDegradationEndYear", 10),
+        minRate: getNumericInput("fitMinimumRate", -0.03)
+    };
+    
+    const baselineProvider = config.providers[config.selectedProviders[0]];
+    
+    // Pass the function as the last argument
+    rawTablesHTML += createBreakdownTableHTML(`Baseline - Year 1 (${baselineProvider.name})`, rawData.baseline.year1, baselineProvider, 1, config.tariffEscalation, fitConfig, getDegradedFitRate);
+    rawTablesHTML += createBreakdownTableHTML(`Baseline - Year 2 (${baselineProvider.name})`, rawData.baseline.year2, baselineProvider, 2, config.tariffEscalation, fitConfig, getDegradedFitRate);
+
+    config.selectedProviders.forEach(pKey => {
+        const provider = config.providers[pKey];
+        if (rawData.system[pKey]) {
+            rawTablesHTML += createBreakdownTableHTML(`${provider.name} with System - Year 1`, rawData.system[pKey].year1, provider, 1, config.tariffEscalation, fitConfig, getDegradedFitRate);
+            rawTablesHTML += createBreakdownTableHTML(`${provider.name} with System - Year 2`, rawData.system[pKey].year2, provider, 2, config.tariffEscalation, fitConfig, getDegradedFitRate);
+        }
+    });
+
+    container.innerHTML = rawTablesHTML;
+}
+
 export function renderResults(resultsObject) {
-    const { financials, config } = resultsObject;
+    const { financials, rawData, config } = resultsObject;
     if (!financials || !config) {
         console.error("Render Results called with invalid data.", resultsObject);
         return;
     }
-    
     renderFinancialSummary(financials, config);
     renderFinancialTable(financials, financials.baselineCosts, config);
     renderCharts(financials, config);
+	renderRawDataTables(rawData, config);
 
     const exportControls = document.getElementById("export-controls");
     if (exportControls) exportControls.style.display = 'flex';

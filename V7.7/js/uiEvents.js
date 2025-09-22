@@ -1,121 +1,151 @@
 // js/uiEvents.js
+//Version 7.7
 import { state } from './state.js';
 import { gatherConfigFromUI } from './config.js';
 import { runSimulation } from './analysis.js';
 import { renderResults } from './uiRender.js';
-import { getNumericInput } from './utils.js';
-import { 
-	handleUsageCsv, 
-	handleSolarCsv, 
-	calculateQuarterlyAverages 
-} from './dataParser.js';
+import { getNumericInput, getSimulationData } from './utils.js';
+import { handleUsageCsv, handleSolarCsv } from './dataParser.js';
 import { wireLoadSettings, wireSaveSettings } from './storage.js';
-import {
-    renderDebugDataTable,
-    renderExistingSystemDebugTable,
-    renderNewSystemDebugTable,
-    renderProvidersDebugTable,
-    renderAnalysisPeriodDebugTable,
-    renderLoanDebugTable,
-    renderOpportunityCostDebugTable
-} from './debugTables.js';
+import { hideAllDebugContainers, renderDebugDataTable, renderExistingSystemDebugTable, renderNewSystemDebugTable, renderProvidersDebugTable, renderAnalysisPeriodDebugTable, renderLoanDebugTable, renderOpportunityCostDebugTable } from './debugTables.js';
 import { generateHourlySolarProfileFromDaily } from './profiles.js';
-
 export function setupUiEvents() {
+    // UI Toggles
+    const noSolarCheckbox = document.getElementById('noExistingSolar');
+    if (noSolarCheckbox) {
+        const existingSystemInputs = [document.getElementById('existingSolarKW'), document.getElementById('existingSolarInverter'), document.getElementById('existingBattery'), document.getElementById('existingBatteryInverter')];
+        const solarCsvLabel = document.getElementById('solarCsvLabel');
+        const solarCsvInput = document.getElementById('solarCsv');
+        const solarCounts = document.getElementById('solarCounts');
+        const toggleExistingSolar = () => {
+            const isDisabled = noSolarCheckbox.checked;
+            existingSystemInputs.forEach(input => { if (input) { input.disabled = isDisabled; if (isDisabled) input.value = '0'; } });
+            if (solarCsvLabel) solarCsvLabel.style.display = isDisabled ? 'none' : 'block';
+            if (isDisabled) {
+                if (solarCsvInput) solarCsvInput.value = null;
+                if (solarCounts) solarCounts.textContent = '';
+                state.solarData = null; state.quarterlyAverages = null;
+            }
+        };
+        noSolarCheckbox.addEventListener('change', toggleExistingSolar);
+        toggleExistingSolar();
+    }
+    const manualToggle = document.getElementById('manualInputToggle');
+    if (manualToggle) {
+        const csvSection = document.getElementById('csvInputSection');
+        const manualSection = document.getElementById('manualInputSection');
+        const toggleInputMethod = () => {
+            const isManual = manualToggle.checked;
+            if (csvSection) csvSection.style.display = isManual ? 'none' : 'block';
+            if (manualSection) manualSection.style.display = isManual ? 'block' : 'none';
+            if (isManual) { state.electricityData = null; state.solarData = null; state.quarterlyAverages = null; document.getElementById('usageCounts').textContent = ''; document.getElementById('solarCounts').textContent = ''; }
+        };
+        manualToggle.addEventListener('change', toggleInputMethod);
+        toggleInputMethod();
+    }
+    const debugToggle = document.getElementById('debugToggle');
+    if (debugToggle) {
+        const debugButtons = document.querySelectorAll('.debug-button');
+        const toggleDebugTools = () => {
+            const isEnabled = debugToggle.checked;
+            const display = isEnabled ? 'inline-block' : 'none';
+            debugButtons.forEach(button => { button.style.display = display; });
+            if (!isEnabled) { hideAllDebugContainers(); }
+        };
+        debugToggle.addEventListener('change', toggleDebugTools);
+        toggleDebugTools();
+    }
     // File Inputs
     document.getElementById("usageCsv")?.addEventListener("change", handleUsageCsv);
     document.getElementById("solarCsv")?.addEventListener("change", handleSolarCsv);
     wireLoadSettings('loadSettings');
     wireSaveSettings('saveSettings');
-	
-	// --- Debug Toggle Logic ---
-    const debugToggle = document.getElementById('debugToggle');
-    if (debugToggle) {
-        const debugButtons = document.querySelectorAll('.debug-button');
-        
-        const toggleDebugButtons = () => {
-            const display = debugToggle.checked ? 'inline-block' : 'none';
-            debugButtons.forEach(button => {
-                button.style.display = display;
-            });
+        // --- Loan and Opportunity Cost Toggles ---
+    const loanToggle = document.getElementById('enableLoan');
+    if (loanToggle) {
+        const loanSettings = document.getElementById('loanSettingsContainer');
+        const loanDebugTable = document.getElementById('loanDebugTableContainer');
+        const toggleLoanUI = () => {
+            const isEnabled = loanToggle.checked;
+            if (loanSettings) loanSettings.style.display = isEnabled ? 'block' : 'none';
+            // If disabled, also hide the debug table
+            if (!isEnabled && loanDebugTable) {
+                loanDebugTable.style.display = 'none';
+            }
         };
-
-        // Add listener for clicks
-        debugToggle.addEventListener('change', toggleDebugButtons);
-        
-        // Run once on page load to set the initial state
-        toggleDebugButtons(); 
+        loanToggle.addEventListener('change', toggleLoanUI);
+        toggleLoanUI(); // Run on page load
     }
-	
-	    // Main "Run Analysis" Button
+
+    const discountRateToggle = document.getElementById('enableDiscountRate');
+    if (discountRateToggle) {
+        const discountSettings = document.getElementById('discountRateSettingsContainer');
+        const discountDebugTable = document.getElementById('opportunityCostDebugTableContainer');
+        const toggleDiscountUI = () => {
+            const isEnabled = discountRateToggle.checked;
+            if (discountSettings) discountSettings.style.display = isEnabled ? 'block' : 'none';
+            // If disabled, also hide the debug table
+            if (!isEnabled && discountDebugTable) {
+                discountDebugTable.style.display = 'none';
+            }
+        };
+        discountRateToggle.addEventListener('change', toggleDiscountUI);
+        toggleDiscountUI(); // Run on page load
+    }
+	// Provider Checkbox Toggles
+    document.querySelectorAll('.providerCheckbox').forEach(checkbox => {
+        const toggleProviderSettings = () => {
+            const settingsDiv = document.getElementById(`${checkbox.value.toLowerCase()}Settings`);
+            if (settingsDiv) { settingsDiv.style.display = checkbox.checked ? 'block' : 'none'; }
+        };
+        checkbox.addEventListener('change', toggleProviderSettings);
+        toggleProviderSettings();
+    });
+    // Main "Run Analysis" Button
     document.getElementById('runAnalysis')?.addEventListener('click', () => {
         try {
             const config = gatherConfigFromUI();
-            
             if (config.selectedProviders.length === 0) { alert("Please select at least one provider."); return; }
-            if (!config.useManual && (!state.electricityData || state.electricityData.length === 0)) { 
-				alert("Please upload a valid CSV file, or select manual input."); 
-				return; 
-			}
-    // Calculate quarterly averages from raw CSV data if they don't exist yet
-		if (!config.useManual && !state.quarterlyAverages) {
-			if (!state.solarData || state.solarData.length === 0) {
-				alert("Please upload your Solar Generation CSV file as well.");
-				return;
-			}
-			state.quarterlyAverages = calculateQuarterlyAverages(state.electricityData, state.solarData);
-			if (!state.quarterlyAverages) {
-				alert("Could not calculate quarterly averages. Please check your data files for overlapping dates.");
-				return;
-			}
-		}
-            const simulationData = config.useManual ? {
-                'Q1_Summer': { avgPeak: getNumericInput("summerDailyPeak"), avgShoulder: getNumericInput("summerDailyShoulder"), avgOffPeak: getNumericInput("summerDailyOffPeak"), avgSolar: getNumericInput("summerDailySolar") },
-                'Q2_Autumn': { avgPeak: getNumericInput("autumnDailyPeak"), avgShoulder: getNumericInput("autumnDailyShoulder"), avgOffPeak: getNumericInput("autumnDailyOffPeak"), avgSolar: getNumericInput("autumnDailySolar") },
-                'Q3_Winter': { avgPeak: getNumericInput("winterDailyPeak"), avgShoulder: getNumericInput("winterDailyShoulder"), avgOffPeak: getNumericInput("winterDailyOffPeak"), avgSolar: getNumericInput("winterDailySolar") },
-                'Q4_Spring': { avgPeak: getNumericInput("springDailyPeak"), avgShoulder: getNumericInput("springDailyShoulder"), avgOffPeak: getNumericInput("springDailyOffPeak"), avgSolar: getNumericInput("springDailySolar") },
-            } : state.quarterlyAverages;
-
-            if (!config.useManual && state.solarData.length > 0) {
-                const solarProfileSourceKw = config.existingSolarKW > 0 ? config.existingSolarKW : 1;
-                let tempProfile = Array(24).fill(0);
-                let totalDays = 0;
-                state.solarData.forEach(day => { day.hourly.forEach((kwh, hour) => { tempProfile[hour] += kwh; }); totalDays++; });
-                if (totalDays > 0) { config.hourlySolarProfilePerKw = tempProfile.map(totalKwh => totalKwh / totalDays / solarProfileSourceKw); }
-            } else {
+            if (!config.useManual && (!state.electricityData || state.electricityData.length === 0)) { alert("Please upload a valid CSV file, or select manual input."); return; }
+            const simulationData = getSimulationData(state);
+            if (!simulationData) { alert("Could not calculate seasonal averages. Please check your data files."); return; }
+            if (!config.useManual && (config.noExistingSolar || state.solarData)) {
+                if (config.noExistingSolar) {
+                    config.hourlySolarProfilePerKw = Array(24).fill(0);
+                } else if (state.solarData.length > 0) {
+                    const solarProfileSourceKw = config.existingSolarKW > 0 ? config.existingSolarKW : 1;
+                    let tempProfile = Array(24).fill(0);
+                    let totalDays = 0;
+                    state.solarData.forEach(day => { day.hourly.forEach((kwh, hour) => { tempProfile[hour] += kwh; }); totalDays++; });
+                    if (totalDays > 0) { config.hourlySolarProfilePerKw = tempProfile.map(totalKwh => totalKwh / totalDays / solarProfileSourceKw); }
+                }
+            } else if (config.useManual) {
                 config.hourlySolarProfilePerKw = generateHourlySolarProfileFromDaily(config.manualSolarProfile);
+            } else {
+                 alert("Please upload a Solar Generation CSV or check 'No existing solar'."); return;
             }
-
             const resultsObject = runSimulation(config, simulationData);
             renderResults(resultsObject);
             state.analysisResults = resultsObject.financials;
             state.analysisConfig = resultsObject.config;
+            state.rawData = resultsObject.rawData;
         } catch (error) {
             console.error("An error occurred during analysis:", error);
             alert("An unexpected error occurred. Check the console.");
         }
     });
-	
-	 // --- Provider Checkbox Toggles ---
-    const providerCheckboxes = document.querySelectorAll('.providerCheckbox');
-    
-    const toggleProviderSettings = (checkbox) => {
-        const providerName = checkbox.value.toLowerCase();
-        const settingsDiv = document.getElementById(`${providerName}Settings`);
-        if (settingsDiv) {
-            settingsDiv.style.display = checkbox.checked ? 'block' : 'none';
-        }
-    };
-
-    providerCheckboxes.forEach(checkbox => {
-        // Add a listener to each checkbox
-        checkbox.addEventListener('change', () => toggleProviderSettings(checkbox));
-        
-        // Run once on page load to set the initial visibility
-        toggleProviderSettings(checkbox);
-    });
-
-
+	    // --- Raw Data Table Toggle ---
+    const rawDataDebugButton = document.getElementById('showRawDataDebug');
+    if (rawDataDebugButton) {
+        rawDataDebugButton.addEventListener('click', () => {
+            const container = document.getElementById('raw-data-debug-container');
+            if (container) {
+                const isHidden = container.style.display === 'none';
+                container.style.display = isHidden ? 'block' : 'none';
+                rawDataDebugButton.textContent = isHidden ? 'Hide Raw Data Tables' : 'Show Raw Data Tables';
+            }
+        });
+    }
     // Debug Buttons
     document.getElementById("showDataDebugTable")?.addEventListener("click", () => renderDebugDataTable(state));
     document.getElementById("showExistingSystemDebugTable")?.addEventListener("click", () => renderExistingSystemDebugTable(state));

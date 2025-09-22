@@ -1,4 +1,5 @@
 // js/main.js
+//Version 7.8
 import { setupUiEvents } from './uiEvents.js';
 import { state } from './state.js';
 import { exportCsv, exportPdf } from './export.js';

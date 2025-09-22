@@ -1,15 +1,78 @@
 // js/debugTables.js
 // Version 7.7
-import { getNumericInput } from './utils.js';
+import { getNumericInput, getSimulationData } from './utils.js';
 import { 
 	generateHourlyConsumptionProfileFromDailyTOU, 
 	generateHourlySolarProfileFromDaily 
 } from './profiles.js';
-import { simulateDay } from './analysis.js'; // Import the main simulation function instead
+import { simulateDay, calculateSizingRecommendations } from './analysis.js';
 import { state } from './state.js';
+import { calculateQuarterlyAverages } from './dataParser.js';
 
-function hideAllDebugContainers() {
+export function hideAllDebugContainers() {
     document.querySelectorAll('[id$="DebugTableContainer"]').forEach(el => el.style.display = "none");
+	
+}
+
+export function createBreakdownTableHTML(title, data, provider, year, escalationRate, fitConfig, getDegradedFitRate) {
+    const escalationFactor = Math.pow(1 + escalationRate, year - 1);
+    const dailyCharge = provider.dailyCharge * escalationFactor;
+    const peakRate = (provider.importRates.find(r => r.name === 'Peak')?.rate || 0) * escalationFactor;
+    const shoulderRate = (provider.importRates.find(r => r.name === 'Shoulder')?.rate || 0) * escalationFactor;
+    const offPeakRate = (provider.importRates.find(r => r.name === 'Off-Peak')?.rate || 0) * escalationFactor;
+
+    let tier1ExportRate = 0;
+    let tier2ExportRate = 0;
+    const exportRule = provider.exportRates[0];
+
+    if (exportRule?.type === 'tiered') {
+        tier1ExportRate = getDegradedFitRate(exportRule.tiers[0]?.rate, year, fitConfig);
+        tier2ExportRate = getDegradedFitRate(exportRule.tiers[1]?.rate, year, fitConfig);
+    } else if (exportRule?.type === 'flat') {
+        tier1ExportRate = getDegradedFitRate(exportRule.rate, year, fitConfig);
+    }
+
+    let totalDays = 0, totalPeakKWh = 0, totalShoulderKWh = 0, totalOffPeakKWh = 0;
+    let totalTier1ExportKWh = 0, totalTier2ExportKWh = 0, totalGridChargeKWh = 0, totalGridChargeCost = 0;
+
+    let tableHTML = `<h3>${title}</h3><table class="raw-data-table"><thead><tr><th>Period</th><th>Days</th><th>Supply Charge</th><th>Grid Charge (kWh)</th><th>Grid Charge Cost</th><th>Peak Import (kWh)</th><th>Peak Charge</th><th>Shoulder Import (kWh)</th><th>Shoulder Charge</th><th>Off-Peak Import (kWh)</th><th>Off-Peak Charge</th><th>Tier 1 Export (kWh)</th><th>Tier 1 Credit</th><th>Tier 2 Export (kWh)</th><th>Tier 2 Credit</th></tr></thead><tbody>`;
+
+    for (const season of ['Summer', 'Autumn', 'Winter', 'Spring']) {
+        const seasonData = data[season];
+        if (!seasonData) continue;
+        
+        totalDays += seasonData.days;
+        totalPeakKWh += seasonData.peakKWh;
+        totalShoulderKWh += seasonData.shoulderKWh;
+        totalOffPeakKWh += seasonData.offPeakKWh;
+        totalGridChargeKWh += seasonData.gridChargeKWh || 0;
+        totalGridChargeCost += seasonData.gridChargeCost || 0;
+
+        let seasonalTier1Export = seasonData.tier1ExportKWh;
+        let seasonalTier2Export = seasonData.tier2ExportKWh;
+        if (exportRule?.type === 'flat') {
+            seasonalTier1Export += seasonalTier2Export;
+            seasonalTier2Export = 0;
+        }
+        totalTier1ExportKWh += seasonalTier1Export;
+        totalTier2ExportKWh += seasonalTier2Export;
+
+        tableHTML += `<tr>
+            <td>${season}</td><td>${seasonData.days}</td>
+            <td>$${(seasonData.days * dailyCharge).toFixed(2)}</td>
+            <td>${(seasonData.gridChargeKWh || 0).toFixed(2)}</td>
+            <td>$${(seasonData.gridChargeCost || 0).toFixed(2)}</td>
+            <td>${seasonData.peakKWh.toFixed(2)}</td><td>$${(seasonData.peakKWh * peakRate).toFixed(2)}</td>
+            <td>${seasonData.shoulderKWh.toFixed(2)}</td><td>$${(seasonData.shoulderKWh * shoulderRate).toFixed(2)}</td>
+            <td>${seasonData.offPeakKWh.toFixed(2)}</td><td>$${(seasonData.offPeakKWh * offPeakRate).toFixed(2)}</td>
+            <td>${seasonalTier1Export.toFixed(2)}</td><td>$${(seasonalTier1Export * tier1ExportRate).toFixed(2)}</td>
+            <td>${seasonalTier2Export.toFixed(2)}</td><td>$${(seasonalTier2Export * tier2ExportRate).toFixed(2)}</td>
+        </tr>`;
+    }
+    
+    tableHTML += `<tr class="total-row"><td>Annual Total</td><td>${totalDays}</td><td>$${(totalDays * dailyCharge).toFixed(2)}</td><td>${totalGridChargeKWh.toFixed(2)}</td><td>$${totalGridChargeCost.toFixed(2)}</td><td>${totalPeakKWh.toFixed(2)}</td><td>$${(totalPeakKWh * peakRate).toFixed(2)}</td><td>${totalShoulderKWh.toFixed(2)}</td><td>$${(totalShoulderKWh * shoulderRate).toFixed(2)}</td><td>${totalOffPeakKWh.toFixed(2)}</td><td>$${(totalOffPeakKWh * offPeakRate).toFixed(2)}</td><td>${totalTier1ExportKWh.toFixed(2)}</td><td>$${(totalTier1ExportKWh * tier1ExportRate).toFixed(2)}</td><td>${totalTier2ExportKWh.toFixed(2)}</td><td>$${(totalTier2ExportKWh * tier2ExportRate).toFixed(2)}</td></tr>`;
+    tableHTML += '</tbody></table>';
+    return tableHTML;
 }
 
 export function renderDebugDataTable(state) {
@@ -97,22 +160,40 @@ export function renderExistingSystemDebugTable(state) {
 
 export function renderNewSystemDebugTable(state) {
     if (!document.getElementById("debugToggle")?.checked) return;
-    
+
     const useManual = document.getElementById("manualInputToggle")?.checked;
     if (!useManual && (!state.electricityData || !state.solarData || state.electricityData.length === 0)) {
-        alert("Please upload CSV data to see the detailed histogram analysis.");
+        alert("Please upload both electricity and solar CSV files to use this debug tool.");
+        return;
     }
     hideAllDebugContainers();
     const debugContainer = document.getElementById("newSystemDebugTableContainer");
+    const recommendationContainer = document.getElementById("recommendationContainer");
+    if (!recommendationContainer) return;
+
+    // Get simulation data (calculating averages if needed)
+    let simulationData;
+    if (useManual) {
+        simulationData = {
+            'Q1_Summer': { avgPeak: getNumericInput("summerDailyPeak"), avgShoulder: getNumericInput("summerDailyShoulder"), avgOffPeak: getNumericInput("summerDailyOffPeak"), avgSolar: getNumericInput("summerDailySolar") },
+            'Q2_Autumn': { avgPeak: getNumericInput("autumnDailyPeak"), avgShoulder: getNumericInput("autumnDailyShoulder"), avgOffPeak: getNumericInput("autumnDailyOffPeak"), avgSolar: getNumericInput("autumnDailySolar") },
+            'Q3_Winter': { avgPeak: getNumericInput("winterDailyPeak"), avgShoulder: getNumericInput("winterDailyShoulder"), avgOffPeak: getNumericInput("winterDailyOffPeak"), avgSolar: getNumericInput("winterDailySolar") },
+            'Q4_Spring': { avgPeak: getNumericInput("springDailyPeak"), avgShoulder: getNumericInput("springDailyShoulder"), avgOffPeak: getNumericInput("springDailyOffPeak"), avgSolar: getNumericInput("springDailySolar") },
+        };
+    } else {
+        if (!state.quarterlyAverages) {
+            state.quarterlyAverages = calculateQuarterlyAverages(state.electricityData, state.solarData);
+        }
+        simulationData = state.quarterlyAverages;
+    }
+
+    if (!simulationData) {
+        recommendationContainer.innerHTML = '<p style="color: red;">Could not calculate seasonal averages from the provided data.</p>';
+        if (debugContainer) debugContainer.style.display = "block";
+        return;
+    }
 
     const coverageTarget = getNumericInput('recommendationCoverageTarget', 90);
-    const simulationData = useManual ? {
-        'Q1_Summer': { avgPeak: getNumericInput("summerDailyPeak"), avgShoulder: getNumericInput("summerDailyShoulder"), avgOffPeak: getNumericInput("summerDailyOffPeak") },
-        'Q2_Autumn': { avgPeak: getNumericInput("autumnDailyPeak"), avgShoulder: getNumericInput("autumnDailyShoulder"), avgOffPeak: getNumericInput("autumnDailyOffPeak") },
-        'Q3_Winter': { avgPeak: getNumericInput("winterDailyPeak"), avgShoulder: getNumericInput("winterDailyShoulder"), avgOffPeak: getNumericInput("winterDailyOffPeak") },
-        'Q4_Spring': { avgPeak: getNumericInput("springDailyPeak"), avgShoulder: getNumericInput("springDailyShoulder"), avgOffPeak: getNumericInput("springDailyOffPeak") },
-    } : state.quarterlyAverages;
-
     const heuristicRecs = calculateSizingRecommendations(coverageTarget, simulationData);
     
     let recommendationHTML = `<div class="recommendation-section">`;
@@ -127,7 +208,8 @@ export function renderNewSystemDebugTable(state) {
             <hr>`;
     }
 
-    if (!useManual && state.electricityData && state.solarData) {
+    // Detailed Sizing (CSV only)
+    if (!useManual) {
         const dailyPeakPeriodData = [];
         const dailyMaxHourData = [];
         let totalDays = 0;
@@ -138,7 +220,6 @@ export function renderNewSystemDebugTable(state) {
         const replaceSystem = document.getElementById("replaceExistingSystem")?.checked;
         const totalSolarKW = replaceSystem ? newSolarKW : existingSolarKW + newSolarKW;
         const solarDataMap = new Map(state.solarData.map(day => [day.date, day.hourly]));
-
         state.electricityData.forEach(day => {
             const hourlySolarRaw = solarDataMap.get(day.date);
             if (!hourlySolarRaw) return;
@@ -170,7 +251,6 @@ export function renderNewSystemDebugTable(state) {
             dailyPeakPeriodData.push(dailyPeakPeriodKWh);
             dailyMaxHourData.push(dailyMaxHourKWh);
         });
-
         if (totalDays > 0) {
             const getPercentile = (data, percentile) => {
                 const sortedData = [...data].sort((a, b) => a - b);
@@ -183,7 +263,6 @@ export function renderNewSystemDebugTable(state) {
             const finalInverterRec = (Math.ceil(recommendedInverterKW * 2) / 2).toFixed(1);
             const batteryCoverageDays = dailyPeakPeriodData.filter(d => d <= finalBatteryRec).length;
             const inverterCoverageDays = dailyMaxHourData.filter(d => d <= finalInverterRec).length;
-
             recommendationHTML += `
                 <h4>Detailed Sizing (based on 90th percentile of daily load)</h4>
                 <p>
@@ -194,43 +273,33 @@ export function renderNewSystemDebugTable(state) {
                     <strong>Recommended Inverter Power: ${finalInverterRec} kW</strong><br>
                     <small><em>This would have met max power demand on ${inverterCoverageDays} of ${totalDays} days.</em></small>
                 </p>`;
-			recommendationHTML += `
-				<p class="input-explainer" style="margin-top: 10px;">
-				<strong>Note:</strong> The <strong>Heuristic Sizing</strong> provides a general estimate based on the solar array size. The <strong>Detailed Sizing</strong> is a more precise calculation based on your actual peak power demand from your CSV data. The Detailed Sizing is the more accurate value for a custom-fit system.
-				</p>`;
-            
-            // --- BLACKOUT LOGIC MOVED HERE ---
             const blackoutSizingEnabled = document.getElementById("enableBlackoutSizing").checked;
-			if (blackoutSizingEnabled) {
-				const blackoutDuration = getNumericInput('blackoutDuration', 0);
-				const blackoutCoverage = getNumericInput('blackoutCoverage', 0) / 100;
-				if (blackoutDuration > 0 && blackoutCoverage > 0) {
-					const allHours = state.electricityData.flatMap(d => d.consumption);
-					let maxConsumptionInWindow = 0;
-					for (let i = 0; i <= allHours.length - blackoutDuration; i++) {
-						const windowSum = allHours.slice(i, i + blackoutDuration).reduce((a, b) => a + b, 0);
-						if (windowSum > maxConsumptionInWindow) maxConsumptionInWindow = windowSum;
-					}
-					const requiredReserve = maxConsumptionInWindow * blackoutCoverage;
-					const totalCalculatedSize = finalBatteryRec + requiredReserve;
-
-					// NEW: Find the next largest standard size
-					const standardSizes = [5, 10, 13.5, 16, 20, 24, 32, 40, 48];
-			const practicalSize = standardSizes.find(size => size >= totalCalculatedSize) || Math.ceil(totalCalculatedSize);
-
-			recommendationHTML += `<hr>
-				<h4>Blackout Protection Sizing</h4>
-				<p>
-					For a <strong>${blackoutDuration}-hour</strong> blackout covering <strong>${blackoutCoverage * 100}%</strong> of usage, a reserve of <strong>${requiredReserve.toFixed(2)} kWh</strong> is needed.
-				</p>
-				<p>
-					<strong>Total Recommended Practical Size (Savings + Blackout):</strong><br>
-					${finalBatteryRec} kWh + ${requiredReserve.toFixed(2)} kWh = ${totalCalculatedSize.toFixed(2)} kWh.
-					The next largest standard size is <strong>${practicalSize} kWh</strong>.
-				</p>`;
-				}
-			}
-            // ... (rest of the histogram and chart logic remains here) ...
+            if (blackoutSizingEnabled) {
+                const blackoutDuration = getNumericInput('blackoutDuration', 0);
+                const blackoutCoverage = getNumericInput('blackoutCoverage', 0) / 100;
+                if (blackoutDuration > 0 && blackoutCoverage > 0) {
+                    const allHours = state.electricityData.flatMap(d => d.consumption);
+                    let maxConsumptionInWindow = 0;
+                    for (let i = 0; i <= allHours.length - blackoutDuration; i++) {
+                        const windowSum = allHours.slice(i, i + blackoutDuration).reduce((a, b) => a + b, 0);
+                        if (windowSum > maxConsumptionInWindow) maxConsumptionInWindow = windowSum;
+                    }
+                    const requiredReserve = maxConsumptionInWindow * blackoutCoverage;
+                    const totalCalculatedSize = finalBatteryRec + requiredReserve;
+                    const standardSizes = [5, 10, 13.5, 16, 20, 24, 32, 40, 48];
+                    const practicalSize = standardSizes.find(size => size >= totalCalculatedSize) || Math.ceil(totalCalculatedSize);
+                    recommendationHTML += `<hr>
+                        <h4>Blackout Protection Sizing</h4>
+                        <p>
+                            For a <strong>${blackoutDuration}-hour</strong> blackout covering <strong>${blackoutCoverage * 100}%</strong> of usage, a reserve of <strong>${requiredReserve.toFixed(2)} kWh</strong> is needed.
+                        </p>
+                        <p>
+                            <strong>Total Recommended Practical Size (Savings + Blackout):</strong><br>
+                            ${finalBatteryRec} kWh + ${requiredReserve.toFixed(2)} kWh = ${totalCalculatedSize.toFixed(2)} kWh.
+                            The next largest standard size is <strong>${practicalSize} kWh</strong>.
+                        </p>`;
+                }
+            }
             const newSystemEstimatesTable = document.getElementById("newSystemEstimatesTable");
             if (newSystemEstimatesTable) {
                 newSystemEstimatesTable.innerHTML = `<details class="collapsible-histogram"><summary>📊 Daily Peak Period Load Distribution</summary><canvas id="peakPeriodHistogram"></canvas></details><details class="collapsible-histogram"><summary>📊 Daily Maximum Hourly Load Distribution</summary><canvas id="maxHourlyHistogram"></canvas></details>`;
@@ -251,11 +320,8 @@ export function renderNewSystemDebugTable(state) {
             if(ctx2) { state.maxHourlyChart = new Chart(ctx2, { type: 'bar', data: { labels: bins2.map(b => b.label), datasets: [{ label: "Days", data: bins2.map(b => b.count), backgroundColor: "rgba(255,159,64,0.6)" }] }, options: { plugins: { title: { display: true, text: 'Maximum Hourly Load Histogram' } } } }); }
         }
     }
-    
     recommendationHTML += `</div>`;
-    const recommendationContainer = document.getElementById("recommendationContainer");
-    if (recommendationContainer) recommendationContainer.innerHTML = recommendationHTML;
-    
+    recommendationContainer.innerHTML = recommendationHTML;
     if (debugContainer) debugContainer.style.display = "block";
 }
 
@@ -264,49 +330,50 @@ export function renderProvidersDebugTable(state) {
     hideAllDebugContainers();
     const debugContainer = document.getElementById("providersDebugTableContainer");
     let tableHTML = "<h3>Provider & Tariff Inputs</h3><table><tbody>";
-    const providers = Array.from(document.querySelectorAll(".providerCheckbox:checked")).map(cb => cb.value);
-    
-    // Check if an analysis has been run and the required data is available
-    if (!state.analysisConfig || !state.quarterlyAverages) {
-        tableHTML += `<tr><td>Run an analysis first to see provider debug info.</td></tr>`;
+
+    // Use the new helper to get reliable data
+    const simulationData = getSimulationData(); 
+
+    if (!simulationData) {
+        tableHTML += `<tr><td>Please upload CSV files or run an analysis first to see provider debug info.</td></tr>`;
         tableHTML += "</tbody></table>";
         if (debugContainer) debugContainer.innerHTML = tableHTML;
         if (debugContainer) debugContainer.style.display = "block";
         return;
     }
 
-    if(state.quarterlyAverages) {
-        tableHTML += `<tr><td colspan="2"><strong>Quarterly Averages (Daily, from CSV)</strong></td></tr>`;
-        for (const quarter in state.quarterlyAverages) {
-            const q = state.quarterlyAverages[quarter];
-            tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Peak</td><td>${(q.avgPeak).toFixed(2)} kWh</td></tr>`;
-            tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Shoulder</td><td>${(q.avgShoulder).toFixed(2)} kWh</td></tr>`;
-            tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Off-Peak</td><td>${(q.avgOffPeak).toFixed(2)} kWh</td></tr>`;
-            tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Solar</td><td>${(q.avgSolar).toFixed(2)} kWh</td></tr>`;
-        }
+    const providers = Array.from(document.querySelectorAll(".providerCheckbox:checked")).map(cb => cb.value);
+
+    tableHTML += `<tr><td colspan="2"><strong>Quarterly Averages (Daily)</strong></td></tr>`;
+    for (const quarter in simulationData) {
+        const q = simulationData[quarter];
+        tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Peak</td><td>${(q.avgPeak).toFixed(2)} kWh</td></tr>`;
+        tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Shoulder</td><td>${(q.avgShoulder).toFixed(2)} kWh</td></tr>`;
+        tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Off-Peak</td><td>${(q.avgOffPeak).toFixed(2)} kWh</td></tr>`;
+        tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Solar</td><td>${(q.avgSolar).toFixed(2)} kWh</td></tr>`;
     }
-    
+
     providers.forEach(p => {
         tableHTML += `<tr><td colspan="2" class="provider-header-cell"><strong>${p}</strong></td></tr>`;
 
-        const providerConfig = state.analysisConfig.providers[p];
-        const batteryConfig = {
-            capacity: getNumericInput("newBattery"),
-            inverterKW: getNumericInput("newBatteryInverter")
-        };
-        const simulationData = state.quarterlyAverages;
-
-        const avgCharge = calculateAverageDailyGridCharge(providerConfig, batteryConfig, simulationData);
-        tableHTML += `<tr><td><strong>Average Daily Grid Charge</strong></td><td><strong>${avgCharge.toFixed(2)} kWh</strong></td></tr>`;
+        // This part requires a full config object, which is only available after a run.
+        // We can simplify this for now or build a mini-config.
+        if (state.analysisConfig) {
+             const providerConfig = state.analysisConfig.providers[p];
+             const batteryConfig = {
+                capacity: getNumericInput("newBattery"),
+                inverterKW: getNumericInput("newBatteryInverter"),
+                gridChargeThreshold: getNumericInput("gridChargeThreshold")
+            };
+            const avgCharge = calculateAverageDailyGridCharge(providerConfig, batteryConfig, simulationData);
+            tableHTML += `<tr><td><strong>Average Daily Grid Charge</strong></td><td><strong>${avgCharge.toFixed(2)} kWh</strong></td></tr>`;
+        }
 
         const settingsDiv = document.getElementById(p.toLowerCase() + "Settings");
-        if(settingsDiv) {
+        if (settingsDiv) {
             settingsDiv.querySelectorAll('label').forEach(label => {
                 const input = label.querySelector('input, select');
-                const p = label.querySelector('p.input-explainer');
-                if (p) return; 
-
-                if(input) {
+                if (input && !label.querySelector('p.input-explainer')) {
                     tableHTML += `<tr><td>${label.textContent.replace(':', '')}</td><td>${input.type === 'checkbox' ? input.checked : input.value}</td></tr>`;
                 }
             });

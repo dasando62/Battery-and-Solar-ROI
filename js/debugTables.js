@@ -1,5 +1,5 @@
 // js/debugTables.js
-// Version 7.7
+// Version 7.8
 import { getNumericInput, getSimulationData } from './utils.js';
 import { 
 	generateHourlyConsumptionProfileFromDailyTOU, 

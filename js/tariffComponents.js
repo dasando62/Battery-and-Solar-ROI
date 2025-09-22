@@ -1,4 +1,5 @@
 // js/tariffComponents.js
+//Version 7.8
 function calculateFlatRateImport(importData, dailyBreakdown, escalationFactor) {
     const totalImport = dailyBreakdown.peakKWh + dailyBreakdown.shoulderKWh + dailyBreakdown.offPeakKWh;
     return totalImport * (importData.rate || 0) * escalationFactor;

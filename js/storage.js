@@ -1,5 +1,5 @@
 // js/storage.js
-//Version 7.7
+//Version 7.8
 import { downloadBlob } from './utils.js';
 
 const savableInputIds = [

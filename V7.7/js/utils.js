@@ -1,5 +1,9 @@
 // js/utils.js
 //Version 7.7
+
+import { state } from './state.js';
+import { calculateQuarterlyAverages } from './dataParser.js';
+
 export function getNumericInput(id, defaultValue = 0) {
   const el = document.getElementById(id);
   if(!el) return defaultValue;
@@ -126,4 +130,24 @@ export function parseRangesToHours(rangesStr) {
     });
 
     return Array.from(allHours).sort((a, b) => a - b);
+}
+
+export function getSimulationData() {
+    const useManual = document.getElementById("manualInputToggle")?.checked;
+
+    if (useManual) {
+        return {
+            'Q1_Summer': { avgPeak: getNumericInput("summerDailyPeak"), avgShoulder: getNumericInput("summerDailyShoulder"), avgOffPeak: getNumericInput("summerDailyOffPeak"), avgSolar: getNumericInput("summerDailySolar") },
+            'Q2_Autumn': { avgPeak: getNumericInput("autumnDailyPeak"), avgShoulder: getNumericInput("autumnDailyShoulder"), avgOffPeak: getNumericInput("autumnDailyOffPeak"), avgSolar: getNumericInput("autumnDailySolar") },
+            'Q3_Winter': { avgPeak: getNumericInput("winterDailyPeak"), avgShoulder: getNumericInput("winterDailyShoulder"), avgOffPeak: getNumericInput("winterDailyOffPeak"), avgSolar: getNumericInput("winterDailySolar") },
+            'Q4_Spring': { avgPeak: getNumericInput("springDailyPeak"), avgShoulder: getNumericInput("springDailyShoulder"), avgOffPeak: getNumericInput("springDailyOffPeak"), avgSolar: getNumericInput("springDailySolar") },
+        };
+    } else {
+        // If averages don't exist yet for CSV mode, calculate them now.
+        if (!state.quarterlyAverages) {
+            if (!state.electricityData || !state.solarData) return null;
+            state.quarterlyAverages = calculateQuarterlyAverages(state.electricityData, state.solarData);
+        }
+        return state.quarterlyAverages;
+    }
 }

@@ -1,4 +1,5 @@
 // js/uiEvents.js
+//Version 7.8
 import { state } from './state.js';
 import { gatherConfigFromUI } from './config.js';
 import { runSimulation } from './analysis.js';
