@@ -104,11 +104,25 @@ th { background-color: #f2f2f2; }
 /* Default style for the status text ("No file chosen") */
 .file-status-text {
 /* This style is ADDED by JavaScript when a file is successfully loaded */
-.line-count-info.loaded {
-  color: #d9534f; /* Red color */
-  font-style: italic;
+/* Wrapper to align the "Choose File" button and its status text */
+.file-upload-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
 }
 
+/* Default style for the status text ("No file chosen") */
+.file-status-text {
+  font-style: italic;
+  color: #666;
+}
+
+/* This style is ADDED by JavaScript when a file is successfully loaded */
+.line-count-info.loaded {
+  color: #28a745; /* Green for success */
+  font-weight: bold;
+}
 
 /* This style is ADDED by JavaScript when a file is successfully loaded */
 .file-status-text.loaded {
@@ -118,14 +132,16 @@ th { background-color: #f2f2f2; }
   flex-basis: 100%; /* Ensures it takes the full width below the button */
   margin-top: 5px;
 }
+
 .formatted-hours-display {
   font-style: italic;
   color: #0056b3; /* A nice blue color */
   font-size: 14px;
   margin: -2px 0 10px 5px; /* Adjusts spacing to look good */
 }
-/* In style.css */
-summary {
-    font-weight: bold;
-    font-size: 1.17em; /* This is the default size for an h3 tag */
+
+.error-message {
+  color: #dc3545; /* A standard, accessible red for errors */
+  font-weight: bold;
+  margin-top: 10px;
 }

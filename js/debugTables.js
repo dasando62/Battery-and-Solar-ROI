@@ -1,6 +1,11 @@
 // js/debugTables.js
-// Version 7.8
-import { getNumericInput, getSimulationData } from './utils.js';
+// Version 9.5
+import { 
+	getNumericInput, 
+	getSimulationData, 
+	displayError, 
+	clearError 
+} from './utils.js';
 import { 
 	generateHourlyConsumptionProfileFromDailyTOU, 
 	generateHourlySolarProfileFromDaily 
@@ -8,6 +13,7 @@ import {
 import { simulateDay, calculateSizingRecommendations } from './analysis.js';
 import { state } from './state.js';
 import { calculateQuarterlyAverages } from './dataParser.js';
+import { gatherConfigFromUI } from './config.js'; 
 
 export function hideAllDebugContainers() {
     document.querySelectorAll('[id$="DebugTableContainer"]').forEach(el => el.style.display = "none");
@@ -45,8 +51,10 @@ export function createBreakdownTableHTML(title, data, provider, year, escalation
         totalPeakKWh += seasonData.peakKWh;
         totalShoulderKWh += seasonData.shoulderKWh;
         totalOffPeakKWh += seasonData.offPeakKWh;
+        // --- SAFE ACCESS START ---
         totalGridChargeKWh += seasonData.gridChargeKWh || 0;
         totalGridChargeCost += seasonData.gridChargeCost || 0;
+        // --- SAFE ACCESS END ---
 
         let seasonalTier1Export = seasonData.tier1ExportKWh;
         let seasonalTier2Export = seasonData.tier2ExportKWh;
@@ -78,26 +86,57 @@ export function createBreakdownTableHTML(title, data, provider, year, escalation
 export function renderDebugDataTable(state) {
     if (!document.getElementById("debugToggle")?.checked) return;
     const useManual = document.getElementById("manualInputToggle")?.checked;
-    if (!useManual && (!state.electricityData || !state.solarData || state.electricityData.length === 0 || state.solarData.length === 0)) {
-        alert("Please upload both electricity and solar CSV files with data first.");
+    
+    if (!useManual && (!state.electricityData || state.electricityData.length === 0)) {
+        displayError("Please upload an electricity CSV file with data first.", "data-input-error");
         return;
     }
+
     hideAllDebugContainers();
     const debugContainer = document.getElementById("dataDebugTableContainer");
-    let tableHTML = "<h3>Debug Data (First 100 entries)</h3><table><thead><tr><th>Date</th><th>Hour</th><th>Consumption (kWh)</th><th>Solar (kWh)</th></tr></thead><tbody>";
-    const numEntries = useManual ? 1 : Math.min(state.electricityData.length, 100);
-    for (let d = 0; d < numEntries; d++) {
-        const dailyPeak = useManual ? getNumericInput("dailyPeak") : 0;
-        const dailyShoulder = useManual ? getNumericInput("dailyShoulder") : 0;
-        const dailyOffPeak = useManual ? getNumericInput("dailyOffPeak") : 0;
-        const dailySolar = useManual ? getNumericInput("dailySolar") : (state.solarData?.[d]?.hourly.reduce((a, b) => a + b, 0) || 0);
-        const hourlyConsumption = useManual ? generateHourlyConsumptionProfileFromDailyTOU(dailyPeak, dailyShoulder, dailyOffPeak) : state.electricityData[d].consumption;
+    
+    // 1. Add "Feed In" to the table header
+    let tableHTML = "<h3>Debug Data</h3><table><thead><tr><th>Date</th><th>Hour</th><th>Consumption (kWh)</th><th>Feed In (kWh)</th><th>Solar (kWh)</th></tr></thead><tbody>";
+    
+    if (useManual) {
+        // ... (manual mode logic remains the same, you can add a column of zeros for Feed In if you like) ...
+        const dailyPeak = (getNumericInput("summerDailyPeak") + getNumericInput("autumnDailyPeak") + getNumericInput("winterDailyPeak") + getNumericInput("springDailyPeak")) / 4;
+        const dailyShoulder = (getNumericInput("summerDailyShoulder") + getNumericInput("autumnDailyShoulder") + getNumericInput("winterShoulder") + getNumericInput("springShoulder")) / 4;
+        const dailyOffPeak = (getNumericInput("summerDailyOffPeak") + getNumericInput("autumnDailyOffPeak") + getNumericInput("winterOffPeak") + getNumericInput("springOffPeak")) / 4;
+        const dailySolar = (getNumericInput("summerDailySolar") + getNumericInput("autumnDailySolar") + getNumericInput("winterDailySolar") + getNumericInput("springDailySolar")) / 4;
+
+        const hourlyConsumption = generateHourlyConsumptionProfileFromDailyTOU(dailyPeak, dailyShoulder, dailyOffPeak);
         const hourlySolar = generateHourlySolarProfileFromDaily(dailySolar);
+
         for (let h = 0; h < 24; h++) {
-            tableHTML += `<tr><td>${useManual ? "Manual Average" : state.electricityData[d].date}</td><td>${(h<10?'0':'')+h}:00</td><td>${(hourlyConsumption[h] || 0).toFixed(3)}</td><td>${(hourlySolar[h] || 0).toFixed(3)}</td></tr>`;
+            tableHTML += `<tr>
+                            <td>Manual Average</td>
+                            <td>${(h<10?'0':'')+h}:00</td>
+                            <td>${(hourlyConsumption[h] || 0).toFixed(3)}</td>
+                            <td>0.000</td>
+                            <td>${(hourlySolar[h] || 0).toFixed(3)}</td>
+                          </tr>`;
         }
-        if (useManual) break;
+    } else {
+        // This is the main part to change for CSV mode
+        const numEntries = Math.min(state.electricityData.length, 100);
+        const solarDataMap = new Map((state.solarData || []).map(d => [d.date, d.hourly]));
+        for (let d = 0; d < numEntries; d++) {
+            const dayData = state.electricityData[d];
+            const hourlySolar = solarDataMap.get(dayData.date) || Array(24).fill(0);
+            for (let h = 0; h < 24; h++) {
+                // 2. Add the dayData.feedIn value to the table row
+                tableHTML += `<tr>
+                                <td>${dayData.date}</td>
+                                <td>${(h<10?'0':'')+h}:00</td>
+                                <td>${(dayData.consumption[h] || 0).toFixed(3)}</td>
+                                <td>${(dayData.feedIn[h] || 0).toFixed(3)}</td>
+                                <td>${(hourlySolar[h] || 0).toFixed(3)}</td>
+                              </tr>`;
+            }
+        }
     }
+
     tableHTML += "</tbody></table>";
     if (debugContainer) debugContainer.innerHTML = tableHTML;
     if (debugContainer) debugContainer.style.display = "block";
@@ -105,8 +144,9 @@ export function renderDebugDataTable(state) {
 
 export function renderExistingSystemDebugTable(state) {
     if (!document.getElementById("debugToggle")?.checked) return;
+	clearError();
     if (document.getElementById("manualInputToggle")?.checked || !state.electricityData || !state.solarData || state.electricityData.length === 0) {
-        alert("This debug table requires uploaded CSV data.");
+        displayError("This debug table requires uploaded CSV data.");
         return;
     }
     hideAllDebugContainers();
@@ -132,7 +172,7 @@ export function renderExistingSystemDebugTable(state) {
     });
 
     if (totalDays === 0) {
-        alert("No overlapping data found between the two CSV files. Please ensure the date ranges are aligned.");
+        displayError("No overlapping data found between the two CSV files. Please ensure the date ranges are aligned.");
         return;
     }
     
@@ -160,10 +200,11 @@ export function renderExistingSystemDebugTable(state) {
 
 export function renderNewSystemDebugTable(state) {
     if (!document.getElementById("debugToggle")?.checked) return;
+	clearError();
 
     const useManual = document.getElementById("manualInputToggle")?.checked;
     if (!useManual && (!state.electricityData || !state.solarData || state.electricityData.length === 0)) {
-        alert("Please upload both electricity and solar CSV files to use this debug tool.");
+        displayError("Please upload both electricity and solar CSV files to use this debug tool.");
         return;
     }
     hideAllDebugContainers();
@@ -182,7 +223,14 @@ export function renderNewSystemDebugTable(state) {
         };
     } else {
         if (!state.quarterlyAverages) {
-            state.quarterlyAverages = calculateQuarterlyAverages(state.electricityData, state.solarData);
+			            // 2. GET THE TOU HOURS FROM THE UI CONFIG
+            const config = gatherConfigFromUI();
+            const baselineProvider = config.providers[config.selectedProviders[0]];
+            const touHours = {
+                peak: baselineProvider.importData.peakHours || [],
+                shoulder: baselineProvider.importData.shoulderHours || [],
+			};
+            state.quarterlyAverages = calculateQuarterlyAverages(state.electricityData, state.solarData, touHours);
         }
         simulationData = state.quarterlyAverages;
     }
