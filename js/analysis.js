@@ -134,6 +134,8 @@ export function runSimulation(config, simulationData, electricityData) {
         finalResults[p] = { annualCosts: [], cumulativeSavingsPerYear: [], npv: 0, roiYear: null };
         rawData.system[p] = { year1: {}, year2: {} };
         for (const q of ['Summer', 'Autumn', 'Winter', 'Spring']) {
+            rawData.baseline.year1[q] = { days: 0, peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, tier1ExportKWh: 0, tier2ExportKWh: 0, gridChargeKWh: 0, gridChargeCost: 0 };
+            rawData.baseline.year2[q] = { days: 0, peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, tier1ExportKWh: 0, tier2ExportKWh: 0, gridChargeKWh: 0, gridChargeCost: 0 };
             rawData.system[p].year1[q] = { days: 0, peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, tier1ExportKWh: 0, tier2ExportKWh: 0, gridChargeKWh: 0, gridChargeCost: 0 };
             rawData.system[p].year2[q] = { days: 0, peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, tier1ExportKWh: 0, tier2ExportKWh: 0, gridChargeKWh: 0, gridChargeCost: 0 };
         }
@@ -145,11 +147,6 @@ export function runSimulation(config, simulationData, electricityData) {
     if (!config.useManual && electricityData) {
         let totalCostForPeriod = 0;
         let daysProcessed = 0;
-        const peakHours = baselineProvider.importData.peakHours || [];
-        const shoulderHours = baselineProvider.importData.shoulderHours || [];
-        for (const q of ['Summer', 'Autumn', 'Winter', 'Spring']) {
-            rawData.baseline.year1[q] = { days: 0, peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, tier1ExportKWh: 0, tier2ExportKWh: 0 };
-        }
         electricityData.forEach(day => {
             daysProcessed++;
             const dailyBreakdown = { peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, tier1ExportKWh: 0, tier2ExportKWh: 0 };
@@ -157,8 +154,8 @@ export function runSimulation(config, simulationData, electricityData) {
             for (let h = 0; h < 24; h++) {
                 const gridImport = day.consumption[h] || 0;
                 if (gridImport > 0) {
-                    if (peakHours.includes(h)) dailyBreakdown.peakKWh += gridImport;
-                    else if (shoulderHours.includes(h)) dailyBreakdown.shoulderKWh += gridImport;
+                    if (baselineProvider.importData.peakHours.includes(h)) dailyBreakdown.peakKWh += gridImport;
+                    else if (baselineProvider.importData.shoulderHours.includes(h)) dailyBreakdown.shoulderKWh += gridImport;
                     else dailyBreakdown.offPeakKWh += gridImport;
                 }
             }
@@ -175,7 +172,7 @@ export function runSimulation(config, simulationData, electricityData) {
             const season = [12,1,2].includes(month) ? 'Summer' : [3,4,5].includes(month) ? 'Autumn' : [6,7,8].includes(month) ? 'Winter' : 'Spring';
             const rawSeason = rawData.baseline.year1[season];
             if(rawSeason){
-                Object.keys(dailyBreakdown).forEach(k => rawSeason[k] += dailyBreakdown[k]);
+                Object.keys(dailyBreakdown).forEach(k => { if(rawSeason[k] !== undefined) rawSeason[k] += dailyBreakdown[k]; });
                 rawSeason.days++;
             }
         });
@@ -203,6 +200,19 @@ export function runSimulation(config, simulationData, electricityData) {
                 dailyEnergyCost -= exportCalculator(baselineProvider.exportData, dailyBreakdown, y, fitConfig, getDegradedFitRate, getRateForHour);
                 const dailySupplyCharge = baselineProvider.dailyCharge;
                 annualBaselineCost += (escalate(dailySupplyCharge, config.tariffEscalation, y) + dailyEnergyCost) * daysInQ;
+                
+                // --- FIX 1: POPULATE RAW DATA FOR MANUAL BASELINE ---
+                if (y <= 2) {
+                    const yearKey = y === 1 ? 'year1' : 'year2';
+                    const seasonName = quarter.split('_')[1];
+                    const rawSeason = rawData.baseline[yearKey][seasonName];
+                    if (rawSeason) {
+                        rawSeason.days = daysInQ;
+                        Object.keys(dailyBreakdown).forEach(k => {
+                            if (rawSeason[k] !== undefined) rawSeason[k] = dailyBreakdown[k] * daysInQ;
+                        });
+                    }
+                }
             }
             finalResults.baselineCosts[y] = annualBaselineCost;
         } else {
@@ -212,8 +222,8 @@ export function runSimulation(config, simulationData, electricityData) {
         config.selectedProviders.forEach(p => {
             const providerData = config.providers[p];
             let annualCost = 0;
-            let totalDaysProcessed = 0;
             let currentSOC = 0;
+            
             if (config.useManual) {
                 for (const quarter in simulationData) {
                     const qData = simulationData[quarter];
@@ -223,19 +233,38 @@ export function runSimulation(config, simulationData, electricityData) {
                     const totalDailySolar = totalSystemKw * config.manualSolarProfile;
                     const baseHourlySolar = generateHourlySolarProfileFromDaily(totalDailySolar, quarter).map(s => s * solarFactor);
                     const batteryConfig = { capacity: (config.newBatteryKWH * batteryFactor), inverterKW: config.newBatteryInverterKW, gridChargeThreshold: config.gridChargeThreshold, socChargeTrigger: config.socChargeTrigger };
-                    // For manual mode, we simulate one day and multiply, so we don't carry over SOC between seasons
-                    const simResults = simulateDay(baseHourlyConsumption, baseHourlySolar, providerData, batteryConfig, 0); 
-                    const dailyBreakdown = simResults.dailyBreakdown;
-                    const escalationConfig = { rate: config.tariffEscalation, year: y };
-                    const importCalculator = tariffComponents[providerData.importComponent].calculate;
-                    const exportCalculator = tariffComponents[providerData.exportComponent].calculate;
-                    let dailyEnergyCost = dailyBreakdown.gridChargeCost || 0;
-                    dailyEnergyCost += importCalculator(providerData.importData, dailyBreakdown, escalationConfig);
-                    dailyEnergyCost -= exportCalculator(providerData.exportData, dailyBreakdown, y, fitConfig, getDegradedFitRate, getRateForHour);
-                    const dailySupplyCharge = (providerData.dailyCharge || 0);
-                    annualCost += (escalate(dailySupplyCharge, config.tariffEscalation, y) + dailyEnergyCost) * daysInQ;
+                    
+                    let quarterTotals = { peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, tier1ExportKWh: 0, tier2ExportKWh: 0, gridChargeKWh: 0, gridChargeCost: 0 };
+                    for (let day = 0; day < daysInQ; day++) {
+                        const simResults = simulateDay(baseHourlyConsumption, baseHourlySolar, providerData, batteryConfig, currentSOC);
+                        const dailyBreakdown = simResults.dailyBreakdown;
+                        currentSOC = simResults.finalSOC;
+                        const escalationConfig = { rate: config.tariffEscalation, year: y };
+                        const importCalculator = tariffComponents[providerData.importComponent].calculate;
+                        const exportCalculator = tariffComponents[providerData.exportComponent].calculate;
+                        let dailyEnergyCost = dailyBreakdown.gridChargeCost || 0;
+                        dailyEnergyCost += importCalculator(providerData.importData, dailyBreakdown, escalationConfig);
+                        dailyEnergyCost -= exportCalculator(providerData.exportData, dailyBreakdown, y, fitConfig, getDegradedFitRate, getRateForHour);
+                        const dailySupplyCharge = (providerData.dailyCharge || 0);
+                        annualCost += escalate(dailySupplyCharge, config.tariffEscalation, y) + dailyEnergyCost;
+                        Object.keys(quarterTotals).forEach(k => quarterTotals[k] += dailyBreakdown[k]);
+                    }
+
+                    // --- FIX 2: POPULATE RAW DATA FOR MANUAL "WITH SYSTEM" ---
+                    if (y <= 2) {
+                        const yearKey = y === 1 ? 'year1' : 'year2';
+                        const seasonName = quarter.split('_')[1];
+                        const rawSeason = rawData.system[p][yearKey][seasonName];
+                        if (rawSeason) {
+                            rawSeason.days = daysInQ;
+                            Object.keys(quarterTotals).forEach(k => {
+                                if (rawSeason[k] !== undefined) rawSeason[k] = quarterTotals[k];
+                            });
+                        }
+                    }
                 }
             } else {
+                let totalDaysProcessed = 0;
                 const solarDataMap = new Map(state.solarData.map(day => [day.date, day.hourly]));
                 const totalSystemKw = config.replaceExistingSystem ? config.newSolarKW : config.existingSolarKW + config.newSolarKW;
                 const solarProfileSourceKw = config.existingSolarKW > 0 ? config.existingSolarKW : 1;
