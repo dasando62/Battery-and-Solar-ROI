@@ -1,5 +1,5 @@
 // js/providers.js
-//Version 9.5
+//Version 9.6
 export const providers = {
     "Origin": {
         name: "Origin Energy",

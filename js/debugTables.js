@@ -1,5 +1,5 @@
 // js/debugTables.js
-// Version 9.5
+// Version 9.6
 import { 
 	getNumericInput, 
 	getSimulationData, 

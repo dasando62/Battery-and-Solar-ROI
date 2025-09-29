@@ -1,172 +1,184 @@
-// js/dataParser.js - FINAL CORRECTED VERSION
-//Version 9.5
+// js/dataParser.js 
+// Version 9.6
 import { state } from './state.js';
-import { parseDateString } from './utils.js';
-import { generateHourlySolarProfileFromDaily } from './profiles.js';
+import { displayError, parseDateString } from './utils.js';
+import { toggleExistingSolar } from './uiEvents.js';
 
-// --- HELPER FUNCTIONS ---
-function getHeaderPossibilities(inputId) {
-    const el = document.getElementById(inputId);
-    if (!el || !el.value) return [];
-    return el.value.split(',').map(h => h.trim());
+function parseCSV(csvText) {
+    const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
+    if (lines.length < 2) return [];
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    const data = lines.slice(1).map(line => {
+        const values = line.split(',');
+        const row = {};
+        headers.forEach((header, index) => {
+            row[header] = values[index] ? values[index].trim().replace(/"/g, '') : '';
+        });
+        return row;
+    });
+    return data;
 }
 
-function findHeaderIndex(headerRow, possibleNames) {
-    for (const name of possibleNames) {
-        const index = headerRow.findIndex(h => h.trim().toLowerCase() === name.toLowerCase());
-        if (index !== -1) return index;
+// A new helper function to find a value in a row using multiple possible column headers
+function findValueInRow(row, possibleHeaders) {
+    for (const header of possibleHeaders) {
+        if (row[header] !== undefined) {
+            return row[header];
+        }
     }
-    return -1;
+    return null;
 }
 
-// Uses local time methods (getFullYear, getMonth, getDate)
-function createDateKey(dateObj) {
-    const year = dateObj.getFullYear();
-    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const day = String(dateObj.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+export function handleUsageCsv(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const csvData = parseCSV(e.target.result);
+            const dailyData = new Map();
+
+            // --- CORRECTLY read all advanced options ---
+            const dateTimeHeader = document.getElementById('elecDateTimeHeader').value;
+            const dateFormat = document.getElementById('elecDateFormat').value;
+            const typeHeader = document.getElementById('usageTypeHeader').value;
+            const consumptionHeaders = document.getElementById('consumptionHeader').value.split(',').map(h => h.trim());
+            const importIdentifier = document.getElementById('importIdentifier').value;
+            const exportIdentifier = document.getElementById('exportIdentifier').value; // <-- Now being used
+
+            for (const row of csvData) {
+                const dateTimeString = row[dateTimeHeader];
+                const dateTime = parseDateString(dateTimeString, dateFormat);
+                if (!dateTime || isNaN(dateTime.getTime())) continue;
+
+                const date = dateTime.toISOString().split('T')[0];
+                const hour = dateTime.getUTCHours();
+                
+                if (!dailyData.has(date)) {
+                    dailyData.set(date, {
+                        date: date,
+                        consumption: Array(24).fill(0),
+                        feedIn: Array(24).fill(0)
+                    });
+                }
+                const day = dailyData.get(date);
+                
+                // --- CORRECTLY find the value using all possible headers ---
+                const valueString = findValueInRow(row, consumptionHeaders);
+                const value = parseFloat(valueString);
+
+                if (!isNaN(value)) {
+                    const type = row[typeHeader];
+                    if (type === importIdentifier) {
+                        day.consumption[hour] += value;
+                    } else if (type === exportIdentifier) { // <-- Now correctly checks for the export type
+                        day.feedIn[hour] += value;
+                    }
+                }
+            }
+
+            state.electricityData = Array.from(dailyData.values()).sort((a, b) => a.date.localeCompare(b.date));
+            document.getElementById('usageCounts').textContent = `${state.electricityData.length} days of usage data loaded.`;
+            
+            toggleExistingSolar();
+
+        } catch (err) {
+            displayError('Failed to process electricity CSV. Please check the file format and advanced options.', 'data-input-error');
+            console.error(err);
+        }
+    };
+    reader.readAsText(file);
 }
 
-// --- MAIN FUNCTIONS ---
-export function calculateQuarterlyAverages(electricityData, solarData = [], touHours) {
-    if (!electricityData) return null;
-    const quarters = {
-        'Q1_Summer': { months: [12, 1, 2], totalPeak: 0, totalShoulder: 0, totalOffPeak: 0, totalSolar: 0, days: 0 },
-        'Q2_Autumn': { months: [3, 4, 5], totalPeak: 0, totalShoulder: 0, totalOffPeak: 0, totalSolar: 0, days: 0 },
-        'Q3_Winter': { months: [6, 7, 8], totalPeak: 0, totalShoulder: 0, totalOffPeak: 0, totalSolar: 0, days: 0 },
-        'Q4_Spring': { months: [9, 10, 11], totalPeak: 0, totalShoulder: 0, totalOffPeak: 0, totalSolar: 0, days: 0 }
+export function handleSolarCsv(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const csvData = parseCSV(e.target.result);
+            const dailyData = new Map();
+
+            // --- CORRECTLY read all advanced options ---
+            const dateTimeHeader = document.getElementById('solarDateTimeHeader').value;
+            const dateFormat = document.getElementById('solarDateFormat').value;
+            const generationHeaders = document.getElementById('solarGenerationHeader').value.split(',').map(h => h.trim());
+
+            for (const row of csvData) {
+                const dateTimeString = row[dateTimeHeader];
+                const dateTime = parseDateString(dateTimeString, dateFormat);
+                if (!dateTime || isNaN(dateTime.getTime())) continue;
+                
+                const date = dateTime.toISOString().split('T')[0];
+                const hour = dateTime.getUTCHours();
+
+                if (!dailyData.has(date)) {
+                    dailyData.set(date, {
+                        date: date,
+                        hourly: Array(24).fill(0)
+                    });
+                }
+                const day = dailyData.get(date);
+                
+                // --- CORRECTLY find the value using all possible headers ---
+                const valueString = findValueInRow(row, generationHeaders);
+                const value = parseFloat(valueString);
+
+                if (!isNaN(value)) {
+                    day.hourly[hour] += value;
+                }
+            }
+
+            state.solarData = Array.from(dailyData.values()).sort((a, b) => a.date.localeCompare(b.date));
+            document.getElementById('solarCounts').textContent = `${state.solarData.length} days of solar data loaded.`;
+
+        } catch (err) {
+            displayError('Failed to process solar CSV. Please check the file format and advanced options.', 'data-input-error');
+            console.error(err);
+        }
+    };
+    reader.readAsText(file);
+}
+
+export function calculateQuarterlyAverages(electricityData, solarData, touHours) {
+    if (!electricityData || !solarData) return null;
+    const quarterlyData = {
+        Q1_Summer: { days: 0, peak: 0, shoulder: 0, offPeak: 0, solar: 0 },
+        Q2_Autumn: { days: 0, peak: 0, shoulder: 0, offPeak: 0, solar: 0 },
+        Q3_Winter: { days: 0, peak: 0, shoulder: 0, offPeak: 0, solar: 0 },
+        Q4_Spring: { days: 0, peak: 0, shoulder: 0, offPeak: 0, solar: 0 },
     };
     const solarDataMap = new Map(solarData.map(day => [day.date, day.hourly.reduce((a, b) => a + b, 0)]));
+
     electricityData.forEach(day => {
         const month = parseInt(day.date.split('-')[1], 10);
-        if (isNaN(month)) return;
-        let dailyPeakConsumption = 0, dailyShoulderConsumption = 0, dailyOffPeakConsumption = 0;
+        let season;
+        if ([12, 1, 2].includes(month)) season = 'Q1_Summer';
+        else if ([3, 4, 5].includes(month)) season = 'Q2_Autumn';
+        else if ([6, 7, 8].includes(month)) season = 'Q3_Winter';
+        else season = 'Q4_Spring';
+        
+        const q = quarterlyData[season];
+        q.days++;
+        q.solar += solarDataMap.get(day.date) || 0;
+        
         for (let h = 0; h < 24; h++) {
-            const consumption = day.consumption[h] || 0;
-            if (touHours.peak.includes(h)) dailyPeakConsumption += consumption;
-            else if (touHours.shoulder.includes(h)) dailyShoulderConsumption += consumption;
-            else dailyOffPeakConsumption += consumption;
-        }
-        for (const quarter in quarters) {
-            if (quarters[quarter].months.includes(month)) {
-                quarters[quarter].totalPeak += dailyPeakConsumption;
-                quarters[quarter].totalShoulder += dailyShoulderConsumption;
-                quarters[quarter].totalOffPeak += dailyOffPeakConsumption;
-                quarters[quarter].totalSolar += solarDataMap.get(day.date) || 0;
-                quarters[quarter].days++;
-                break;
-            }
+            const consumption = day.consumption[h] + Math.max(0, (solarDataMap.get(day.date) || 0) / 24 - day.feedIn[h]);
+            if (touHours.peak.includes(h)) q.peak += consumption;
+            else if (touHours.shoulder.includes(h)) q.shoulder += consumption;
+            else q.offPeak += consumption;
         }
     });
-    const averages = {};
-    for (const quarter in quarters) {
-        const q = quarters[quarter];
-        if (q.days > 0) {
-            averages[quarter] = {
-                avgPeak: q.totalPeak / q.days,
-                avgShoulder: q.totalShoulder / q.days,
-                avgOffPeak: q.totalOffPeak / q.days,
-                avgSolar: q.totalSolar / q.days
-            };
-        }
-    }
-    return Object.keys(averages).length > 0 ? averages : null;
-}
 
-export async function handleUsageCsv(event) {
-    const file = event.target.files[0];
-    const countsElement = document.getElementById('usageCounts');
-    if (!file || !countsElement) return;
-    const dateFormat = document.getElementById('elecDateFormat').value;
-    const importIdentifier = document.getElementById('importIdentifier').value.toLowerCase();
-    const exportIdentifier = document.getElementById('exportIdentifier').value.toLowerCase();
-    const typeHeader = getHeaderPossibilities('usageTypeHeader');
-    const kwhHeader = getHeaderPossibilities('consumptionHeader');
-    const dateHeader = getHeaderPossibilities('elecDateTimeHeader');
-    try {
-        const text = await file.text();
-        const lines = text.split(/\r?\n/);
-        const headerRow = lines[0].trim().split(/,|\t/);
-        let dateIndex = findHeaderIndex(headerRow, dateHeader);
-        let typeIndex = findHeaderIndex(headerRow, typeHeader);
-        let kwhIndex = findHeaderIndex(headerRow, kwhHeader);
-        if (dateIndex === -1 || typeIndex === -1 || kwhIndex === -1) {
-            throw new Error("Could not find required columns in Usage CSV. Check Advanced Options.");
-        }
-        const dailyData = new Map();
-        for (let i = 1; i < lines.length; i++) {
-            if (!lines[i].trim()) continue;
-            const columns = lines[i].trim().split(/,|\t/);
-            if (!columns[typeIndex] || !columns[dateIndex]) continue;
-            const dateTimeStr = columns[dateIndex];
-            const typeStr = columns[typeIndex].trim().toLowerCase();
-            const kWh = parseFloat(columns[kwhIndex]);
-            if (!dateTimeStr || isNaN(kWh)) continue;
-            const dateObj = parseDateString(dateTimeStr, dateFormat);
-            if (!dateObj || isNaN(dateObj.getTime())) continue;
-            const dateKey = createDateKey(dateObj);
-            const hour = dateObj.getHours(); // Use local time
-            if (!dailyData.has(dateKey)) {
-                dailyData.set(dateKey, { date: dateKey, consumption: Array(24).fill(0), feedIn: Array(24).fill(0) });
-            }
-            const day = dailyData.get(dateKey);
-            if (importIdentifier && typeStr.includes(importIdentifier)) {
-                day.consumption[hour] += kWh;
-            } else if (exportIdentifier && typeStr.includes(exportIdentifier)) {
-                day.feedIn[hour] += kWh;
-            }
-        }
-        state.electricityData = Array.from(dailyData.values());
-        countsElement.textContent = `Processed ${state.electricityData.length} days of usage data.`;
-        countsElement.style.color = 'green';
-    } catch (error) {
-        console.error("Error processing usage CSV:", error);
-        countsElement.textContent = `Error: ${error.message}`;
-        countsElement.style.color = 'red';
+    const result = {};
+    for (const q in quarterlyData) {
+        const data = quarterlyData[q];
+        result[q] = {
+            avgPeak: data.days > 0 ? data.peak / data.days : 0,
+            avgShoulder: data.days > 0 ? data.shoulder / data.days : 0,
+            avgOffPeak: data.days > 0 ? data.offPeak / data.days : 0,
+            avgSolar: data.days > 0 ? data.solar / data.days : 0
+        };
     }
-}
-
-export async function handleSolarCsv(event) {
-    const file = event.target.files[0];
-    const countsElement = document.getElementById('solarCounts');
-    if (!file || !countsElement) return;
-    const dateFormat = document.getElementById('solarDateFormat').value;
-    const genHeader = getHeaderPossibilities('solarGenerationHeader');
-    const dateHeader = getHeaderPossibilities('solarDateTimeHeader');
-    try {
-        const text = await file.text();
-        const lines = text.split(/\r?\n/);
-        const headerRow = lines[0].trim().split(/,|\t/);
-        let dateIndex = findHeaderIndex(headerRow, dateHeader);
-        let kwhIndex = findHeaderIndex(headerRow, genHeader);
-        if (dateIndex === -1 || kwhIndex === -1) {
-            throw new Error("Could not find required columns in Solar CSV. Check Advanced Options.");
-        }
-        const dailyData = new Map();
-        for (let i = 1; i < lines.length; i++) {
-            if (!lines[i].trim()) continue;
-            const columns = lines[i].trim().split(/,|\t/);
-            if (!columns[dateIndex] || !columns[kwhIndex]) continue;
-            const dateStr = columns[dateIndex];
-            const totalDailyKWh = parseFloat(columns[kwhIndex]);
-            if (!dateStr || isNaN(totalDailyKWh)) continue;
-            const dateObj = parseDateString(dateStr, dateFormat);
-            if (!dateObj || isNaN(dateObj.getTime())) continue;
-            const dateKey = createDateKey(dateObj);
-            const month = dateObj.getMonth() + 1;
-            let season = 'Q4_Spring';
-            if ([12, 1, 2].includes(month)) season = 'Q1_Summer';
-            else if ([3, 4, 5].includes(month)) season = 'Q2_Autumn';
-            else if ([6, 7, 8].includes(month)) season = 'Q3_Winter';
-            const hourlyGeneration = generateHourlySolarProfileFromDaily(totalDailyKWh, season);
-            dailyData.set(dateKey, { date: dateKey, hourly: hourlyGeneration });
-        }
-        state.solarData = Array.from(dailyData.values());
-        countsElement.textContent = `Processed ${state.solarData.length} days of solar data.`;
-        countsElement.style.color = 'green';
-    } catch (error) {
-        console.error("Error processing solar CSV:", error);
-        countsElement.textContent = `Error: ${error.message}`;
-        countsElement.style.color = 'red';
-    }
+    return result;
 }

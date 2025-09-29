@@ -1,5 +1,5 @@
 // js/uiEvents.js
-// Version 9.5
+//Version 9.6
 import { state } from './state.js';
 import { gatherConfigFromUI } from './config.js';
 import { calculateDetailedSizing, runSimulation } from './analysis.js';
@@ -11,71 +11,77 @@ import { hideAllDebugContainers, renderDebugDataTable, renderExistingSystemDebug
 import { saveProvider, deleteProvider, getProviders } from './providerManager.js';
 import { renderProviderSettings } from './uiDynamic.js';
 
-export function wireStaticEvents() {
-    // UI Toggles that are only wired once
+// Standalone function to be called from multiple places
+export function toggleExistingSolar() {
     const noSolarCheckbox = document.getElementById('noExistingSolar');
-    if (noSolarCheckbox) {
-        const solarCsvLabel = document.getElementById('solarCsvLabel');
-        noSolarCheckbox.addEventListener('change', () => {
-            if(solarCsvLabel) solarCsvLabel.style.display = noSolarCheckbox.checked ? 'none' : 'block';
-        });
+    if (!noSolarCheckbox) return;
+
+    const solarCsvLabel = document.getElementById('solarCsvLabel');
+    const solarCsvInput = document.getElementById('solarCsv');
+    const solarCounts = document.getElementById('solarCounts');
+    const existingSolarKWInput = document.getElementById('existingSolarKW');
+    const existingSolarInverterInput = document.getElementById('existingSolarInverter');
+
+    const isDisabled = noSolarCheckbox.checked;
+    if (solarCsvLabel) solarCsvLabel.style.display = isDisabled ? 'none' : 'block';
+    if (existingSolarKWInput) existingSolarKWInput.disabled = isDisabled;
+    if (existingSolarInverterInput) existingSolarInverterInput.disabled = isDisabled;
+
+    if (isDisabled) {
+        if (solarCsvInput) solarCsvInput.value = null;
+        if (solarCounts) solarCounts.textContent = '';
+        if (existingSolarKWInput) existingSolarKWInput.value = '0';
+        if (existingSolarInverterInput) existingSolarInverterInput.value = '0';
+        
+        if (state.electricityData && state.electricityData.length > 0) {
+            state.solarData = state.electricityData.map(day => ({
+                date: day.date,
+                hourly: Array(24).fill(0)
+            }));
+            if (solarCounts) solarCounts.textContent = `${state.solarData.length} days of zero-solar data generated.`;
+        } else {
+            state.solarData = null;
+        }
+    } else {
+        if (solarCounts) solarCounts.textContent = '';
     }
-    const manualToggle = document.getElementById('manualInputToggle');
-    if (manualToggle) {
-        const csvSection = document.getElementById('csvInputSection');
-        const manualSection = document.getElementById('manualInputSection');
-        manualToggle.addEventListener('change', () => {
-            if (csvSection) csvSection.style.display = manualToggle.checked ? 'none' : 'block';
-            if (manualSection) manualSection.style.display = manualToggle.checked ? 'block' : 'none';
-        });
-    }
-    const debugToggle = document.getElementById('debugToggle');
-    if (debugToggle) {
-        const debugButtons = document.querySelectorAll('.debug-button');
-        debugToggle.addEventListener('change', () => {
-            const display = debugToggle.checked ? 'inline-block' : 'none';
-            debugButtons.forEach(button => button.style.display = display);
-            if (!debugToggle.checked) hideAllDebugContainers();
-        });
-    }
+}
+
+export function wireStaticEvents() {
+    document.getElementById('noExistingSolar')?.addEventListener('change', toggleExistingSolar);
+    
+    document.getElementById('manualInputToggle')?.addEventListener('change', (e) => {
+        document.getElementById('csvInputSection').style.display = e.target.checked ? 'none' : 'block';
+        document.getElementById('manualInputSection').style.display = e.target.checked ? 'block' : 'none';
+    });
+    document.getElementById('debugToggle')?.addEventListener('change', (e) => {
+        const display = e.target.checked ? 'inline-block' : 'none';
+        document.querySelectorAll('.debug-button').forEach(button => button.style.display = display);
+        if (!e.target.checked) hideAllDebugContainers();
+    });
     document.getElementById("usageCsv")?.addEventListener("change", handleUsageCsv);
     document.getElementById("solarCsv")?.addEventListener("change", handleSolarCsv);
     wireLoadSettings('loadSettings');
     wireSaveSettings('saveSettings');
     document.getElementById('calculateSizing')?.addEventListener('click', handleCalculateSizing);
     document.getElementById('runAnalysis')?.addEventListener('click', handleRunAnalysis);
-    const blackoutToggle = document.getElementById('enableBlackoutSizing');
-    if (blackoutToggle) {
-        const blackoutSettings = document.getElementById('blackoutSettingsContainer');
-        blackoutToggle.addEventListener('change', () => {
-            if (blackoutSettings) blackoutSettings.style.display = blackoutToggle.checked ? 'block' : 'none';
-        });
-    }
-    const loanToggle = document.getElementById('enableLoan');
-    if (loanToggle) {
-        const loanSettings = document.getElementById('loanSettingsContainer');
-        loanToggle.addEventListener('change', () => {
-            if (loanSettings) loanSettings.style.display = loanToggle.checked ? 'block' : 'none';
-        });
-    }
-    const discountRateToggle = document.getElementById('enableDiscountRate');
-    if (discountRateToggle) {
-        const discountSettings = document.getElementById('discountRateSettingsContainer');
-        discountRateToggle.addEventListener('change', () => {
-            if (discountSettings) discountSettings.style.display = discountRateToggle.checked ? 'block' : 'none';
-        });
-    }
-    const rawDataDebugButton = document.getElementById('showRawDataDebug');
-    if (rawDataDebugButton) {
-        rawDataDebugButton.addEventListener('click', () => {
-            const container = document.getElementById('raw-data-debug-container');
-            if (container) {
-                const isHidden = container.style.display === 'none';
-                container.style.display = isHidden ? 'block' : 'none';
-                rawDataDebugButton.textContent = isHidden ? 'Hide Raw Data Tables' : 'Show Raw Data Tables';
-            }
-        });
-    }
+    document.getElementById('enableBlackoutSizing')?.addEventListener('change', (e) => {
+        document.getElementById('blackoutSettingsContainer').style.display = e.target.checked ? 'block' : 'none';
+    });
+    document.getElementById('enableLoan')?.addEventListener('change', (e) => {
+        document.getElementById('loanSettingsContainer').style.display = e.target.checked ? 'block' : 'none';
+    });
+    document.getElementById('enableDiscountRate')?.addEventListener('change', (e) => {
+        document.getElementById('discountRateSettingsContainer').style.display = e.target.checked ? 'block' : 'none';
+    });
+    document.getElementById('showRawDataDebug')?.addEventListener('click', (e) => {
+        const container = document.getElementById('raw-data-debug-container');
+        if (container) {
+            const isHidden = container.style.display === 'none';
+            container.style.display = isHidden ? 'block' : 'none';
+            e.target.textContent = isHidden ? 'Hide Raw Data Tables' : 'Show Raw Data Tables';
+        }
+    });
     document.getElementById('add-provider-button')?.addEventListener('click', () => {
         const newProvider = { name: "New Provider", id: `custom_${Date.now()}`, importComponent: 'TIME_OF_USE_IMPORT', exportComponent: 'FLAT_RATE_FIT', exportType: 'flat', gridChargeEnabled: false, gridChargeStart: 23, gridChargeEnd: 5 };
         saveProvider(newProvider);
@@ -128,6 +134,7 @@ export function wireDynamicProviderEvents() {
         }
     });
 }
+
 
 function handleCalculateSizing() {
     try {

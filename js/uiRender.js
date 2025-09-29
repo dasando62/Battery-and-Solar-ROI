@@ -1,5 +1,5 @@
 // js/uiRender.js
-//Version 9.5
+//Version 9.6
 import { state } from './state.js';
 import { createBreakdownTableHTML } from './debugTables.js';
 import { getNumericInput } from './utils.js';

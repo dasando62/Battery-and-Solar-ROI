@@ -1,5 +1,5 @@
 // js/export.js
-//Version 9.5
+//Version 9.6
 import { state } from './state.js';
 
 export function exportCsv() {
