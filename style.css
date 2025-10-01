@@ -10,7 +10,7 @@ input, select, button { padding: 5px; margin-top: 5px; width: 100%; max-width: 3
 button { margin-top: 15px; cursor: pointer; border: none; border-radius: 5px; }
 .run-button { background-color: #007BFF; color: #fff; }
 .run-button:hover { background-color: #0056b3; }
-.debug-button { background-color: #dc3545; color: #fff; }
+.debug-button { background-color: #dc3545; color: #fff; display: none; }
 .debug-button:hover { background-color: #c82333; }
 .subsettings { margin-left: 20px; margin-top: 10px; padding: 10px; border-left: 3px solid #007BFF; background: #f9f9ff; border-radius: 5px; }
 table { width: 100%; border-collapse: collapse; margin-top: 20px; }

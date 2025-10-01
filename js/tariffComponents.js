@@ -1,72 +1,115 @@
 // js/tariffComponents.js
-// Version 1.0.2
+// Version 2.0.0 - Dynamic Tariff Engine
 
-import { escalate } from './utils.js';
+import { escalate, parseRangesToHours } from './utils.js';
 
-// --- IMPORT COST CALCULATION COMPONENTS ---
+/**
+ * A generic "rules engine" to calculate the total import cost for a day.
+ * It processes rules in the order they are provided, allowing for prioritization.
+ * @param {Array} importRules - An array of rule objects from the provider.
+ * @param {Object} dailyBreakdown - An object containing the day's energy data.
+ * @param {Object} escalationConfig - Contains the escalation rate and current year.
+ * @returns {number} The total calculated import cost for the day.
+ */
+function calculateImportCost(importRules, dailyBreakdown, escalationConfig) {
+    let totalCost = 0;
+    // Create a mutable copy of the hourly import data to track what's been processed.
+    const remainingHourlyImports = [...(dailyBreakdown.hourlyImports || [])];
+    let remainingTotalImport = remainingHourlyImports.reduce((a, b) => a + b, 0);
 
-function calculateFlatRateImport(importData, dailyBreakdown, escalationConfig) {
-    const { rate, year } = escalationConfig;
-    const totalImport = dailyBreakdown.peakKWh + dailyBreakdown.shoulderKWh + dailyBreakdown.offPeakKWh;
-    
-    // Escalate the base rate before calculating the cost
-    const escalatedRate = escalate(importData.rate || 0, rate, year);
-    return totalImport * escalatedRate;
-}
+    const { rate: escalationRate, year } = escalationConfig;
 
-function calculateTimeOfUseImport(importData, dailyBreakdown, escalationConfig) {
-    const { rate, year } = escalationConfig;
-    let cost = 0;
+    // Process rules in the order they appear in the array.
+    for (const rule of importRules) {
+        if (remainingTotalImport <= 0) break; // Stop if all imports have been processed.
 
-    // Escalate each TOU rate before calculating the cost for that period
-    cost += dailyBreakdown.peakKWh * escalate(importData.peak || 0, rate, year);
-    cost += dailyBreakdown.shoulderKWh * escalate(importData.shoulder || 0, rate, year);
-    cost += dailyBreakdown.offPeakKWh * escalate(importData.offPeak || 0, rate, year);
-    
-    return cost;
-}
+        const escalatedRate = escalate(rule.rate || 0, escalationRate, year);
 
-// --- FEED-IN TARIFF (FIT) CALCULATION COMPONENTS ---
-// These remain unchanged as they use a specific degradation logic, not escalation.
+        switch (rule.type) {
+            case 'tou': // Time of Use rule
+                const ruleHours = parseRangesToHours(rule.hours || '');
+                for (const h of ruleHours) {
+                    if (remainingHourlyImports[h] > 0) {
+                        totalCost += remainingHourlyImports[h] * escalatedRate;
+                        remainingTotalImport -= remainingHourlyImports[h];
+                        remainingHourlyImports[h] = 0; // Mark this hour as processed.
+                    }
+                }
+                break;
 
-function calculateFlatRateFit(exportData, dailyBreakdown, year, fitConfig, getDegradedFitRate) {
-    const totalExport = dailyBreakdown.tier1ExportKWh + dailyBreakdown.tier2ExportKWh;
-    const degradedRate = getDegradedFitRate(exportData.rate, year, fitConfig);
-    return totalExport * degradedRate;
-}
+            case 'tiered': // Tiered rule (processes a portion of the total daily import)
+                const amountInTier = Math.min(remainingTotalImport, rule.limit || Infinity);
+                totalCost += amountInTier * escalatedRate;
+                remainingTotalImport -= amountInTier;
+                // Note: This simplified tiered model doesn't deplete specific hours,
+                // assuming tiers apply to the daily total regardless of time.
+                break;
 
-function calculateMultiTierFit(exportData, dailyBreakdown, year, fitConfig, getDegradedFitRate) {
-    let credit = 0;
-    const tier1Rule = exportData.tiers[0];
-    const tier2Rule = exportData.tiers[1];
-    credit += dailyBreakdown.tier1ExportKWh * getDegradedFitRate(tier1Rule.rate, year, fitConfig);
-    credit += dailyBreakdown.tier2ExportKWh * getDegradedFitRate(tier2Rule.rate, year, fitConfig);
-    return credit;
-}
-
-function calculateGloBirdComplexFit(exportData, dailyBreakdown, year, fitConfig, getDegradedFitRate, getRateForHour) {
-    let credit = 0;
-    const totalExport = dailyBreakdown.hourlyExports.reduce((a, b) => a + b, 0);
-    const bonusAmount = Math.min(totalExport, exportData.bonusLimit);
-    credit += bonusAmount * getDegradedFitRate(exportData.bonusRate, year, fitConfig);
-    
-    // Note: This assumes the hourly export rates for GloBird also degrade over time.
-    for (let h = 0; h < 24; h++) {
-        if (dailyBreakdown.hourlyExports[h] > 0) {
-            const rateForHour = getRateForHour(h, exportData.touRates);
-            credit += dailyBreakdown.hourlyExports[h] * getDegradedFitRate(rateForHour, year, fitConfig);
+            case 'flat': // Flat rate rule (processes all remaining import)
+                totalCost += remainingTotalImport * escalatedRate;
+                remainingTotalImport = 0;
+                break;
         }
     }
-    return credit;
+    return totalCost;
 }
 
+/**
+ * A generic "rules engine" to calculate the total export credit for a day.
+ * It processes rules in order, allowing for complex schemes like bonus tiers followed by TOU rates.
+ * @param {Array} exportRules - An array of rule objects from the provider.
+ * @param {Object} dailyBreakdown - An object containing the day's energy data.
+ * @param {number} year - The current simulation year.
+ * @param {Object} fitConfig - Configuration for Feed-In Tariff degradation.
+ * @param {Function} getDegradedFitRate - Helper function to get the degraded rate.
+ * @returns {number} The total calculated export credit for the day.
+ */
+function calculateExportCredit(exportRules, dailyBreakdown, year, fitConfig, getDegradedFitRate) {
+    let totalCredit = 0;
+    const remainingHourlyExports = [...(dailyBreakdown.hourlyExports || [])];
+    let remainingTotalExport = remainingHourlyExports.reduce((a, b) => a + b, 0);
+
+    for (const rule of exportRules) {
+        if (remainingTotalExport <= 0) break;
+
+        const degradedRate = getDegradedFitRate(rule.rate || 0, year, fitConfig);
+
+        switch (rule.type) {
+            case 'tiered':
+                const amountInTier = Math.min(remainingTotalExport, rule.limit || Infinity);
+                totalCredit += amountInTier * degradedRate;
+                remainingTotalExport -= amountInTier;
+                // This assumes the highest-priority kWh are used by the tier first.
+                // We need to proportionally reduce the hourly exports.
+                const reductionFactor = (remainingTotalExport + amountInTier) > 0 ? remainingTotalExport / (remainingTotalExport + amountInTier) : 0;
+                for (let h = 0; h < 24; h++) {
+                    remainingHourlyExports[h] *= reductionFactor;
+                }
+                break;
+
+            case 'tou':
+                const ruleHours = parseRangesToHours(rule.hours || '');
+                for (const h of ruleHours) {
+                    if (remainingHourlyExports[h] > 0) {
+                        totalCredit += remainingHourlyExports[h] * degradedRate;
+                        remainingTotalExport -= remainingHourlyExports[h];
+                        remainingHourlyExports[h] = 0;
+                    }
+                }
+                break;
+
+            case 'flat':
+                totalCredit += remainingTotalExport * degradedRate;
+                remainingTotalExport = 0;
+                break;
+        }
+    }
+    return totalCredit;
+}
 
 // --- EXPORTED COMPONENT LIBRARY ---
-
+// The library is now much simpler, exporting the two main engine functions.
 export const tariffComponents = {
-    FLAT_RATE_IMPORT: { calculate: calculateFlatRateImport },
-    TIME_OF_USE_IMPORT: { calculate: calculateTimeOfUseImport },
-    FLAT_RATE_FIT: { calculate: calculateFlatRateFit },
-    MULTI_TIER_FIT: { calculate: calculateMultiTierFit },
-    GLOBIRD_COMPLEX_FIT: { calculate: calculateGloBirdComplexFit },
+    IMPORT_RULES: { calculate: calculateImportCost },
+    EXPORT_RULES: { calculate: calculateExportCredit },
 };

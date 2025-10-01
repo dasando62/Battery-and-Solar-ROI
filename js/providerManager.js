@@ -1,63 +1,66 @@
 // js/providerManager.js
-//Version 1.0.2
+//Version 1.0.3
 const PROVIDERS_KEY = 'roiAnalyzer_providers';
 const DEFAULTS_LOADED_KEY = 'roiAnalyzer_defaults_loaded';
 
 // The default providers are now in an array to preserve order
 const defaultProviders = [
-	{
+    {
         id: "Origin",
         name: "Origin Energy",
-        importComponent: 'TIME_OF_USE_IMPORT',
-        exportComponent: 'MULTI_TIER_FIT',
-        exportType: 'tiered',
+		isExpanded: true,
         dailyCharge: 1.1605,
-        peakRate: 0.59653,
-        shoulderRate: 0.29425,
-        offPeakRate: 0.35233,
-        peakHours: '7am-10am, 4pm-10pm',
-        shoulderHours: '10am-4pm',
-        offPeakHours: '10pm-7am',
-        export1Rate: 0.10,
-        export1Limit: 14,
-        export2Rate: 0.02,
+        rebate: 0,
+        monthlyFee: 0,
+        importRules: [
+            { type: 'tou', name: 'Peak', rate: 0.59653, hours: '7am-10am, 4pm-10pm' },
+            { type: 'tou', name: 'Shoulder', rate: 0.29425, hours: '10am-4pm' },
+            { type: 'tou', name: 'Off-Peak', rate: 0.35233, hours: '10pm-7am' }
+        ],
+        exportRules: [
+            { type: 'tiered', name: 'Tier 1', rate: 0.10, limit: 14 },
+            { type: 'flat', name: 'Tier 2', rate: 0.02 }
+        ], // <-- FIXED: Missing comma added
         gridChargeEnabled: false,
-        gridChargeStart: 23,
+        gridChargeStart: 1,
         gridChargeEnd: 5
     },
     {
         id: "GloBird",
         name: "GloBird",
-        importComponent: 'TIME_OF_USE_IMPORT',
-        exportComponent: 'GLOBIRD_COMPLEX_FIT',
-        exportType: 'timeOfUse',
+		isExpanded: true,
         dailyCharge: 1.364,
-        peakRate: 0.528,
-        shoulderRate: 0.396,
-        offPeakRate: 0.000,
-        peakHours: '3pm-11pm',
-        shoulderHours: '7am-11am, 10pm-12am',
-        offPeakHours: '12am-7am, 11am-3pm',
-        export4pm9pmRate: 0.030,
-        export9pm10am2pm4pmRate: 0.003,
-        export10am2pmRate: 0.000,
-        superExportRate: 0.120,
-        superExportLimit: 10,
+        rebate: 1500, // <-- FIXED: Missing comma added
         zeroHeroCredit: -1.00,
-        gridChargeEnabled: false,
-        gridChargeStart: 23,
-        gridChargeEnd: 5
-    },
+        monthlyFee: 0,
+        importRules: [
+            { type: 'tou', name: 'Peak Import', rate: 0.528, hours: '3pm-11pm' },
+            { type: 'tou', name: 'Shoulder Import', rate: 0.396, hours: '7am-11am, 10pm-12am' },
+            { type: 'tou', name: 'Off-Peak Import', rate: 0.000, hours: '12am-7am, 11am-3pm' }
+        ],
+        exportRules: [
+            { type: 'tiered', name: 'Super Export Bonus', rate: 0.120, limit: 10 },
+            { type: 'tou', name: 'Peak Export', rate: 0.030, hours: '4pm-9pm' },
+            { type: 'tou', name: 'Shoulder Export', rate: 0.003, hours: '9pm-10am, 2pm-4pm' },
+            { type: 'tou', name: 'Solar Sponge', rate: 0.000, hours: '10am-2pm' }
+        ],
+        gridChargeEnabled: true,
+        gridChargeStart: 11,
+        gridChargeEnd: 15
+    }, // <-- FIXED: Missing comma added
     {
         id: "Amber",
         name: "Amber",
-        importComponent: 'FLAT_RATE_IMPORT',
-        exportComponent: 'FLAT_RATE_FIT',
-        exportType: 'flat',
+		isExpanded: true,
         dailyCharge: 1.091,
-        importRate: 0.355,
-        exportRate: 0.007,
         monthlyFee: 25,
+        rebate: 1500,
+        importRules: [
+            { type: 'flat', name: 'Average Import', rate: 0.355 }
+        ],
+        exportRules: [
+            { type: 'flat', name: 'Average Export', rate: 0.007 }
+        ], // <-- FIXED: Missing comma added
         gridChargeEnabled: false,
         gridChargeStart: 23,
         gridChargeEnd: 5
@@ -65,21 +68,22 @@ const defaultProviders = [
     {
         id: "AGL",
         name: "AGL Energy",
-        importComponent: 'TIME_OF_USE_IMPORT',
-        exportComponent: 'FLAT_RATE_FIT',
-        exportType: 'flat',
+		isExpanded: true,
         dailyCharge: 1.2,
-        peakRate: 0.5,
-        shoulderRate: 0.3,
-        offPeakRate: 0.2,
-        peakHours: '3pm-11pm',
-        shoulderHours: '7am-11am, 10pm-12am',
-        offPeakHours: '12am-7am, 11am-3pm',
-        exportRate: 0.05,
+        rebate: 0,
+        monthlyFee: 0,
+        importRules: [
+            { type: 'tou', name: 'Peak', rate: 0.5, hours: '3pm-11pm' }, // <-- FIXED: Added quotes
+            { type: 'tou', name: 'Shoulder', rate: 0.3, hours: '7am-11am, 11pm-12am' },
+            { type: 'tou', name: 'Off-Peak', rate: 0.2, hours: '12am-7am, 11am-3pm' }
+        ],
+        exportRules: [
+            { type: 'flat', name: 'Flat Rate', rate: 0.05 }
+        ], // <-- FIXED: Missing comma added
         gridChargeEnabled: false,
-        gridChargeStart: 23,
-        gridChargeEnd: 5
-    }
+        gridChargeStart: 0,
+        gridChargeEnd: 7
+    },
 ];
 
 export function getProviders() {

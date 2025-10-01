@@ -1,9 +1,67 @@
 // js/uiRender.js
-//Version 1.0.2
+//Version 1.0.3
 import { state } from './state.js';
 import { createBreakdownTableHTML } from './debugTables.js';
 import { getNumericInput } from './utils.js';
 import { getDegradedFitRate } from './analysis.js';
+
+export function drawDistributionCharts(distributions, state) {
+    if (!distributions) return;
+
+    // Destroy old charts if they exist
+    if (state.peakPeriodChart) state.peakPeriodChart.destroy();
+    if (state.maxHourlyChart) state.maxHourlyChart.destroy();
+
+    const { peakPeriod: dailyPeakPeriodData, maxHourly: dailyMaxHourData } = distributions;
+
+    // --- Chart 1: Peak Period Load Distribution ---
+    const maxPeakPeriod = Math.max(...dailyPeakPeriodData);
+    const binSize1 = Math.ceil(maxPeakPeriod / 10) || 1;
+    const bins1 = Array.from({ length: 10 }, (_, i) => ({ 
+        label: `${i * binSize1}-${(i + 1) * binSize1} kWh`, 
+        count: 0 
+    }));
+    dailyPeakPeriodData.forEach(v => { 
+        const binIndex = Math.min(Math.floor(v / binSize1), 9); 
+        if (bins1[binIndex]) bins1[binIndex].count++; 
+    });
+
+    const ctx1 = document.getElementById("peakPeriodHistogram")?.getContext("2d");
+    if (ctx1) { 
+        state.peakPeriodChart = new Chart(ctx1, { 
+            type: 'bar', 
+            data: { 
+                labels: bins1.map(b => b.label), 
+                datasets: [{ label: "Days", data: bins1.map(b => b.count), backgroundColor: "rgba(54,162,235,0.6)" }] 
+            }, 
+            options: { plugins: { title: { display: true, text: 'Daily Peak Period Load Distribution' } } } 
+        }); 
+    }
+
+    // --- Chart 2: Maximum Hourly Load Distribution ---
+    const maxHourly = Math.max(...dailyMaxHourData);
+    const binSize2 = (Math.ceil(maxHourly / 10 * 10) / 10) || 1;
+    const bins2 = Array.from({ length: 10 }, (_, i) => ({ 
+        label: `${(i * binSize2).toFixed(1)}-${((i + 1) * binSize2).toFixed(1)} kW`, 
+        count: 0 
+    }));
+    dailyMaxHourData.forEach(v => { 
+        const binIndex = Math.min(Math.floor(v / binSize2), 9); 
+        if (bins2[binIndex]) bins2[binIndex].count++; 
+    });
+
+    const ctx2 = document.getElementById("maxHourlyHistogram")?.getContext("2d");
+    if (ctx2) { 
+        state.maxHourlyChart = new Chart(ctx2, { 
+            type: 'bar', 
+            data: { 
+                labels: bins2.map(b => b.label), 
+                datasets: [{ label: "Days", data: bins2.map(b => b.count), backgroundColor: "rgba(255,159,64,0.6)" }] 
+            }, 
+            options: { plugins: { title: { display: true, text: 'Daily Maximum Hourly Load Distribution' } } } 
+        }); 
+    }
+}
 
 // Replace the existing buildRawDataTable function in uiRender.js with this one
 function buildRawDataTable(data) {
@@ -71,102 +129,62 @@ function buildRawDataTable(data) {
     return tableHTML;
 }
 
-export function renderSizingResults(sizingData, state) {
+export function renderSizingResults(sizingResults, state) {
     const recommendationContainer = document.getElementById('recommendationContainer');
-    const estimatesContainer = document.getElementById('newSystemEstimatesTable');
-    const recommendationSection = document.getElementById('sizing-recommendation-section');
-    
-    // --- 1. Build the Complete HTML for the Recommendations ---
-    let recommendationHTML = `
-        <div class="recommendation-section">
-            <h4>Heuristic Sizing (based on ${sizingData.heuristic.coverageTarget}% annual coverage)</h4>
+    if (!recommendationContainer) return;
+
+    const { heuristic, detailed, blackout } = sizingResults;
+    let recommendationHTML = `<div class="recommendation-section">`;
+
+    // --- Heuristic Sizing Section ---
+    if (heuristic) {
+        recommendationHTML += `
+            <h4>Heuristic Sizing (based on ${heuristic.coverageTarget}% annual coverage)</h4>
             <p>
-                <strong>Recommended Solar: ${sizingData.heuristic.solar.toFixed(1)} kW</strong><br>
-                <strong>Recommended Battery: ${sizingData.heuristic.battery.toFixed(1)} kWh</strong><br>
-                <strong>Recommended Inverter: ${sizingData.heuristic.inverter.toFixed(1)} kW</strong>
-            </p>
-            <hr>
+                <strong>Recommended Solar: ${heuristic.solar.toFixed(1)} kW</strong><br>
+                <strong>Recommended Battery: ${heuristic.battery.toFixed(1)} kWh</strong><br>
+                <strong>Recommended Inverter: ${heuristic.inverter.toFixed(1)} kW</strong>
+            </p>`;
+    }
+
+    // --- Detailed Sizing Section ---
+    if (detailed) {
+        recommendationHTML += `<hr>
             <h4>Detailed Sizing (based on 90th percentile of daily load)</h4>
             <p>
-                <strong>Recommended Battery Capacity: ${sizingData.detailed.recommendedBatteryKWh} kWh</strong><br>
-                <small><em>This would have fully covered peak period needs on ${sizingData.detailed.batteryCoverageDays} of ${sizingData.detailed.totalDays} days.</em></small>
+                <strong>Recommended Battery Capacity: ${detailed.recommendedBatteryKWh} kWh</strong><br>
+                <small><em>This would have fully covered peak period needs on ${detailed.batteryCoverageDays} of ${detailed.totalDays} days.</em></small>
             </p>
             <p>
-                <strong>Recommended Inverter Power: ${sizingData.detailed.recommendedInverterKW} kW</strong><br>
-                <small><em>This would have met max power demand on ${sizingData.detailed.inverterCoverageDays} of ${sizingData.detailed.totalDays} days.</em></small>
-            </p>
-    `;
+                <strong>Recommended Inverter Power: ${detailed.recommendedInverterKW.toFixed(1)} kW</strong><br>
+                <small><em>This would have met max power demand on ${detailed.inverterCoverageDays} of ${detailed.totalDays} days.</em></small>
+            </p>`;
+    }
 
-    // Conditionally add the blackout section if the data exists
-    if (sizingData.blackout) {
-        recommendationHTML += `
-            <hr>
+    // --- Blackout Sizing Section (only if enabled and calculated) ---
+    if (blackout) {
+        recommendationHTML += `<hr>
             <h4>Blackout Protection Sizing</h4>
             <p>
-                For a <strong>${sizingData.blackout.duration}-hour</strong> blackout covering <strong>${sizingData.blackout.coverage * 100}%</strong> of usage, a reserve of <strong>${sizingData.blackout.requiredReserve.toFixed(2)} kWh</strong> is needed.
+                A reserve of <strong>${blackout.requiredReserve.toFixed(2)} kWh</strong> is needed for your specified blackout scenario.
             </p>
             <p>
                 <strong>Total Recommended Practical Size (Savings + Blackout):</strong><br>
-                ${sizingData.detailed.recommendedBatteryKWh} kWh + ${sizingData.blackout.requiredReserve.toFixed(2)} kWh = ${sizingData.blackout.totalCalculatedSize.toFixed(2)} kWh.
-                The next largest standard size is <strong>${sizingData.blackout.practicalSize} kWh</strong>.
-            </p>
-        `;
+                ${detailed.recommendedBatteryKWh} kWh + ${blackout.requiredReserve.toFixed(2)} kWh = ${blackout.totalCalculatedSize.toFixed(2)} kWh.
+                The next largest standard size is <strong>${blackout.practicalSize} kWh</strong>.
+            </p>`;
     }
-
+    
     recommendationHTML += `</div>`;
     recommendationContainer.innerHTML = recommendationHTML;
 
-    // --- 2. Add the HTML for the Chart Canvases ---
-    estimatesContainer.innerHTML = `
-        <details class="collapsible-histogram" open>
-            <summary>📊 Daily Peak Period Load Distribution</summary>
-            <canvas id="peakPeriodHistogram"></canvas>
-        </details>
-        <details class="collapsible-histogram" open>
-            <summary>📊 Daily Maximum Hourly Load Distribution</summary>
-            <canvas id="maxHourlyHistogram" style="margin-top: 30px;"></canvas>
-        </details>
-    `;
-
-// --- 3. Render the Chart.js Histograms ---
-	setTimeout(() => {
-    if (state.peakPeriodChart) state.peakPeriodChart.destroy();
-    const ctx1 = document.getElementById("peakPeriodHistogram")?.getContext("2d");
-    if (ctx1) {
-        state.peakPeriodChart = new Chart(ctx1, {
-            type: 'bar',
-            data: {
-                labels: sizingData.histogramData.peakPeriod.map(b => b.label),
-                datasets: [{
-                    label: "Number of Days",
-                    data: sizingData.histogramData.peakPeriod.map(b => b.count),
-                    backgroundColor: "rgba(54, 162, 235, 0.6)"
-                }]
-            },
-            options: { plugins: { title: { display: true, text: 'Peak Period Demand Histogram' } } }
-        });
+    // --- Create the empty canvas elements for the charts ---
+    const newSystemEstimatesTable = document.getElementById("newSystemEstimatesTable");
+    if (newSystemEstimatesTable) {
+        newSystemEstimatesTable.innerHTML = `
+            <details class="collapsible-histogram" open><summary>📊 Daily Peak Period Load Distribution</summary><canvas id="peakPeriodHistogram"></canvas></details>
+            <details class="collapsible-histogram" open><summary>📊 Daily Maximum Hourly Load Distribution</summary><canvas id="maxHourlyHistogram"></canvas></details>`;
     }
-
-    if (state.maxHourlyChart) state.maxHourlyChart.destroy();
-    const ctx2 = document.getElementById("maxHourlyHistogram")?.getContext("2d");
-    if (ctx2) {
-        state.maxHourlyChart = new Chart(ctx2, {
-            type: 'bar',
-            data: {
-                labels: sizingData.histogramData.maxHourly.map(b => b.label),
-                datasets: [{
-                    label: "Number of Days",
-                    data: sizingData.histogramData.maxHourly.map(b => b.count),
-                    backgroundColor: "rgba(255, 159, 64, 0.6)"
-                }]
-            },
-            options: { plugins: { title: { display: true, text: 'Maximum Hourly Load Histogram' } } }
-        });
-    }
-}, 0); // A zero-millisecond delay is all that's needed.
-
-    // --- 4. Make the Section Visible ---
-    recommendationSection.style.display = 'block';
 }
 
 function renderFinancialSummary(financials, config) {

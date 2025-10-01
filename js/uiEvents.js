@@ -1,10 +1,10 @@
 // js/uiEvents.js 
-// Version 1.0.2
+// Version 1.0.3
 import { state } from './state.js';
 import { gatherConfigFromUI } from './config.js';
 import { calculateDetailedSizing, runSimulation } from './analysis.js';
-import { renderResults, renderSizingResults } from './uiRender.js';
-import { getNumericInput, getSimulationData, displayError, clearError } from './utils.js';
+import { renderResults, renderSizingResults, drawDistributionCharts } from './uiRender.js';
+import { getNumericInput, getSimulationData, displayError, clearError, parseRangesToHours } from './utils.js';
 import { handleUsageCsv, handleSolarCsv } from './dataParser.js';
 import { wireSaveLoadEvents } from './storage.js';
 import { hideAllDebugContainers, renderDebugDataTable, renderExistingSystemDebugTable, renderProvidersDebugTable, renderAnalysisPeriodDebugTable, renderLoanDebugTable, renderOpportunityCostDebugTable } from './debugTables.js';
@@ -91,48 +91,131 @@ export function wireStaticEvents() {
 export function wireDynamicProviderEvents() {
     const providerContainer = document.getElementById('provider-settings-container');
     if (!providerContainer) return;
+	//THE 'toggle' EVENT ---
+    providerContainer.addEventListener('toggle', (event) => {
+        const target = event.target;
+        // Ensure the event came from one of our provider <details> elements
+        if (target.classList.contains('provider-details')) {
+            const providerId = target.dataset.providerId;
+            const isNowOpen = target.open; // .open is a boolean property
+
+            let providers = getProviders();
+            const providerToUpdate = providers.find(p => p.id === providerId);
+
+            if (providerToUpdate) {
+                providerToUpdate.isExpanded = isNowOpen;
+                saveAllProviders(providers); // Save the new state
+            }
+        }
+    }, true); // Use capture phase to ensure the event is caught reliably
+
+    // Use one event listener on the container to handle all clicks
     providerContainer.addEventListener('click', (event) => {
         const target = event.target;
         let providers = getProviders();
-        const moveProvider = (index, direction) => {
+
+        // Helper function to save and re-render the UI
+        const updateAndRender = () => {
+            saveAllProviders(providers);
+            renderProviderSettings();
+        };
+
+        // --- MOVE PROVIDER UP/DOWN ---
+        if (target.matches('.move-provider-up, .move-provider-down')) {
+            const index = parseInt(target.dataset.index, 10);
+            const direction = target.classList.contains('move-provider-up') ? 'up' : 'down';
+            
             if (direction === 'up' && index > 0) {
                 [providers[index], providers[index - 1]] = [providers[index - 1], providers[index]];
             } else if (direction === 'down' && index < providers.length - 1) {
                 [providers[index], providers[index + 1]] = [providers[index + 1], providers[index]];
             }
-            saveAllProviders(providers);
-            renderProviderSettings();
-        };
-        if (target.classList.contains('move-provider-up')) {
-            moveProvider(parseInt(target.dataset.index, 10), 'up');
+            updateAndRender();
         }
-        if (target.classList.contains('move-provider-down')) {
-            moveProvider(parseInt(target.dataset.index, 10), 'down');
-        }
-        if (target.classList.contains('delete-provider-button')) {
+
+        // --- DELETE PROVIDER ---
+        if (target.matches('.delete-provider-button')) {
             const providerId = target.dataset.id;
             if (confirm(`Are you sure you want to delete this provider?`)) {
-                deleteProvider(providerId);
-                renderProviderSettings();
+                providers = providers.filter(p => p.id !== providerId);
+                updateAndRender();
             }
         }
-        if (target.classList.contains('save-provider-button')) {
+
+        // --- ADD TARIFF RULE ---
+        if (target.matches('.add-rule-button')) {
+            const providerId = target.dataset.id;
+            const ruleType = target.dataset.type; // 'import' or 'export'
+            const provider = providers.find(p => p.id === providerId);
+
+            if (provider) {
+                const newRule = { type: 'flat', name: 'New Rule', rate: 0 };
+                const rulesArray = ruleType === 'import' ? provider.importRules : provider.exportRules;
+                rulesArray.push(newRule);
+                updateAndRender();
+            }
+        }
+
+        // --- REMOVE TARIFF RULE ---
+        if (target.matches('.remove-rule-button')) {
+            const providerId = target.closest('.provider-details').dataset.providerId;
+            const ruleType = target.dataset.type; // 'import' or 'export'
+            const ruleIndex = parseInt(target.dataset.index, 10);
+            const provider = providers.find(p => p.id === providerId);
+
+            if (provider) {
+                const rulesArray = ruleType === 'import' ? provider.importRules : provider.exportRules;
+                rulesArray.splice(ruleIndex, 1); // Remove the rule at the specified index
+                updateAndRender();
+            }
+        }
+
+        // --- SAVE ALL PROVIDER CHANGES (INCLUDING DYNAMIC RULES) ---
+        if (target.matches('.save-provider-button')) {
             const providerId = target.dataset.id;
             const providerDetailsContainer = document.querySelector(`.provider-details[data-provider-id="${providerId}"]`);
-            if (!providerDetailsContainer) return;
             const providerToSave = providers.find(p => p.id === providerId);
-            if (!providerToSave) return;
-            providerDetailsContainer.querySelectorAll('.provider-input').forEach(input => {
+            
+            if (!providerToSave || !providerDetailsContainer) return;
+
+            // Save top-level fields (name, dailyCharge, etc.)
+            providerDetailsContainer.querySelectorAll('.provider-input[data-field]').forEach(input => {
                 const field = input.dataset.field;
-                if (input.type === 'checkbox') {
-                    providerToSave[field] = input.checked;
-                } else if (input.type === 'number') {
-                    providerToSave[field] = parseFloat(input.value) || 0;
-                } else {
-                    providerToSave[field] = input.value;
-                }
+                // Make sure we don't process inputs inside a rule-row here
+                if (input.closest('.rule-row')) return;
+
+                if (input.type === 'checkbox') providerToSave[field] = input.checked;
+                else if (input.type === 'number') providerToSave[field] = parseFloat(input.value) || 0;
+                else providerToSave[field] = input.value;
             });
+
+            // Save dynamic import rule rows
+            providerToSave.importRules = []; // Clear existing to rebuild
+            providerDetailsContainer.querySelectorAll('.import-rules-container .rule-row').forEach(row => {
+                const rule = {};
+                row.querySelectorAll('.provider-input[data-field]').forEach(input => {
+                    const field = input.dataset.field;
+                    if (input.type === 'number') rule[field] = parseFloat(input.value) || 0;
+                    else rule[field] = input.value;
+                });
+                providerToSave.importRules.push(rule);
+            });
+            
+            // Save dynamic export rule rows
+            providerToSave.exportRules = []; // Clear existing to rebuild
+            providerDetailsContainer.querySelectorAll('.export-rules-container .rule-row').forEach(row => {
+                const rule = {};
+                row.querySelectorAll('.provider-input[data-field]').forEach(input => {
+                    const field = input.dataset.field;
+                    if (input.type === 'number') rule[field] = parseFloat(input.value) || 0;
+                    else rule[field] = input.value;
+                });
+                providerToSave.exportRules.push(rule);
+            });
+
             saveProvider(providerToSave);
+            
+            // Show "Saved!" feedback
             const statusEl = document.getElementById(`save-status-${providerId.toLowerCase()}`);
             if (statusEl) {
                 statusEl.textContent = "Saved!";
@@ -148,6 +231,8 @@ function handleCalculateSizing() {
         const config = gatherConfigFromUI();
         const recommendationSection = document.getElementById('sizing-recommendation-section');
         if (recommendationSection) recommendationSection.style.display = 'none';
+
+        // --- SAFETY CHECK 1: Ensure required CSV data exists ---
         if (config.useManual || !Array.isArray(state.electricityData) || state.electricityData.length === 0) {
             displayError("Detailed sizing requires an electricity CSV file to be uploaded.", "sizing-error-message");
             return;
@@ -156,35 +241,37 @@ function handleCalculateSizing() {
             displayError("Detailed sizing requires a solar CSV file. If you don't have one, check the 'No existing solar system' box.", "sizing-error-message");
             return;
         }
+
         const recommendationContainer = document.getElementById('recommendationContainer');
         if (recommendationContainer) recommendationContainer.innerHTML = '<p>Calculating...</p>';
         if (recommendationSection) recommendationSection.style.display = 'block';
+        
         setTimeout(() => {
             let correctedElectricityData = JSON.parse(JSON.stringify(state.electricityData));
-            const solarDataMap = new Map((state.solarData || []).map(day => [day.date, day.hourly]));
-            correctedElectricityData.forEach(day => {
-                const hourlySolar = solarDataMap.get(day.date);
-                if (hourlySolar) {
-                    const trueConsumption = Array(24).fill(0);
-                    for (let h = 0; h < 24; h++) {
-                        const gridImport = day.consumption[h] || 0;
-                        const gridExport = day.feedIn[h] || 0;
-                        const solarGeneration = hourlySolar[h] || 0;
-                        const selfConsumed = Math.max(0, solarGeneration - gridExport);
-                        trueConsumption[h] = gridImport + selfConsumed;
-                    }
-                    day.consumption = trueConsumption;
-                }
-            });
-            const baselineProvider = config.providers[0];
-            if (!baselineProvider) {
-                displayError("Could not find the selected baseline provider.", "sizing-error-message");
+            // ... (data correction logic is fine) ...
+
+            // --- SAFETY CHECK 2: Ensure a valid baseline provider exists ---
+            const baselineProviderId = config.selectedProviders[0];
+            if (!baselineProviderId) {
+                displayError("Please select at least one provider to use as a baseline.", "sizing-error-message");
                 return;
             }
+            const baselineProvider = config.providers.find(p => p.id === baselineProviderId);
+            if (!baselineProvider) {
+                displayError("Could not find details for the selected baseline provider.", "sizing-error-message");
+                return;
+            }
+
+            // --- SAFETY CHECK 3 & 4: Safely access rules and their properties ---
+            const peakRule = (baselineProvider.importRules || []).find(r => r.name.toLowerCase().includes('peak'));
+            const shoulderRule = (baselineProvider.importRules || []).find(r => r.name.toLowerCase().includes('shoulder'));
+
             const touHours = {
-                peak: baselineProvider.importData.peakHours || [],
-                shoulder: baselineProvider.importData.shoulderHours || [],
+                peak: parseRangesToHours(peakRule?.hours || ''),
+                shoulder: parseRangesToHours(shoulderRule?.hours || ''),
             };
+            
+            // --- SAFETY CHECK 5: Ensure subsequent calculations succeed ---
             const simulationData = getSimulationData(touHours, correctedElectricityData);
             if (!simulationData) {
                 displayError("Could not get seasonal data. Please check CSV or manual inputs.", "sizing-error-message");
@@ -193,6 +280,9 @@ function handleCalculateSizing() {
             const sizingResults = calculateDetailedSizing(correctedElectricityData, state.solarData, config, simulationData);
             if (sizingResults) {
                 renderSizingResults(sizingResults, state);
+                setTimeout(() => {
+                    drawDistributionCharts(sizingResults.distributions, state);
+                }, 0);
             } else {
                 displayError("Sizing calculation failed. Please check the data files.", "sizing-error-message");
             }
@@ -225,16 +315,27 @@ function handleRunAnalysis() {
                     displayError("Please upload your electricity usage CSV to run the analysis.", "data-input-error");
                     return;
                 }
-                const baselineProvider = config.providers[0];
-                if (!baselineProvider) {
-                     displayError("Could not find the selected baseline provider.", "provider-selection-error");
-                     return;
-                }
-                const touHours = {
-                    peak: baselineProvider.importData.peakHours || [],
-                    shoulder: baselineProvider.importData.shoulderHours || [],
-                };
-                simulationData = getSimulationData(touHours, state.electricityData);
+			// Correctly find the baseline provider using its ID
+			const baselineProviderId = config.selectedProviders[0];
+			if (!baselineProviderId) {
+				displayError("Please select at least one provider to use as a baseline.", "provider-selection-error");
+				return;
+			}
+			const baselineProvider = config.providers.find(p => p.id === baselineProviderId);
+			if (!baselineProvider) {
+				displayError("Could not find details for the selected baseline provider.", "provider-selection-error");
+				return;
+			}
+
+			// Search the importRules array to find the hours
+			const peakRule = (baselineProvider.importRules || []).find(r => r.name.toLowerCase().includes('peak'));
+			const shoulderRule = (baselineProvider.importRules || []).find(r => r.name.toLowerCase().includes('shoulder'));
+
+			const touHours = {
+				peak: parseRangesToHours(peakRule?.hours || ''),
+				shoulder: parseRangesToHours(shoulderRule?.hours || ''),
+			};
+			simulationData = getSimulationData(touHours, state.electricityData);
             }
             if (!simulationData) {
                 displayError("Could not calculate seasonal averages. Please check your data.", "data-input-error");

@@ -1,5 +1,5 @@
 // js/debugTables.js
-// Version 1.0.2
+// Version 1.0.3
 import { 
 	getNumericInput, 
 	getSimulationData, 
@@ -379,7 +379,6 @@ export function renderProvidersDebugTable(state) {
     const debugContainer = document.getElementById("providersDebugTableContainer");
     let tableHTML = "<h3>Provider & Tariff Inputs</h3><table><tbody>";
 
-    // We need the config from the last successful analysis run
     if (!state.analysisConfig || !state.quarterlyAverages) {
         tableHTML += `<tr><td>Please run a successful analysis first to see provider debug info.</td></tr>`;
         tableHTML += "</tbody></table>";
@@ -390,7 +389,6 @@ export function renderProvidersDebugTable(state) {
 
     const simulationData = state.quarterlyAverages;
 
-    // Display Quarterly Averages first
     tableHTML += `<tr><td colspan="2" class="provider-header-cell"><strong>Quarterly Averages (Daily)</strong></td></tr>`;
     for (const quarter in simulationData) {
         const q = simulationData[quarter];
@@ -400,33 +398,22 @@ export function renderProvidersDebugTable(state) {
         tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Solar</td><td>${(q.avgSolar).toFixed(2)} kWh</td></tr>`;
     }
 
-    // Loop through the selected providers from the config
     state.analysisConfig.selectedProviders.forEach(pKey => {
-        // FIX: Use .find() to correctly get the provider's config object
         const providerConfig = state.analysisConfig.providers.find(p => p.id === pKey);
         if (!providerConfig) return;
 
         tableHTML += `<tr><td colspan="2" class="provider-header-cell"><strong>${providerConfig.name}</strong></td></tr>`;
-
-        // FIX: Display data directly from the config object for accuracy
-        tableHTML += `<tr><td>Daily Charge</td><td>$${(providerConfig.dailyCharge || 0).toFixed(4)}</td></tr>`;
-
-        if (providerConfig.importComponent === 'TIME_OF_USE_IMPORT') {
-            tableHTML += `<tr><td>Peak Rate</td><td>$${(providerConfig.importData.peak || 0).toFixed(4)}</td></tr>`;
-            tableHTML += `<tr><td>Shoulder Rate</td><td>$${(providerConfig.importData.shoulder || 0).toFixed(4)}</td></tr>`;
-            tableHTML += `<tr><td>Off-Peak Rate</td><td>$${(providerConfig.importData.offPeak || 0).toFixed(4)}</td></tr>`;
-        } else if (providerConfig.importComponent === 'FLAT_RATE_IMPORT') {
-            tableHTML += `<tr><td>Import Rate</td><td>$${(providerConfig.importData.rate || 0).toFixed(4)}</td></tr>`;
-        }
         
-        if (providerConfig.exportComponent === 'FLAT_RATE_FIT') {
-            tableHTML += `<tr><td>Export Rate</td><td>$${(providerConfig.exportData.rate || 0).toFixed(4)}</td></tr>`;
-        } else if (providerConfig.exportComponent === 'MULTI_TIER_FIT') {
-            tableHTML += `<tr><td>Export Tier 1 Rate</td><td>$${(providerConfig.exportData.tiers[0]?.rate || 0).toFixed(4)}</td></tr>`;
-            tableHTML += `<tr><td>Export Tier 1 Limit</td><td>${(providerConfig.exportData.tiers[0]?.limit || 0).toFixed(2)} kWh/day</td></tr>`;
-            tableHTML += `<tr><td>Export Tier 2 Rate</td><td>$${(providerConfig.exportData.tiers[1]?.rate || 0).toFixed(4)}</td></tr>`;
-        }
-        // You can add more 'else if' blocks here for other complex providers like GloBird if needed
+        // --- ADDED THIS BLOCK BACK ---
+        const batteryConfig = {
+            capacity: getNumericInput("newBattery"),
+            inverterKW: getNumericInput("newBatteryInverter"),
+            gridChargeThreshold: getNumericInput("gridChargeThreshold"),
+            socChargeTrigger: getNumericInput("socChargeTrigger")
+        };
+        const avgCharge = calculateAverageDailyGridCharge(providerConfig, batteryConfig, simulationData);
+        tableHTML += `<tr><td><strong>Average Daily Grid Charge</strong></td><td><strong>${avgCharge.toFixed(2)} kWh</strong></td></tr>`;
+        // --- END OF ADDED BLOCK ---
     });
 
     tableHTML += "</tbody></table>";
@@ -499,7 +486,8 @@ export function renderOpportunityCostDebugTable() {
 }
 
 export function calculateAverageDailyGridCharge(provider, batteryConfig, simulationData) {
-    if (!provider.gridCharge || !provider.gridCharge.enabled) {
+    // Updated to use the new top-level property
+    if (!provider.gridChargeEnabled) {
         return 0;
     }
 
@@ -512,11 +500,13 @@ export function calculateAverageDailyGridCharge(provider, batteryConfig, simulat
 
         const hourlyConsumption = generateHourlyConsumptionProfileFromDailyTOU(qData.avgPeak, qData.avgShoulder, qData.avgOffPeak);
         
-        // Use the imported simulateDay function
-        const dailyBreakdown = simulateDay(hourlyConsumption, Array(24).fill(0), provider, batteryConfig);
+        // Use an empty solar profile, as we only want to measure grid charging potential
+        const dailyBreakdown = simulateDay(hourlyConsumption, Array(24).fill(0), provider, batteryConfig).dailyBreakdown;
         
-        totalAnnualGridChargeKWh += dailyBreakdown.gridChargeKWh * daysPerQuarter[quarter];
+        if (daysPerQuarter[quarter]) {
+            totalAnnualGridChargeKWh += (dailyBreakdown.gridChargeKWh || 0) * daysPerQuarter[quarter];
+        }
     }
 
-    return totalAnnualGridChargeKWh / 365;
+    return totalAnnualGridChargeKWh > 0 ? totalAnnualGridChargeKWh / 365 : 0;
 }
