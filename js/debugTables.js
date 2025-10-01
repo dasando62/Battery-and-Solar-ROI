@@ -1,5 +1,5 @@
 // js/debugTables.js
-// Version 9.6
+// Version 1.0.2
 import { 
 	getNumericInput, 
 	getSimulationData, 
@@ -379,20 +379,19 @@ export function renderProvidersDebugTable(state) {
     const debugContainer = document.getElementById("providersDebugTableContainer");
     let tableHTML = "<h3>Provider & Tariff Inputs</h3><table><tbody>";
 
-    // Use the new helper to get reliable data
-    const simulationData = getSimulationData(); 
-
-    if (!simulationData) {
-        tableHTML += `<tr><td>Please upload CSV files or run an analysis first to see provider debug info.</td></tr>`;
+    // We need the config from the last successful analysis run
+    if (!state.analysisConfig || !state.quarterlyAverages) {
+        tableHTML += `<tr><td>Please run a successful analysis first to see provider debug info.</td></tr>`;
         tableHTML += "</tbody></table>";
         if (debugContainer) debugContainer.innerHTML = tableHTML;
         if (debugContainer) debugContainer.style.display = "block";
         return;
     }
 
-    const providers = Array.from(document.querySelectorAll(".providerCheckbox:checked")).map(cb => cb.value);
+    const simulationData = state.quarterlyAverages;
 
-    tableHTML += `<tr><td colspan="2"><strong>Quarterly Averages (Daily)</strong></td></tr>`;
+    // Display Quarterly Averages first
+    tableHTML += `<tr><td colspan="2" class="provider-header-cell"><strong>Quarterly Averages (Daily)</strong></td></tr>`;
     for (const quarter in simulationData) {
         const q = simulationData[quarter];
         tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Peak</td><td>${(q.avgPeak).toFixed(2)} kWh</td></tr>`;
@@ -401,32 +400,35 @@ export function renderProvidersDebugTable(state) {
         tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Solar</td><td>${(q.avgSolar).toFixed(2)} kWh</td></tr>`;
     }
 
-    providers.forEach(p => {
-        tableHTML += `<tr><td colspan="2" class="provider-header-cell"><strong>${p}</strong></td></tr>`;
+    // Loop through the selected providers from the config
+    state.analysisConfig.selectedProviders.forEach(pKey => {
+        // FIX: Use .find() to correctly get the provider's config object
+        const providerConfig = state.analysisConfig.providers.find(p => p.id === pKey);
+        if (!providerConfig) return;
 
-        // This part requires a full config object, which is only available after a run.
-        // We can simplify this for now or build a mini-config.
-        if (state.analysisConfig) {
-             const providerConfig = state.analysisConfig.providers[p];
-             const batteryConfig = {
-                capacity: getNumericInput("newBattery"),
-                inverterKW: getNumericInput("newBatteryInverter"),
-                gridChargeThreshold: getNumericInput("gridChargeThreshold")
-            };
-            const avgCharge = calculateAverageDailyGridCharge(providerConfig, batteryConfig, simulationData);
-            tableHTML += `<tr><td><strong>Average Daily Grid Charge</strong></td><td><strong>${avgCharge.toFixed(2)} kWh</strong></td></tr>`;
-        }
+        tableHTML += `<tr><td colspan="2" class="provider-header-cell"><strong>${providerConfig.name}</strong></td></tr>`;
 
-        const settingsDiv = document.getElementById(p.toLowerCase() + "Settings");
-        if (settingsDiv) {
-            settingsDiv.querySelectorAll('label').forEach(label => {
-                const input = label.querySelector('input, select');
-                if (input && !label.querySelector('p.input-explainer')) {
-                    tableHTML += `<tr><td>${label.textContent.replace(':', '')}</td><td>${input.type === 'checkbox' ? input.checked : input.value}</td></tr>`;
-                }
-            });
+        // FIX: Display data directly from the config object for accuracy
+        tableHTML += `<tr><td>Daily Charge</td><td>$${(providerConfig.dailyCharge || 0).toFixed(4)}</td></tr>`;
+
+        if (providerConfig.importComponent === 'TIME_OF_USE_IMPORT') {
+            tableHTML += `<tr><td>Peak Rate</td><td>$${(providerConfig.importData.peak || 0).toFixed(4)}</td></tr>`;
+            tableHTML += `<tr><td>Shoulder Rate</td><td>$${(providerConfig.importData.shoulder || 0).toFixed(4)}</td></tr>`;
+            tableHTML += `<tr><td>Off-Peak Rate</td><td>$${(providerConfig.importData.offPeak || 0).toFixed(4)}</td></tr>`;
+        } else if (providerConfig.importComponent === 'FLAT_RATE_IMPORT') {
+            tableHTML += `<tr><td>Import Rate</td><td>$${(providerConfig.importData.rate || 0).toFixed(4)}</td></tr>`;
         }
+        
+        if (providerConfig.exportComponent === 'FLAT_RATE_FIT') {
+            tableHTML += `<tr><td>Export Rate</td><td>$${(providerConfig.exportData.rate || 0).toFixed(4)}</td></tr>`;
+        } else if (providerConfig.exportComponent === 'MULTI_TIER_FIT') {
+            tableHTML += `<tr><td>Export Tier 1 Rate</td><td>$${(providerConfig.exportData.tiers[0]?.rate || 0).toFixed(4)}</td></tr>`;
+            tableHTML += `<tr><td>Export Tier 1 Limit</td><td>${(providerConfig.exportData.tiers[0]?.limit || 0).toFixed(2)} kWh/day</td></tr>`;
+            tableHTML += `<tr><td>Export Tier 2 Rate</td><td>$${(providerConfig.exportData.tiers[1]?.rate || 0).toFixed(4)}</td></tr>`;
+        }
+        // You can add more 'else if' blocks here for other complex providers like GloBird if needed
     });
+
     tableHTML += "</tbody></table>";
     if (debugContainer) debugContainer.innerHTML = tableHTML;
     if (debugContainer) debugContainer.style.display = "block";

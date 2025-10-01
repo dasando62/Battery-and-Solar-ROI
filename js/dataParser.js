@@ -1,5 +1,5 @@
 // js/dataParser.js 
-// Version 9.6
+// Version 1.0.2
 import { state } from './state.js';
 import { displayError, parseDateString } from './utils.js';
 import { toggleExistingSolar } from './uiEvents.js';

@@ -1,159 +1,112 @@
 // js/storage.js
-//Version 9.6
+import { getProviders, saveAllProviders } from './providerManager.js';
+import { renderProviderSettings } from './uiDynamic.js';
 import { downloadBlob } from './utils.js';
+import { state } from './state.js';
 
-const savableInputIds = [
-  "dailyPeak", "dailyShoulder", "dailyOffPeak", "dailySolar", "existingSolarKW", "existingSolarInverter",
-  "existingBattery", "existingBatteryInverter", "newSolarKW", "costSolar", "newBattery", "newBatteryInverter",
-  "costBattery", "gridOffPeakCharge", "gridChargeThreshold", "gridChargeStartTime", "enableBlackoutSizing",
-  "blackoutDuration", "blackoutCoverage", "enableLoan", "loanAmount", "loanInterestRate", "loanTerm",
-  "enableDiscountRate", "discountRate", "tariffEscalation", "fitDegradationStartYear", "fitDegradationEndYear",
-  "fitMinimumRate", "originDailyCharge", "originPeakRate", "originShoulderRate", "originOffPeakRate",
-  "originExport1Rate", "originExport1Limit", "originExport2Rate", "originRebate", // <-- ADD THIS
-  "globirdDailyCharge", "globirdPeakRate", "globirdShoulderRate", "globirdOffPeakRate",
-  "globirdExport4pm9pmRate", "globirdExport9pm10am2pm4pmRate", "globirdExport10am2pmRate",
-  "globirdSuperExportRate", "globirdSuperExportLimit", "globirdZeroHeroCredit", "globirdRebate", // <-- ADD THIS
-  "amberDailyCharge", "amberImportRate", "amberExportRate", "amberMembership", "amberRebate", // <-- ADD THIS
-  "aglDailyCharge", "aglPeakRate", "aglShoulderRate", "aglOffPeakRate", "aglExportRate", "aglRebate", // <-- ADD THIS
-  "numYears", "solarDegradation", "batteryDegradation",
-  "noExistingSolar", "manualInputToggle", "debugToggle"
-]
-export function saveSettingsToFile() {
-  const settings = {};
-  savableInputIds.forEach(id => {
-    const element = document.getElementById(id);
-    if (element) {
-      settings[id] = element.type === 'checkbox' ? element.checked : element.value;
-    }
-  });
-  downloadBlob('roi_settings.json', JSON.stringify(settings, null, 2), 'application/json');
-}
-
-export function wireLoadSettings(inputFileElementId) {
-    const input = document.getElementById(inputFileElementId);
-    if (!input) return;
-
-    input.addEventListener('change', (event) => {
-        const file = event.target.files[0];
-        const statusDiv = document.getElementById('settingsFileStatus');
-
-        if (!file) {
-            if (statusDiv) {
-                statusDiv.textContent = "";
-                statusDiv.classList.remove('loaded');
-            }
-            return;
+// Gathers all UI input values into a single object
+function gatherAllInputs() {
+    const inputs = {};
+    document.querySelectorAll('input[type="number"], input[type="text"]').forEach(input => {
+        if (input.id) {
+            inputs[input.id] = input.value;
         }
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const settings = JSON.parse(e.target.result);
-                
-                // --- START OF CHANGES ---
-
-                // 1. Count the number of items in the loaded settings object
-                const itemCount = Object.keys(settings).length;
-
-                // 2. Apply the settings (this loop remains the same)
-                for (const id in settings) {
-                    const el = document.getElementById(id);
-                    if (el) {
-                        if (el.type === 'checkbox') {
-                            el.checked = settings[id];
-                            el.dispatchEvent(new Event('change'));
-                        } else {
-                            el.value = settings[id];
-                        }
-                    }
-                }
-                // 3. Update the status text with the new message
-                if (statusDiv) {
-                    statusDiv.textContent = `${itemCount} configuration items loaded`;
-                    statusDiv.classList.add('loaded');
-                }
-                
-                // --- END OF CHANGES ---
-
-            } catch (error) {
-                if (statusDiv) {
-                    statusDiv.textContent = "Load failed. Invalid file.";
-                    statusDiv.classList.add('loaded');
-                }
-                console.error("Error loading settings:", error);
-            }
-        };
-        reader.readAsText(file);
     });
+    document.querySelectorAll('input[type="checkbox"]').forEach(input => {
+        if (input.id) {
+            inputs[input.id] = input.checked;
+        }
+    });
+    return inputs;
 }
 
-export function wireSaveSettings(buttonElementId) {
-    const button = document.getElementById(buttonElementId);
-    if (!button) return;
+// Applies saved input values back to the UI
+function applyAllInputs(inputs) {
+    for (const id in inputs) {
+        const element = document.getElementById(id);
+        if (element) {
+            if (element.type === 'checkbox') {
+                element.checked = inputs[id];
+            } else {
+                element.value = inputs[id];
+            }
+            // Trigger a change event to make sure any associated UI updates happen
+            element.dispatchEvent(new Event('change'));
+        }
+    }
+}
 
-    button.addEventListener('click', () => {
-        const settings = {};
-        // List of all input IDs to save
-        const inputIds = [
-            // Data Input
-            "manualSolarProfile", "summerDailyPeak", "summerDailyShoulder", "summerDailyOffPeak", "summerDailySolar",
-            "autumnDailyPeak", "autumnDailyShoulder", "autumnDailyOffPeak", "autumnDailySolar",
-            "winterDailyPeak", "winterDailyShoulder", "winterDailyOffPeak", "winterDailySolar",
-            "springDailyPeak", "springDailyShoulder", "springDailyOffPeak", "springDailySolar",
-            // Existing System
-            "existingSolarKW", "existingSolarInverter", "existingBattery", "existingBatteryInverter",
-            // New System
-            "newSolarKW", "costSolar", "newBattery", "newBatteryInverter", "costBattery", "gridChargeThreshold",
-            "recommendationCoverageTarget",
-            // Financial Inputs
-            "loanAmount", "loanInterestRate", "loanTerm", "discountRate",
-            // Providers & Tariffs
-            "tariffEscalation", "fitDegradationStartYear", "fitDegradationEndYear", "fitMinimumRate",
-            "originRebate", "originDailyCharge", "originPeakHours", "originShoulderHours", "originOffPeakHours",
-            "originPeakRate", "originShoulderRate", "originOffPeakRate", "originExport1Rate", "originExport1Limit", "originExport2Rate",
-            "originGridChargeEnable", "originGridChargeStartTime", "originGridChargeEndTime",
-            "globirdRebate", "globirdDailyCharge", "globirdPeakHours", "globirdShoulderHours", "globirdOffPeakHours",
-            "globirdPeakRate", "globirdShoulderRate", "globirdOffPeakRate", "globirdExport4pm9pmRate",
-            "globirdExport9pm10am2pm4pmRate", "globirdExport10am2pmRate", "globirdSuperExportRate", "globirdSuperExportLimit", "globirdZeroHeroCredit",
-            "globirdGridChargeEnable", "globirdGridChargeStartTime", "globirdGridChargeEndTime",
-            "amberRebate", "amberDailyCharge", "amberImportRate", "amberExportRate", "amberMembership",
-            "amberGridChargeEnable", "amberGridChargeStartTime", "amberGridChargeEndTime",
-            "aglRebate", "aglDailyCharge", "aglPeakHours", "aglShoulderHours", "aglOffPeakHours",
-            "aglPeakRate", "aglShoulderRate", "aglOffPeakRate", "aglExportRate",
-            "aglGridChargeEnable", "aglGridChargeStartTime", "aglGridChargeEndTime",
-            // Analysis Period
-            "numYears", "solarDegradation", "batteryDegradation"
-        ];
-        
-        // Checkboxes that need their 'checked' state saved
-        const checkboxIds = [
-            "noExistingSolar", "manualInputToggle", "debugToggle", "replaceExistingSystem",
-            "enableBlackoutSizing", "enableLoan", "enableDiscountRate",
-            "originGridChargeEnable", "globirdGridChargeEnable", "amberGridChargeEnable", "aglGridChargeEnable"
-        ];
+// Main function to save the entire application state to a JSON file
+function saveStateToFile() {
+    const appState = {
+        version: "1.0.2", // Version your settings file
+        savedAt: new Date().toISOString(),
+        providers: getProviders(),
+        uiInputs: gatherAllInputs(),
+        // We don't save CSV data, just the settings
+    };
 
-        // Gather values from regular inputs
-        inputIds.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) settings[id] = el.value;
-        });
+    const jsonString = JSON.stringify(appState, null, 2); // Pretty-print the JSON
+    downloadBlob('roi-analyzer-settings.json', jsonString, 'application/json');
+}
 
-        // Gather state from checkboxes
-        checkboxIds.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) settings[id] = el.checked;
-        });
+// Main function to load and apply state from a JSON file
+// Replace the existing function in storage.js with this one
+function loadStateFromFile(event) {
+    const file = event.target.files[0];
+    const statusEl = document.getElementById('settingsFileStatus');
+    
+    // Clear previous status messages
+    if (statusEl) {
+        statusEl.textContent = '';
+        statusEl.style.color = ''; // Reset color
+    }
+    
+    if (!file) return;
 
-        // Create and download the file
-        const settingsString = JSON.stringify(settings, null, 2);
-        const blob = new Blob([settingsString], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'roi_settings.json';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    });
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const appState = JSON.parse(e.target.result);
+            
+            if (!appState.version || !appState.providers || !appState.uiInputs) {
+                if (statusEl) {
+                    statusEl.textContent = "Error: This does not appear to be a valid settings file.";
+                    statusEl.style.color = 'red';
+                } else {
+                    alert("This does not appear to be a valid settings file.");
+                }
+                return;
+            }
+
+            saveAllProviders(appState.providers);
+            applyAllInputs(appState.uiInputs);
+            renderProviderSettings();
+            
+            // --- FIX: Replace alert() with a detailed status message ---
+            if (statusEl) {
+                const providerCount = appState.providers.length;
+                statusEl.textContent = `Loaded '${file.name}' with ${providerCount} provider configuration(s).`;
+                statusEl.style.color = 'green'; // Style the success message
+            }
+
+        } catch (error) {
+            console.error("Failed to load or parse settings file:", error);
+            if (statusEl) {
+                statusEl.textContent = "Failed to load settings. The file may be corrupt.";
+                statusEl.style.color = 'red';
+            } else {
+                alert("Failed to load settings. The file may be corrupt or in the wrong format.");
+            }
+        } finally {
+            event.target.value = null;
+        }
+    };
+    reader.readAsText(file);
+}
+
+// Wire up the event listeners for the save/load buttons
+export function wireSaveLoadEvents() {
+    document.getElementById('saveSettings')?.addEventListener('click', saveStateToFile);
+    document.getElementById('loadSettings')?.addEventListener('change', loadStateFromFile);
 }

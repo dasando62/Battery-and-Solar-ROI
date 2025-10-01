@@ -1,5 +1,5 @@
 // js/analysis.js
-// Version 9.6
+// Version 1.0.2
 import { state } from './state.js';
 import { getNumericInput, escalate, getRateForHour } from './utils.js';
 import { tariffComponents } from './tariffComponents.js';
@@ -25,7 +25,9 @@ export function getDegradedFitRate(baseRate, year, fitConfig) {
 export function simulateDay(hourlyConsumption, hourlySolar, provider, batteryConfig = null, startingSOC = 0) {
     const results = { peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, tier1ExportKWh: 0, tier2ExportKWh: 0, gridChargeKWh: 0, gridChargeCost: 0, hourlyExports: Array(24).fill(0) };
     let batterySOC = startingSOC;
+
     if (!batteryConfig) {
+        // --- NO BATTERY SCENARIO --- (This part is fine)
         const finalHourlyConsumption = Array(24).fill(0);
         for (let h = 0; h < 24; h++) {
             const net = (hourlyConsumption[h] || 0) - (hourlySolar[h] || 0);
@@ -42,6 +44,7 @@ export function simulateDay(hourlyConsumption, hourlySolar, provider, batteryCon
             }
         }
     } else {
+        // --- WITH BATTERY SCENARIO ---
         const finalHourlyImports = Array(24).fill(0);
         const gridChargeImports = Array(24).fill(0);
         for (let h = 0; h < 24; h++) {
@@ -50,36 +53,44 @@ export function simulateDay(hourlyConsumption, hourlySolar, provider, batteryCon
             const selfConsumption = Math.min(consumption, solar);
             let remainingConsumption = consumption - selfConsumption;
             let excessSolar = solar - selfConsumption;
+
             if (excessSolar > 0) {
                 const chargeFromSolar = Math.min(excessSolar, batteryConfig.capacity - batterySOC, batteryConfig.inverterKW);
                 batterySOC += chargeFromSolar;
                 excessSolar -= chargeFromSolar;
             }
             results.hourlyExports[h] = excessSolar;
+
             if (remainingConsumption > 0) {
                 const discharge = Math.min(remainingConsumption, batterySOC, batteryConfig.inverterKW);
                 batterySOC -= discharge;
                 remainingConsumption -= discharge;
             }
             finalHourlyImports[h] = remainingConsumption;
-            const gridChargeSettings = provider;
-            const startHour = gridChargeSettings.gridChargeStart;
-            const endHour = gridChargeSettings.gridChargeEnd;
-            let inChargeWindow = false;
-            if (startHour > endHour) {
-                if (h >= startHour || h < endHour) inChargeWindow = true;
-            } else {
-                if (h >= startHour && h < endHour) inChargeWindow = true;
-            }
-            if (gridChargeSettings.gridChargeEnabled && inChargeWindow && batterySOC < (batteryConfig.socChargeTrigger / 100) * batteryConfig.capacity) {
-                const chargeNeeded = batteryConfig.capacity * (batteryConfig.gridChargeThreshold / 100) - batterySOC;
-                const chargeFromGrid = Math.min(chargeNeeded, batteryConfig.inverterKW);
-                if (chargeFromGrid > 0) {
-                    batterySOC += chargeFromGrid;
-                    gridChargeImports[h] = chargeFromGrid;
+
+            // --- THIS IS THE CORRECTED LOGIC ---
+            // The grid charging logic now only runs if there is a battery AND a provider.
+            if (provider) {
+                const gridChargeSettings = provider;
+                const startHour = gridChargeSettings.gridChargeStart;
+                const endHour = gridChargeSettings.gridChargeEnd;
+                let inChargeWindow = false;
+                if (startHour > endHour) {
+                    if (h >= startHour || h < endHour) inChargeWindow = true;
+                } else {
+                    if (h >= startHour && h < endHour) inChargeWindow = true;
+                }
+                if (gridChargeSettings.gridChargeEnabled && inChargeWindow && batterySOC < (batteryConfig.socChargeTrigger / 100) * batteryConfig.capacity) {
+                    const chargeNeeded = batteryConfig.capacity * (batteryConfig.gridChargeThreshold / 100) - batterySOC;
+                    const chargeFromGrid = Math.min(chargeNeeded, batteryConfig.inverterKW);
+                    if (chargeFromGrid > 0) {
+                        batterySOC += chargeFromGrid;
+                        gridChargeImports[h] = chargeFromGrid;
+                    }
                 }
             }
         }
+        
         const peakHours = provider.importData.peakHours || [];
         const shoulderHours = provider.importData.shoulderHours || [];
         const offPeakRate = provider.importData.offPeak || 0;
@@ -98,6 +109,8 @@ export function simulateDay(hourlyConsumption, hourlySolar, provider, batteryCon
             }
         }
     }
+
+    // This part is fine
     const dailyTotalExport = results.hourlyExports.reduce((a, b) => a + b, 0);
     const exportRule = provider.exportRates ? provider.exportRates[0] : null;
     if (exportRule) {
@@ -105,6 +118,7 @@ export function simulateDay(hourlyConsumption, hourlySolar, provider, batteryCon
         results.tier1ExportKWh = Math.min(dailyTotalExport, tier1Limit);
         results.tier2ExportKWh = Math.max(0, dailyTotalExport - tier1Limit);
     }
+    
     return { dailyBreakdown: results, finalSOC: batterySOC };
 }
 
@@ -116,16 +130,24 @@ export function runSimulation(config, simulationData, electricityData) {
     const rawData = { baseline: { year1: {}, year2: {} }, system: {} };
     const daysPerQuarter = { 'Summer': 90, 'Autumn': 91, 'Winter': 92, 'Spring': 92 };
 
-    config.selectedProviders.forEach(p => {
-        finalResults[p] = { annualCosts: [], cumulativeSavingsPerYear: [], npv: 0, roiYear: null };
-        rawData.system[p] = { year1: {}, year2: {} };
+    config.selectedProviders.forEach(pId => {
+        const provider = config.providers.find(p => p.id === pId);
+        if (!provider) return;
+        finalResults[provider.id] = { annualCosts: [], cumulativeSavingsPerYear: [], npv: 0, roiYear: null };
+        rawData.system[provider.id] = { year1: {}, year2: {} };
         for (const q of ['Summer', 'Autumn', 'Winter', 'Spring']) {
-            rawData.system[p].year1[q] = { days: 0, peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, tier1ExportKWh: 0, tier2ExportKWh: 0, gridChargeKWh: 0, gridChargeCost: 0 };
-            rawData.system[p].year2[q] = { days: 0, peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, tier1ExportKWh: 0, tier2ExportKWh: 0, gridChargeKWh: 0, gridChargeCost: 0 };
+            rawData.system[provider.id].year1[q] = { days: 0, peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, tier1ExportKWh: 0, tier2ExportKWh: 0, gridChargeKWh: 0, gridChargeCost: 0 };
+            rawData.system[provider.id].year2[q] = { days: 0, peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, tier1ExportKWh: 0, tier2ExportKWh: 0, gridChargeKWh: 0, gridChargeCost: 0 };
         }
     });
 
-    const baselineProvider = config.providers[config.selectedProviders[0]];
+    // THIS IS THE ONLY BLOCK YOU NEED
+    const baselineProvider = config.providers[0]; 
+    if (!baselineProvider) {
+        console.error("Baseline provider not found in config. Cannot run simulation.");
+        return { financials: {}, rawData: {}, config: config };
+    }
+
     let annualizedBaseCost = 0;
 
     if (!config.useManual && electricityData) {
@@ -194,7 +216,8 @@ export function runSimulation(config, simulationData, electricityData) {
         }
 
         config.selectedProviders.forEach(p => {
-            const providerData = config.providers[p];
+            const providerData = config.providers.find(provider => provider.id === p);
+			if (!providerData) return; 
             let annualCost = 0;
             let totalDaysProcessed = 0;
             let currentSOC = 0;
@@ -241,7 +264,7 @@ export function runSimulation(config, simulationData, electricityData) {
                     let dailyEnergyCost = dailyBreakdown.gridChargeCost || 0;
                     dailyEnergyCost += importCalculator(providerData.importData, dailyBreakdown, escalationConfig);
                     dailyEnergyCost -= exportCalculator(providerData.exportData, dailyBreakdown, y, fitConfig, getDegradedFitRate, getRateForHour);
-                    const dailySupplyCharge = (providerData.dailyCharge || 0);
+					const dailySupplyCharge = (providerData.dailyCharge || 0);
                     annualCost += escalate(dailySupplyCharge, config.tariffEscalation, y) + dailyEnergyCost;
                     if (y <= 2) {
                         const month = parseInt(day.date.split('-')[1], 10);
@@ -328,14 +351,14 @@ export function calculateSizingRecommendations(coverageTarget, simulationData) {
 
 export function calculateDetailedSizing(correctedElectricityData, solarData, config, simulationData) {
     if (!correctedElectricityData) return null;
-    let peakHours = [];
-    if (config.selectedProviders && config.selectedProviders.length > 0) {
-        const baselineProviderKey = config.selectedProviders[0];
-        const baselineProvider = config.providers[baselineProviderKey];
-        if (baselineProvider && baselineProvider.importData) {
-            peakHours = baselineProvider.importData.peakHours || [];
-        }
-    }
+	let peakHours = [];
+	if (config.providers && config.providers.length > 0) {
+		// The first provider in the configured array is always the baseline
+		const baselineProvider = config.providers[0]; 
+		if (baselineProvider && baselineProvider.importData) {
+			peakHours = baselineProvider.importData.peakHours || [];
+		}
+	}
     const totalSolarKW = config.replaceExistingSystem ? config.newSolarKW : config.existingSolarKW + config.newSolarKW;
     const solarProfileSourceKw = config.existingSolarKW > 0 ? config.existingSolarKW : 1;
     const solarDataMap = config.noExistingSolar ? new Map() : new Map((solarData || []).map(day => [day.date, day.hourly]));

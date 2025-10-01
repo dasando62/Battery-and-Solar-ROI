@@ -1,5 +1,5 @@
 // js/uiDynamic.js
-//Version 9.6
+//Version 1.0.2
 import { getProviders } from './providerManager.js';
 import { sanitize } from './utils.js';
 
@@ -8,8 +8,9 @@ export function renderProviderSettings() {
     if (!container) return;
     const allProviders = getProviders();
     let providersHTML = '';
-    for (const pKey in allProviders) {
-        const provider = allProviders[pKey];
+
+    // The loop is now a forEach with an index
+    allProviders.forEach((provider, index) => {
         const pId = provider.id.toLowerCase();
         let importHTML = '';
         if (provider.importComponent === 'TIME_OF_USE_IMPORT') {
@@ -29,21 +30,19 @@ export function renderProviderSettings() {
                 <label>Export Tier 1 Rate ($/kWh): <input type="number" step="0.001" class="provider-input" data-id="${provider.id}" data-field="export1Rate" value="${provider.export1Rate ?? ''}"></label>
                 <label>Export Tier 1 Limit (kWh/day): <input type="number" step="0.1" class="provider-input" data-id="${provider.id}" data-field="export1Limit" value="${provider.export1Limit ?? ''}"></label>
                 <label>Export Tier 2 Rate ($/kWh): <input type="number" step="0.001" class="provider-input" data-id="${provider.id}" data-field="export2Rate" value="${provider.export2Rate ?? ''}"></label>`;
-        } else if (provider.exportComponent === 'GLOBIRD_COMPLEX_FIT') {
-            exportHTML = `<h4>Export Rates (Complex)</h4>
-                <label>Solar/Gen Feed-in (4pm-9pm) ($/kWh): <input type="number" step="0.001" class="provider-input" data-id="${provider.id}" data-field="export4pm9pmRate" value="${provider.export4pm9pmRate ?? ''}"></label>
-                <label>Solar/Gen Feed-in (9pm-10am, 2pm-4pm) ($/kWh): <input type="number" step="0.001" class="provider-input" data-id="${provider.id}" data-field="export9pm10am2pm4pmRate" value="${provider.export9pm10am2pm4pmRate ?? ''}"></label>
-                <label>Solar/Gen Feed-in (10am-2pm) ($/kWh): <input type="number" step="0.001" class="provider-input" data-id="${provider.id}" data-field="export10am2pmRate" value="${provider.export10am2pmRate ?? ''}"></label>
-                <label>Super Export top up (First kWh/Day) ($/kWh): <input type="number" step="0.001" class="provider-input" data-id="${provider.id}" data-field="superExportRate" value="${provider.superExportRate ?? ''}"></label>
-                <label>Super Export Limit (kWh/day): <input type="number" step="0.1" class="provider-input" data-id="${provider.id}" data-field="superExportLimit" value="${provider.superExportLimit ?? ''}"></label>
-                <label>ZeroHero Daily Credit ($): <input type="number" step="0.01" class="provider-input" data-id="${provider.id}" data-field="zeroHeroCredit" value="${provider.zeroHeroCredit ?? ''}"></label>`;
         } else if (provider.exportComponent === 'FLAT_RATE_FIT') {
             exportHTML = `<h4>Export Rate (Flat)</h4><label>Export Rate ($/kWh): <input type="number" step="0.001" class="provider-input" data-id="${provider.id}" data-field="exportRate" value="${provider.exportRate ?? ''}"></label>`;
         }
+        
         providersHTML += `<details class="collapsible-section provider-details" open data-provider-id="${provider.id}">
                 <summary>
                     <input type="checkbox" class="providerCheckbox" value="${provider.id}" checked>
                     <strong style="font-size: 1.2em; margin-left: 5px;">${sanitize(provider.name)}</strong>
+                    
+                    <span class="provider-order-controls">
+                        <button class="move-provider-up" data-index="${index}" ${index === 0 ? 'disabled' : ''}>▲</button>
+                        <button class="move-provider-down" data-index="${index}" ${index === allProviders.length - 1 ? 'disabled' : ''}>▼</button>
+                    </span>
                 </summary>
                 <div class="subsettings">
                     <label>Provider Name: <input type="text" class="provider-input" data-id="${provider.id}" data-field="name" value="${sanitize(provider.name || '')}"></label>
@@ -63,6 +62,6 @@ export function renderProviderSettings() {
                     <span id="save-status-${pId}" style="margin-left: 10px; color: green; font-weight: bold;"></span>
                 </div>
             </details>`;
-    }
+    });
     setTimeout(() => { container.innerHTML = providersHTML; }, 0);
 }

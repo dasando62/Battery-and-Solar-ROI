@@ -1,9 +1,75 @@
 // js/uiRender.js
-//Version 9.6
+//Version 1.0.2
 import { state } from './state.js';
 import { createBreakdownTableHTML } from './debugTables.js';
 import { getNumericInput } from './utils.js';
 import { getDegradedFitRate } from './analysis.js';
+
+// Replace the existing buildRawDataTable function in uiRender.js with this one
+function buildRawDataTable(data) {
+    let tableHTML = `<table class="raw-data-table">
+        <thead>
+            <tr>
+                <th>Period</th>
+                <th>Days</th>
+                <th>Peak (kWh)</th>
+                <th>Shoulder (kWh)</th>
+                <th>Off-Peak (kWh)</th>
+                <th>Grid Charge (kWh)</th>
+                <th>Export Tier 1 (kWh)</th>
+                <th>Export Tier 2 (kWh)</th>
+            </tr>
+        </thead>
+        <tbody>`;
+    
+    // 1. Initialize variables to hold the totals
+    let totalDays = 0, totalPeakKWh = 0, totalShoulderKWh = 0, totalOffPeakKWh = 0;
+    let totalGridChargeKWh = 0, totalTier1ExportKWh = 0, totalTier2ExportKWh = 0;
+
+    // Loop through each season (Summer, Autumn, etc.) in the data
+    for (const seasonName in data) {
+        const seasonData = data[seasonName];
+        if (seasonData && seasonData.days > 0) {
+            // 2. Add the current season's data to the running totals
+            totalDays += seasonData.days || 0;
+            totalPeakKWh += seasonData.peakKWh || 0;
+            totalShoulderKWh += seasonData.shoulderKWh || 0;
+            totalOffPeakKWh += seasonData.offPeakKWh || 0;
+            totalGridChargeKWh += seasonData.gridChargeKWh || 0;
+            totalTier1ExportKWh += seasonData.tier1ExportKWh || 0;
+            totalTier2ExportKWh += seasonData.tier2ExportKWh || 0;
+
+            // Render the individual season row (this is unchanged)
+            tableHTML += `
+                <tr>
+                    <td>${seasonName}</td>
+                    <td>${seasonData.days}</td>
+                    <td>${(seasonData.peakKWh || 0).toFixed(2)}</td>
+                    <td>${(seasonData.shoulderKWh || 0).toFixed(2)}</td>
+                    <td>${(seasonData.offPeakKWh || 0).toFixed(2)}</td>
+                    <td>${(seasonData.gridChargeKWh || 0).toFixed(2)}</td>
+                    <td>${(seasonData.tier1ExportKWh || 0).toFixed(2)}</td>
+                    <td>${(seasonData.tier2ExportKWh || 0).toFixed(2)}</td>
+                </tr>`;
+        }
+    }
+
+    // 3. Add the final "Annual Total" row to the table HTML
+    tableHTML += `
+        <tr class="total-row">
+            <td><strong>Annual Total</strong></td>
+            <td><strong>${totalDays}</strong></td>
+            <td><strong>${totalPeakKWh.toFixed(2)}</strong></td>
+            <td><strong>${totalShoulderKWh.toFixed(2)}</strong></td>
+            <td><strong>${totalOffPeakKWh.toFixed(2)}</strong></td>
+            <td><strong>${totalGridChargeKWh.toFixed(2)}</strong></td>
+            <td><strong>${totalTier1ExportKWh.toFixed(2)}</strong></td>
+            <td><strong>${totalTier2ExportKWh.toFixed(2)}</strong></td>
+        </tr>`;
+
+    tableHTML += `</tbody></table>`;
+    return tableHTML;
+}
 
 export function renderSizingResults(sizingData, state) {
     const recommendationContainer = document.getElementById('recommendationContainer');
@@ -106,30 +172,42 @@ export function renderSizingResults(sizingData, state) {
 function renderFinancialSummary(financials, config) {
     let summaryHTML = "<h3>Return on Investment Summary</h3>";
     config.selectedProviders.forEach(pKey => {
-        const providerData = config.providers[pKey];
+        const providerDetails = config.providers.find(p => p.id === pKey);
+		if (!providerDetails) return;
         const result = financials[pKey];
         if (!result) return;
         
-        const systemCostForProvider = config.initialSystemCost - (providerData.rebate || 0);
+        const systemCostForProvider = config.initialSystemCost - (providerDetails.rebate || 0);
 
         // CORRECTED NPV Calculation: Subtract the full initial system cost.
         const finalNPV = result.npv - systemCostForProvider;
 
-        summaryHTML += `<p><strong>${providerData.name}</strong></p><ul><li>Payback Period: Year ${result.roiYear ? result.roiYear : `> ${config.numYears}`}</li>${config.discountRateEnabled ? `<li>Net Present Value (NPV): <strong>$${finalNPV.toFixed(2)}</strong></li>` : ''}</ul>`;
+        summaryHTML += `<p><strong>${providerDetails.name}</strong></p><ul><li>Payback Period: Year ${result.roiYear ? result.roiYear : `> ${config.numYears}`}</li>${config.discountRateEnabled ? `<li>Net Present Value (NPV): <strong>$${finalNPV.toFixed(2)}</strong></li>` : ''}</ul>`;
     });
     document.getElementById("roiSummary").innerHTML = summaryHTML;
 }
 
 function renderFinancialTable(financials, baselineCosts, config) {
-    const baselineProviderName = config.providers[config.selectedProviders[0]].name;
+    // --- FIX 1: Use .find() to get the baseline provider object first ---
+    const baselineProviderDetails = config.providers.find(p => p.id === config.selectedProviders[0]);
+    const baselineProviderName = baselineProviderDetails ? baselineProviderDetails.name : "Baseline";
+
     let tableHTML = `<h3>Financial Breakdown by Year</h3><table><thead><tr><th>Year</th><th>Baseline Cost (${baselineProviderName})</th>`;
+
+    // --- FIX 2: Use .find() inside the header loop to get each provider's name ---
     config.selectedProviders.forEach(pKey => {
-        tableHTML += `<th>${config.providers[pKey].name} Cost w/ System</th><th>${config.providers[pKey].name} Cumulative Savings</th>`;
+        const providerDetails = config.providers.find(p => p.id === pKey);
+        if (providerDetails) { // Safety check
+            tableHTML += `<th>${providerDetails.name} Cost w/ System</th><th>${providerDetails.name} Cumulative Savings</th>`;
+        }
     });
+
     tableHTML += `</tr></thead><tbody>`;
     for (let y = 0; y < config.numYears; y++) {
         tableHTML += `<tr><td>${y + 1}</td><td>$${(baselineCosts[y + 1] || 0).toFixed(2)}</td>`;
+        
         config.selectedProviders.forEach(pKey => {
+            // --- FIX 3: Removed the unnecessary and incorrect 'if (providerId === ...)' check ---
             const result = financials[pKey];
             const annualCost = result?.annualCosts[y] || 0;
             const cumulativeSaving = result?.cumulativeSavingsPerYear[y] || 0;
@@ -147,26 +225,38 @@ function renderCharts(financials, config) {
     }
     const ctx = document.getElementById("savingsChart")?.getContext("2d");
     if (!ctx) return;
-    const datasets = config.selectedProviders.map(pKey => ({
-        label: `${config.providers[pKey].name} Cumulative Savings`,
-        data: financials[pKey]?.cumulativeSavingsPerYear || [],
-        borderColor: '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0'),
-        fill: false,
-        yAxisID: 'y'
-    }));
-    const costDatasets = config.selectedProviders.map(pKey => {
-        const providerData = config.providers[pKey];
-        const systemCostForProvider = config.initialSystemCost - (providerData.rebate || 0);
+
+    const datasets = config.selectedProviders.map(pKey => {
+        // --- FIX 1: Use .find() to get the provider's details ---
+        const providerDetails = config.providers.find(p => p.id === pKey);
+        if (!providerDetails) return null; // Safety check
+
         return {
-            label: `${providerData.name} Capital Outlay`,
+            label: `${providerDetails.name} Cumulative Savings`,
+            data: financials[pKey]?.cumulativeSavingsPerYear || [],
+            borderColor: '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0'),
+            fill: false,
+            yAxisID: 'y'
+        };
+    }).filter(Boolean); // Removes any null entries if a provider wasn't found
+
+    const costDatasets = config.selectedProviders.map(pKey => {
+        // --- FIX 2: Use .find() here as well ---
+        const providerDetails = config.providers.find(p => p.id === pKey);
+        if (!providerDetails) return null; // Safety check
+
+        const systemCostForProvider = config.initialSystemCost - (providerDetails.rebate || 0);
+        return {
+            label: `${providerDetails.name} Capital Outlay`,
             data: Array(config.numYears).fill(systemCostForProvider),
-            borderColor: datasets.find(ds => ds.label.startsWith(providerData.name))?.borderColor || '#ccc',
+            borderColor: datasets.find(ds => ds.label.startsWith(providerDetails.name))?.borderColor || '#ccc',
             borderDash: [5, 5],
             fill: false,
             pointRadius: 0,
             yAxisID: 'y'
         };
-    });
+    }).filter(Boolean); // Removes any null entries
+
     state.savingsChart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -180,32 +270,35 @@ function renderCharts(financials, config) {
     });
 }
 
+// Replace your existing renderRawDataTables function with this one
 function renderRawDataTables(rawData, config) {
     const container = document.getElementById('raw-data-tables-container');
     if (!container) return;
 
-    let rawTablesHTML = '';
-    const fitConfig = {
-        startYear: getNumericInput("fitDegradationStartYear", 1),
-        endYear: getNumericInput("fitDegradationEndYear", 10),
-        minRate: getNumericInput("fitMinimumRate", -0.03)
-    };
-    
-    const baselineProvider = config.providers[config.selectedProviders[0]];
-    
-    // Pass the function as the last argument
-    rawTablesHTML += createBreakdownTableHTML(`Baseline - Year 1 (${baselineProvider.name})`, rawData.baseline.year1, baselineProvider, 1, config.tariffEscalation, fitConfig, getDegradedFitRate);
-    rawTablesHTML += createBreakdownTableHTML(`Baseline - Year 2 (${baselineProvider.name})`, rawData.baseline.year2, baselineProvider, 2, config.tariffEscalation, fitConfig, getDegradedFitRate);
+    let tablesHTML = '';
 
-    config.selectedProviders.forEach(pKey => {
-        const provider = config.providers[pKey];
-        if (rawData.system[pKey]) {
-            rawTablesHTML += createBreakdownTableHTML(`${provider.name} with System - Year 1`, rawData.system[pKey].year1, provider, 1, config.tariffEscalation, fitConfig, getDegradedFitRate);
-            rawTablesHTML += createBreakdownTableHTML(`${provider.name} with System - Year 2`, rawData.system[pKey].year2, provider, 2, config.tariffEscalation, fitConfig, getDegradedFitRate);
+    // Handle the 'baseline' data first
+    const baselineProviderDetails = config.providers.find(p => p.id === config.selectedProviders[0]);
+    if (rawData.baseline?.year1 && baselineProviderDetails) {
+        tablesHTML += `<h3>Baseline Performance (Year 1)</h3>`;
+        // --- FIX: Call the helper to generate the table HTML ---
+        tablesHTML += buildRawDataTable(rawData.baseline.year1);
+    }
+    
+    // Then, loop through the actual providers in rawData.system
+    Object.keys(rawData.system).forEach(providerId => {
+        const providerDetails = config.providers.find(p => p.id === providerId);
+        if (!providerDetails) return;
+
+        const providerSystemData = rawData.system[providerId];
+        if (providerSystemData?.year1) {
+            tablesHTML += `<h3>${providerDetails.name} - System Performance (Year 1)</h3>`;
+            // --- FIX: Call the helper here too ---
+            tablesHTML += buildRawDataTable(providerSystemData.year1);
         }
     });
 
-    container.innerHTML = rawTablesHTML;
+    container.innerHTML = tablesHTML;
 }
 
 export function renderResults(resultsObject) {
