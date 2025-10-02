@@ -102,7 +102,6 @@ th { background-color: #f2f2f2; }
 }
 
 /* Default style for the status text ("No file chosen") */
-.file-status-text {
 /* This style is ADDED by JavaScript when a file is successfully loaded */
 /* Wrapper to align the "Choose File" button and its status text */
 .file-upload-wrapper {
@@ -145,3 +144,66 @@ th { background-color: #f2f2f2; }
   font-weight: bold;
   margin-top: 10px;
 }
+
+.remove-rule-button,
+.remove-condition-button {
+    background-color: #e9ecef; /* A light, neutral grey */
+    color: #495057;           /* A darker grey for the text */
+    border: 1px solid #ced4da; /* A subtle border for definition */
+    border-radius: 4px;       /* Standard rounded corners (no longer a circle) */
+    
+    /* Remove fixed height/width and use padding for flexible sizing */
+    padding: 2px 8px;
+    min-width: 30px;          /* Set the desired minimum width */
+    
+    font-size: 16px;
+    font-weight: bold;
+    text-align: center;
+    cursor: pointer;
+    line-height: 1.5;         /* Use a relative line-height */
+    flex-shrink: 0;
+}
+
+.remove-rule-button:hover,
+.remove-condition-button:hover {
+    background-color: #d3d9df; /* A slightly darker grey for hover */
+    border-color: #b9bec4;
+}
+
+/* --- Special Conditions Row - FINAL LAYOUT --- */
+
+/* 1. The main flex container */
+.rule-row-content {
+    display: flex;
+    align-items: center; /* Vertically align everything */
+    gap: 6px;      /* Slightly reduce the gap to save space */
+    width: 100%;
+    padding: 8px 0;    /* Add some vertical padding for breathing room */
+}
+
+/* 2. A powerful RESET for ALL direct children of the container */
+/* This rule is the key to overriding your site-wide styles */
+.rule-row-content > * {
+    flex-grow: 0;         /* Do not allow any item to grow */
+    flex-shrink: 0;       /* Do not allow any item to shrink */
+    flex-basis: auto;     /* Let the width property control the size */
+    margin-top: 0;        /* Override global margins */
+    width: auto;          /* Override global widths */
+}
+
+/* 3. The remove button gets special alignment */
+.rule-row-content .remove-condition-button {
+    margin-left: auto; /* Pushes it to the far right */
+}
+
+/* 4. Now, set specific, smaller widths for each element */
+.rule-row-content input[data-field="name"] { width: 150px; }
+.rule-row-content input[data-field="months"] { width: 120px; }
+.rule-row-content select[data-field="condition.metric"] { width: 120px; }
+.rule-row-content input[data-field="condition.hours"] { width: 90px; }
+.rule-row-content select[data-field="condition.operator"] { width: 50px; }
+.rule-row-content input[data-field="condition.value"] { width: 70px; }
+.rule-row-content select[data-field="action.type"] { width: 110px; }
+.rule-row-content input[data-field="action.value"] { width: 60px; }
+.rule-row-content input[data-field="rate"] { width: 70px; }
+.rule-row-content input[data-field="limit"] { width: 80px; }

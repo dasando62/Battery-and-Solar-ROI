@@ -1,25 +1,22 @@
 // js/uiDynamic.js
-//Version 1.0.4
+//Version 1.0.5
 import { getProviders } from './providerManager.js';
 import { sanitize } from './utils.js';
 
 function renderConditionRow(condition, providerId, index) {
-    // Conditionally show the 'hours' input only if the metric requires it
     const hoursInput = (condition.condition.metric === 'import_in_window')
         ? `<input type="text" class="provider-input" data-field="condition.hours" placeholder="e.g., 5pm-7pm" value="${condition.condition.hours || ''}">`
         : '';
 
     return `
         <div class="rule-row condition-row" data-index="${index}">
-            <div class="rule-row-header">
+            <div class="rule-row-content">
                 <input type="text" class="provider-input" data-field="name" placeholder="Condition Name" value="${condition.name || ''}">
-                <button class="remove-condition-button" data-id="${providerId}" data-index="${index}">-</button>
-            </div>
-            <div class="rule-row-body">
-                <label>Months (1-12):
-                    <input type="text" class="provider-input" data-field="months" placeholder="e.g., 4,5,6,7,8,9" value="${(condition.months || []).join(',')}" title="Comma-separated list of months (1-12). Leave blank for all year.">
-                </label>
-                <label>IF</label>
+                
+                <span class="rule-label" title="Enter a comma-separated list of months (1-12), leave blank for all year.">Months:</span>
+                <input type="text" class="provider-input" data-field="months" placeholder="e.g., 4,5,6,7,8,9" value="${(condition.months || []).join(',')}" title="Comma-separated list of months (1-12). Leave blank for all year.">
+                
+                <span class="rule-label">IF</span>
                 <select class="provider-input" data-field="condition.metric">
                     <option value="peak_import" ${condition.condition.metric === 'peak_import' ? 'selected' : ''}>Peak Import is</option>
                     <option value="net_grid_usage" ${condition.condition.metric === 'net_grid_usage' ? 'selected' : ''}>Net Grid Usage is</option>
@@ -27,43 +24,49 @@ function renderConditionRow(condition, providerId, index) {
                 </select>
                 ${hoursInput}
                 <select class="provider-input" data-field="condition.operator">
-                    <option value="less_than" ${condition.condition.operator === 'less_than' ? 'selected' : ''}>&lt;</option>
                     <option value="less_than_or_equal_to" ${condition.condition.operator === 'less_than_or_equal_to' ? 'selected' : ''}>&lt;=</option>
+                    <option value="less_than" ${condition.condition.operator === 'less_than' ? 'selected' : ''}>&lt;</option>
                     <option value="greater_than" ${condition.condition.operator === 'greater_than' ? 'selected' : ''}>&gt;</option>
                     <option value="greater_than_or_equal_to" ${condition.condition.operator === 'greater_than_or_equal_to' ? 'selected' : ''}>&gt;=</option>
                 </select>
                 <input type="number" step="0.01" class="provider-input" data-field="condition.value" placeholder="Value (kWh)" value="${condition.condition.value ?? 0}">
-                <label>THEN</label>
+                
+                <span class="rule-label">THEN</span>
                 <select class="provider-input" data-field="action.type">
                     <option value="flat_credit" ${condition.action.type === 'flat_credit' ? 'selected' : ''}>Apply Credit</option>
                     <option value="flat_charge" ${condition.action.type === 'flat_charge' ? 'selected' : ''}>Apply Charge</option>
                 </select>
-                <label>$ <input type="number" step="0.01" class="provider-input" data-field="action.value" placeholder="Amount" value="${condition.action.value ?? 0}"></label>
+                <span class="rule-label">$</span>
+                <input type="number" step="0.01" class="provider-input" data-field="action.value" placeholder="Amount" value="${condition.action.value ?? 0}">
+
+                <button class="remove-condition-button" data-id="${providerId}" data-index="${index}" title="Remove this Rule">-</button>
             </div>
         </div>`;
 }
 
 function renderRuleRow(rule, providerId, ruleType, index) {
-    // Show/hide inputs based on rule.type
-    const hoursInput = (rule.type === 'tou') 
-        ? `<label>Hours: <input type="text" class="provider-input" data-field="hours" value="${rule.hours || ''}"></label>` 
+    const hoursInput = (rule.type === 'tou')
+        ? `<input type="text" class="provider-input" data-field="hours" placeholder="Hours (e.g., 7am-10am)" value="${rule.hours || ''}">`
         : '';
-    const limitInput = (rule.type === 'tiered') 
-        ? `<label>Limit (kWh): <input type="number" step="0.1" class="provider-input" data-field="limit" value="${rule.limit || ''}"></label>` 
+    const limitInput = (rule.type === 'tiered')
+        ? `<input type="number" step="0.1" class="provider-input" data-field="limit" placeholder="Limit (kWh)" value="${rule.limit || ''}">`
         : '';
 
     return `
         <div class="rule-row" data-index="${index}">
-            <select class="provider-input" data-field="type">
-                <option value="tou" ${rule.type === 'tou' ? 'selected' : ''}>Time of Use</option>
-                <option value="tiered" ${rule.type === 'tiered' ? 'selected' : ''}>Tiered</option>
-                <option value="flat" ${rule.type === 'flat' ? 'selected' : ''}>Flat Rate</option>
-            </select>
-            <label>Name: <input type="text" class="provider-input" data-field="name" value="${rule.name || ''}"></label>
-            <label>Rate ($): <input type="number" step="0.001" class="provider-input" data-field="rate" value="${rule.rate || 0}"></label>
-            ${hoursInput}
-            ${limitInput}
-            <button class="remove-rule-button" data-type="${ruleType}" data-index="${index}">-</button>
+            <div class="rule-row-content">
+                <select class="provider-input" data-field="type">
+                    <option value="tou" ${rule.type === 'tou' ? 'selected' : ''}>Time of Use</option>
+                    <option value="tiered" ${rule.type === 'tiered' ? 'selected' : ''}>Tiered</option>
+                    <option value="flat" ${rule.type === 'flat' ? 'selected' : ''}>Flat Rate</option>
+                </select>
+                <input type="text" class="provider-input" data-field="name" placeholder="Rule Name" value="${rule.name || ''}">
+                <label class="rule-label">$</label>
+                <input type="number" step="0.001" class="provider-input" data-field="rate" value="${rule.rate || 0}">
+                ${hoursInput}
+                ${limitInput}
+                <button class="remove-rule-button" data-type="${ruleType}" data-index="${index}" title="Remove this Rule">-</button>
+            </div>
         </div>`;
 }
 
