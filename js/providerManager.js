@@ -1,5 +1,5 @@
 // js/providerManager.js
-//Version 1.0.3
+//Version 1.0.4
 const PROVIDERS_KEY = 'roiAnalyzer_providers';
 const DEFAULTS_LOADED_KEY = 'roiAnalyzer_defaults_loaded';
 
@@ -21,6 +21,7 @@ const defaultProviders = [
             { type: 'tiered', name: 'Tier 1', rate: 0.10, limit: 14 },
             { type: 'flat', name: 'Tier 2', rate: 0.02 }
         ], // <-- FIXED: Missing comma added
+		specialConditions: [], 
         gridChargeEnabled: false,
         gridChargeStart: 1,
         gridChargeEnd: 5
@@ -44,6 +45,37 @@ const defaultProviders = [
             { type: 'tou', name: 'Shoulder Export', rate: 0.003, hours: '9pm-10am, 2pm-4pm' },
             { type: 'tou', name: 'Solar Sponge', rate: 0.000, hours: '10am-2pm' }
         ],
+		specialConditions: [
+			{
+				name: 'ZEROHERO Credit (Daylight Saving)',
+				// Rule applies from October (10) to March (3)
+				months: [10, 11, 12, 1, 2, 3], 
+				condition: { 
+					metric: 'import_in_window',      // Our new metric
+					hours: '6pm-8pm',               // The DST window
+					operator: 'less_than_or_equal_to',
+					value: 0.06                     // The total threshold (0.03 kWh/hr * 2 hours)
+				},
+				action: { 
+					type: 'flat_credit',
+					value: 1.00 
+				}
+			},
+			{
+				name: 'ZEROHERO Credit (Standard Time)',
+				// Rule applies from April (4) to September (9)
+				months: [4, 5, 6, 7, 8, 9],
+				condition: { 
+					metric: 'import_in_window',
+					hours: '5pm-7pm',               // The standard time window
+					operator: 'less_than_or_equal_to',
+					value: 0.06                     // The total threshold is the same
+				},
+				action: { 
+					type: 'flat_credit',
+					value: 1.00
+				}
+			}], 
         gridChargeEnabled: true,
         gridChargeStart: 11,
         gridChargeEnd: 15
@@ -61,6 +93,7 @@ const defaultProviders = [
         exportRules: [
             { type: 'flat', name: 'Average Export', rate: 0.007 }
         ], // <-- FIXED: Missing comma added
+		specialConditions: [], 
         gridChargeEnabled: false,
         gridChargeStart: 23,
         gridChargeEnd: 5
@@ -80,6 +113,7 @@ const defaultProviders = [
         exportRules: [
             { type: 'flat', name: 'Flat Rate', rate: 0.05 }
         ], // <-- FIXED: Missing comma added
+		specialConditions: [], 
         gridChargeEnabled: false,
         gridChargeStart: 0,
         gridChargeEnd: 7

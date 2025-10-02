@@ -1,5 +1,5 @@
 // js/tariffComponents.js
-// Version 2.0.0 - Dynamic Tariff Engine
+// Version 1.0.4
 
 import { escalate, parseRangesToHours } from './utils.js';
 

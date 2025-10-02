@@ -1,5 +1,5 @@
 // js/config.js
-//Version 1.0.3
+//Version 1.0.4
 import { getNumericInput, parseRangesToHours } from './utils.js';
 import { getProviders } from './providerManager.js';
 

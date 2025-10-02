@@ -1,9 +1,75 @@
 // js/analysis.js
-// Version 1.0.3
+// Version 1.0.4
 import { state } from './state.js';
 import { getNumericInput, escalate, getRateForHour, parseRangesToHours } from './utils.js';
 import { tariffComponents } from './tariffComponents.js';
 import { generateHourlyConsumptionProfileFromDailyTOU, generateHourlySolarProfileFromDaily } from './profiles.js';
+
+
+function applySpecialConditions(dailyCost, dailyBreakdown, conditions, dateString) {
+    let adjustedCost = dailyCost;
+    if (!conditions || conditions.length === 0) {
+        return adjustedCost;
+    }
+
+    // Get the current month (1-12) from the date string
+    const month = parseInt(dateString.split('-')[1], 10);
+
+    // Evaluate each condition in the order provided
+    for (const condition of conditions) {
+        // If the rule has a 'months' property, check if it applies today
+        if (condition.months && condition.months.length > 0 && !condition.months.includes(month)) {
+            continue; // Skip this rule if it's not for the current month
+        }
+        
+        let metricValue;
+        switch (condition.condition.metric) {
+            case 'peak_import':
+                metricValue = dailyBreakdown.peakKWh;
+                break;
+            case 'net_grid_usage':
+                const totalImport = dailyBreakdown.peakKWh + dailyBreakdown.shoulderKWh + dailyBreakdown.offPeakKWh;
+                const totalExport = dailyBreakdown.tier1ExportKWh + dailyBreakdown.tier2ExportKWh;
+                metricValue = totalImport - totalExport;
+                break;
+            case 'import_in_window':
+                const ruleHours = parseRangesToHours(condition.condition.hours || '');
+                metricValue = 0;
+                for (const h of ruleHours) {
+                    metricValue += dailyBreakdown.hourlyImports[h] || 0;
+                }
+                break;
+        }
+
+        let conditionMet = false;
+        switch (condition.condition.operator) {
+            case 'less_than':
+                conditionMet = metricValue < condition.condition.value;
+                break;
+            case 'less_than_or_equal_to':
+                conditionMet = metricValue <= condition.condition.value;
+                break;
+            case 'greater_than':
+                conditionMet = metricValue > condition.condition.value;
+                break;
+            case 'greater_than_or_equal_to':
+                conditionMet = metricValue >= condition.condition.value;
+                break;
+        }
+
+        if (conditionMet) {
+            switch (condition.action.type) {
+                case 'flat_credit':
+                    adjustedCost -= condition.action.value;
+                    break;
+                case 'flat_charge':
+                    adjustedCost += condition.action.value;
+                    break;
+            }
+        }
+    }
+    return adjustedCost;
+}
 
 function getFitDegradationConfig() {
     return {
@@ -207,9 +273,9 @@ export function runSimulation(config, simulationData, electricityData) {
             let dailyEnergyCost = importCalculator(baselineProvider.importRules, dailyBreakdown, { rate: 0, year: 1 });
             dailyEnergyCost -= exportCalculator(baselineProvider.exportRules, dailyBreakdown, 1, fitConfig, getDegradedFitRate);
             
-            const dailySupplyCharge = baselineProvider.dailyCharge || 0;
-            const dailySpecialCredits = baselineProvider.zeroHeroCredit || 0;
-            totalCostForPeriod += dailySupplyCharge + dailyEnergyCost + dailySpecialCredits;
+			let totalDailyAdjustment = (baselineProvider.dailyCharge || 0) + dailyEnergyCost;
+			totalDailyAdjustment = applySpecialConditions(totalDailyAdjustment, dailyBreakdown, baselineProvider.specialConditions, day.date);
+			totalCostForPeriod += totalDailyAdjustment;
         });
         const annualizationFactor = daysProcessed > 0 ? 365 / daysProcessed : 0;
         annualizedBaseCost = totalCostForPeriod * annualizationFactor;
@@ -309,12 +375,15 @@ export function runSimulation(config, simulationData, electricityData) {
                     let dailyEnergyCost = dailyBreakdown.gridChargeCost || 0;
                     dailyEnergyCost += importCalculator(providerData.importRules, dailyBreakdown, escalationConfig);
                     dailyEnergyCost -= exportCalculator(providerData.exportRules, dailyBreakdown, y, fitConfig, getDegradedFitRate);
-                    
-                    const dailySupplyCharge = (providerData.dailyCharge || 0);
-                    const dailySpecialCredits = (providerData.zeroHeroCredit || 0);
-                    
-                    const totalDailyAdjustment = escalate(dailySupplyCharge, config.tariffEscalation, y) + dailyEnergyCost + dailySpecialCredits;
-                    annualCost += totalDailyAdjustment;
+                    //changed to add special conditions. left as unsure of change at this point.
+                    //const dailySupplyCharge = (providerData.dailyCharge || 0);
+                    //const dailySpecialCredits = (providerData.zeroHeroCredit || 0);
+                    //
+                    //const totalDailyAdjustment = escalate(dailySupplyCharge, config.tariffEscalation, y) + dailyEnergyCost + dailySpecialCredits;
+                    //annualCost += totalDailyAdjustment;
+					let totalDailyAdjustment = escalate((providerData.dailyCharge || 0), config.tariffEscalation, y) + dailyEnergyCost;
+					totalDailyAdjustment = applySpecialConditions(totalDailyAdjustment, dailyBreakdown, providerData.specialConditions, day.date);
+					annualCost += totalDailyAdjustment;
                 });
 
                 const annualizationFactor = totalDaysProcessed > 0 ? 365 / totalDaysProcessed : 0;

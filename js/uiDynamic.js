@@ -1,7 +1,47 @@
 // js/uiDynamic.js
-//Version 1.0.3
+//Version 1.0.4
 import { getProviders } from './providerManager.js';
 import { sanitize } from './utils.js';
+
+function renderConditionRow(condition, providerId, index) {
+    // Conditionally show the 'hours' input only if the metric requires it
+    const hoursInput = (condition.condition.metric === 'import_in_window')
+        ? `<input type="text" class="provider-input" data-field="condition.hours" placeholder="e.g., 5pm-7pm" value="${condition.condition.hours || ''}">`
+        : '';
+
+    return `
+        <div class="rule-row condition-row" data-index="${index}">
+            <div class="rule-row-header">
+                <input type="text" class="provider-input" data-field="name" placeholder="Condition Name" value="${condition.name || ''}">
+                <button class="remove-condition-button" data-id="${providerId}" data-index="${index}">-</button>
+            </div>
+            <div class="rule-row-body">
+                <label>Months (1-12):
+                    <input type="text" class="provider-input" data-field="months" placeholder="e.g., 4,5,6,7,8,9" value="${(condition.months || []).join(',')}" title="Comma-separated list of months (1-12). Leave blank for all year.">
+                </label>
+                <label>IF</label>
+                <select class="provider-input" data-field="condition.metric">
+                    <option value="peak_import" ${condition.condition.metric === 'peak_import' ? 'selected' : ''}>Peak Import is</option>
+                    <option value="net_grid_usage" ${condition.condition.metric === 'net_grid_usage' ? 'selected' : ''}>Net Grid Usage is</option>
+                    <option value="import_in_window" ${condition.condition.metric === 'import_in_window' ? 'selected' : ''}>Import during</option>
+                </select>
+                ${hoursInput}
+                <select class="provider-input" data-field="condition.operator">
+                    <option value="less_than" ${condition.condition.operator === 'less_than' ? 'selected' : ''}>&lt;</option>
+                    <option value="less_than_or_equal_to" ${condition.condition.operator === 'less_than_or_equal_to' ? 'selected' : ''}>&lt;=</option>
+                    <option value="greater_than" ${condition.condition.operator === 'greater_than' ? 'selected' : ''}>&gt;</option>
+                    <option value="greater_than_or_equal_to" ${condition.condition.operator === 'greater_than_or_equal_to' ? 'selected' : ''}>&gt;=</option>
+                </select>
+                <input type="number" step="0.01" class="provider-input" data-field="condition.value" placeholder="Value (kWh)" value="${condition.condition.value ?? 0}">
+                <label>THEN</label>
+                <select class="provider-input" data-field="action.type">
+                    <option value="flat_credit" ${condition.action.type === 'flat_credit' ? 'selected' : ''}>Apply Credit</option>
+                    <option value="flat_charge" ${condition.action.type === 'flat_charge' ? 'selected' : ''}>Apply Charge</option>
+                </select>
+                <label>$ <input type="number" step="0.01" class="provider-input" data-field="action.value" placeholder="Amount" value="${condition.action.value ?? 0}"></label>
+            </div>
+        </div>`;
+}
 
 function renderRuleRow(rule, providerId, ruleType, index) {
     // Show/hide inputs based on rule.type
@@ -34,31 +74,31 @@ export function renderProviderSettings() {
     let providersHTML = '';
 
     allProviders.forEach((provider, index) => {
-        // SAFETY CHECK: Ensure the provider object itself is valid before proceeding.
-        if (!provider) return; 
+        if (!provider) return;
 
-        // SAFETY CHECK: Use (provider.importRules || []) to prevent errors if the array is missing.
         let importHTML = '<h4>Import Rules</h4><div class="import-rules-container">';
         (provider.importRules || []).forEach((rule, ruleIndex) => {
             importHTML += renderRuleRow(rule, provider.id, 'import', ruleIndex);
         });
-		importHTML += '</div>'; // Close the wrapper
-        importHTML += `<button class="add-rule-button" data-id="${provider.id}" data-type="import">+</button>`;
+        importHTML += '</div><button class="add-rule-button" data-id="${provider.id}" data-type="import">+ Add Import Rule</button>';
 
-        // SAFETY CHECK: Do the same for the exportRules array.
         let exportHTML = '<h4>Export Rules</h4><div class="export-rules-container">';
         (provider.exportRules || []).forEach((rule, ruleIndex) => {
             exportHTML += renderRuleRow(rule, provider.id, 'export', ruleIndex);
         });
-		exportHTML += '</div>';
-        exportHTML += `<button class="add-rule-button" data-id="${provider.id}" data-type="export">+</button>`;
+        exportHTML += '</div><button class="add-rule-button" data-id="${provider.id}" data-type="export">+ Add Export Rule</button>';
 
+        // --- NEW: A section for Special Conditions ---
+        let conditionsHTML = '<h4>Special Conditions</h4><div class="conditions-container">';
+        (provider.specialConditions || []).forEach((condition, conditionIndex) => {
+            conditionsHTML += renderConditionRow(condition, provider.id, conditionIndex);
+        });
+        conditionsHTML += `<button class="add-condition-button" data-id="${provider.id}">+ Add Condition</button>`;
+        
         providersHTML += `<details class="collapsible-section provider-details" ${provider.isExpanded ? 'open' : ''} data-provider-id="${provider.id}">
             <summary>
                 <input type="checkbox" class="providerCheckbox" value="${provider.id}" checked>
-                
                 <strong style="font-size: 1.2em; margin-left: 5px;">${sanitize(provider.name || '')}</strong>
-                
                 <span class="provider-order-controls">
                     <button class="move-provider-up" data-index="${index}" ${index === 0 ? 'disabled' : ''}>▲</button>
                     <button class="move-provider-down" data-index="${index}" ${index === allProviders.length - 1 ? 'disabled' : ''}>▼</button>
@@ -70,9 +110,12 @@ export function renderProviderSettings() {
                 <label>Rebate ($): <input type="number" step="0.01" class="provider-input" data-id="${provider.id}" data-field="rebate" value="${provider.rebate ?? 0}"></label>
                 <label>Monthly Fee ($): <input type="number" step="0.01" class="provider-input" data-id="${provider.id}" data-field="monthlyFee" value="${provider.monthlyFee ?? 0}"></label>
                 
-                <hr>${importHTML}<hr>${exportHTML}<hr>
+                <hr>${importHTML}
+                <hr>${exportHTML}
+                <hr>${conditionsHTML}
+                <hr>
                 
-                <details class="collapsible-section" open>
+                <details class="collapsible-section">
                     <summary>Grid Charging Options</summary>
                     <div class="subsettings">
                         <label><input type="checkbox" class="provider-input" data-id="${provider.id}" data-field="gridChargeEnabled" ${provider.gridChargeEnabled ? 'checked' : ''}> Enable Grid Charging</label>

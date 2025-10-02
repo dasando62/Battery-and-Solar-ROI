@@ -1,5 +1,5 @@
 // js/uiEvents.js 
-// Version 1.0.3
+// Version 1.0.4
 import { state } from './state.js';
 import { gatherConfigFromUI } from './config.js';
 import { calculateDetailedSizing, runSimulation } from './analysis.js';
@@ -10,6 +10,18 @@ import { wireSaveLoadEvents } from './storage.js';
 import { hideAllDebugContainers, renderDebugDataTable, renderExistingSystemDebugTable, renderProvidersDebugTable, renderAnalysisPeriodDebugTable, renderLoanDebugTable, renderOpportunityCostDebugTable } from './debugTables.js';
 import { saveProvider, deleteProvider, getProviders, saveAllProviders } from './providerManager.js';
 import { renderProviderSettings } from './uiDynamic.js';
+
+function setNestedProperty(obj, path, value) {
+    const keys = path.split('.');
+    let current = obj;
+    for (let i = 0; i < keys.length - 1; i++) {
+        if (!current[keys[i]] || typeof current[keys[i]] !== 'object') {
+            current[keys[i]] = {};
+        }
+        current = current[keys[i]];
+    }
+    current[keys[keys.length - 1]] = value;
+}
 
 export function toggleExistingSolar() {
     const noSolarCheckbox = document.getElementById('noExistingSolar');
@@ -91,30 +103,30 @@ export function wireStaticEvents() {
 export function wireDynamicProviderEvents() {
     const providerContainer = document.getElementById('provider-settings-container');
     if (!providerContainer) return;
-	//THE 'toggle' EVENT ---
+
+    // Listener for saving the open/closed state of a provider section
     providerContainer.addEventListener('toggle', (event) => {
         const target = event.target;
-        // Ensure the event came from one of our provider <details> elements
         if (target.classList.contains('provider-details')) {
             const providerId = target.dataset.providerId;
-            const isNowOpen = target.open; // .open is a boolean property
+            const isNowOpen = target.open;
 
             let providers = getProviders();
             const providerToUpdate = providers.find(p => p.id === providerId);
 
             if (providerToUpdate) {
                 providerToUpdate.isExpanded = isNowOpen;
-                saveAllProviders(providers); // Save the new state
+                saveAllProviders(providers);
             }
         }
-    }, true); // Use capture phase to ensure the event is caught reliably
+    }, true);
 
-    // Use one event listener on the container to handle all clicks
+    // Main listener for all button clicks within the provider sections
     providerContainer.addEventListener('click', (event) => {
         const target = event.target;
         let providers = getProviders();
 
-        // Helper function to save and re-render the UI
+        // Helper function to save all provider data and then re-render the UI
         const updateAndRender = () => {
             saveAllProviders(providers);
             renderProviderSettings();
@@ -145,7 +157,7 @@ export function wireDynamicProviderEvents() {
         // --- ADD TARIFF RULE ---
         if (target.matches('.add-rule-button')) {
             const providerId = target.dataset.id;
-            const ruleType = target.dataset.type; // 'import' or 'export'
+            const ruleType = target.dataset.type;
             const provider = providers.find(p => p.id === providerId);
 
             if (provider) {
@@ -159,18 +171,47 @@ export function wireDynamicProviderEvents() {
         // --- REMOVE TARIFF RULE ---
         if (target.matches('.remove-rule-button')) {
             const providerId = target.closest('.provider-details').dataset.providerId;
-            const ruleType = target.dataset.type; // 'import' or 'export'
+            const ruleType = target.dataset.type;
             const ruleIndex = parseInt(target.dataset.index, 10);
             const provider = providers.find(p => p.id === providerId);
 
             if (provider) {
                 const rulesArray = ruleType === 'import' ? provider.importRules : provider.exportRules;
-                rulesArray.splice(ruleIndex, 1); // Remove the rule at the specified index
+                rulesArray.splice(ruleIndex, 1);
+                updateAndRender();
+            }
+        }
+        
+        // --- ADD SPECIAL CONDITION ---
+        if (target.matches('.add-condition-button')) {
+            const providerId = target.dataset.id;
+            const provider = providers.find(p => p.id === providerId);
+            if (provider) {
+                const newCondition = {
+                    name: 'New Condition',
+                    condition: { metric: 'peak_import', operator: 'less_than', value: 1 },
+                    action: { type: 'flat_credit', value: 0.10 }
+                };
+                if (!provider.specialConditions) {
+                    provider.specialConditions = [];
+                }
+                provider.specialConditions.push(newCondition);
                 updateAndRender();
             }
         }
 
-        // --- SAVE ALL PROVIDER CHANGES (INCLUDING DYNAMIC RULES) ---
+        // --- REMOVE SPECIAL CONDITION ---
+        if (target.matches('.remove-condition-button')) {
+            const providerId = target.dataset.id;
+            const ruleIndex = parseInt(target.dataset.index, 10);
+            const provider = providers.find(p => p.id === providerId);
+            if (provider && provider.specialConditions) {
+                provider.specialConditions.splice(ruleIndex, 1);
+                updateAndRender();
+            }
+        }
+
+        // --- SAVE ALL PROVIDER CHANGES ---
         if (target.matches('.save-provider-button')) {
             const providerId = target.dataset.id;
             const providerDetailsContainer = document.querySelector(`.provider-details[data-provider-id="${providerId}"]`);
@@ -178,10 +219,9 @@ export function wireDynamicProviderEvents() {
             
             if (!providerToSave || !providerDetailsContainer) return;
 
-            // Save top-level fields (name, dailyCharge, etc.)
+            // Save top-level fields
             providerDetailsContainer.querySelectorAll('.provider-input[data-field]').forEach(input => {
                 const field = input.dataset.field;
-                // Make sure we don't process inputs inside a rule-row here
                 if (input.closest('.rule-row')) return;
 
                 if (input.type === 'checkbox') providerToSave[field] = input.checked;
@@ -189,8 +229,8 @@ export function wireDynamicProviderEvents() {
                 else providerToSave[field] = input.value;
             });
 
-            // Save dynamic import rule rows
-            providerToSave.importRules = []; // Clear existing to rebuild
+            // Save import rule rows
+            providerToSave.importRules = [];
             providerDetailsContainer.querySelectorAll('.import-rules-container .rule-row').forEach(row => {
                 const rule = {};
                 row.querySelectorAll('.provider-input[data-field]').forEach(input => {
@@ -201,8 +241,8 @@ export function wireDynamicProviderEvents() {
                 providerToSave.importRules.push(rule);
             });
             
-            // Save dynamic export rule rows
-            providerToSave.exportRules = []; // Clear existing to rebuild
+            // Save export rule rows
+            providerToSave.exportRules = [];
             providerDetailsContainer.querySelectorAll('.export-rules-container .rule-row').forEach(row => {
                 const rule = {};
                 row.querySelectorAll('.provider-input[data-field]').forEach(input => {
@@ -213,9 +253,27 @@ export function wireDynamicProviderEvents() {
                 providerToSave.exportRules.push(rule);
             });
 
+            // Save special condition rows
+            providerToSave.specialConditions = [];
+            providerDetailsContainer.querySelectorAll('.conditions-container .rule-row').forEach(row => {
+                const condition = {};
+                row.querySelectorAll('.provider-input[data-field]').forEach(input => {
+                    const field = input.dataset.field;
+                    let value = input.value;
+                    
+                    if (input.type === 'number') {
+                        value = parseFloat(value) || 0;
+                    } else if (field === 'months') {
+                        value = value.split(',').map(m => parseInt(m.trim(), 10)).filter(Number.isInteger);
+                    }
+                    
+                    setNestedProperty(condition, field, value);
+                });
+                providerToSave.specialConditions.push(condition);
+            });
+
             saveProvider(providerToSave);
             
-            // Show "Saved!" feedback
             const statusEl = document.getElementById(`save-status-${providerId.toLowerCase()}`);
             if (statusEl) {
                 statusEl.textContent = "Saved!";
