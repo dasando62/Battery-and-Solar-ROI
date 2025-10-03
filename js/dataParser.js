@@ -1,8 +1,9 @@
 // js/dataParser.js 
-// Version 1.0.4
+// Version 1.0.6
 import { state } from './state.js';
 import { displayError, parseDateString } from './utils.js';
 import { toggleExistingSolar } from './uiEvents.js';
+import { generateHourlySolarProfileFromDaily } from './profiles.js';
 
 function parseCSV(csvText) {
     const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
@@ -99,7 +100,6 @@ export function handleSolarCsv(event) {
             const csvData = parseCSV(e.target.result);
             const dailyData = new Map();
 
-            // --- CORRECTLY read all advanced options ---
             const dateTimeHeader = document.getElementById('solarDateTimeHeader').value;
             const dateFormat = document.getElementById('solarDateFormat').value;
             const generationHeaders = document.getElementById('solarGenerationHeader').value.split(',').map(h => h.trim());
@@ -115,17 +115,31 @@ export function handleSolarCsv(event) {
                 if (!dailyData.has(date)) {
                     dailyData.set(date, {
                         date: date,
-                        hourly: Array(24).fill(0)
+                        hourly: Array(24).fill(0),
+                        rowCount: 0 // <-- MODIFIED: Add a counter
                     });
                 }
                 const day = dailyData.get(date);
                 
-                // --- CORRECTLY find the value using all possible headers ---
                 const valueString = findValueInRow(row, generationHeaders);
                 const value = parseFloat(valueString);
 
                 if (!isNaN(value)) {
                     day.hourly[hour] += value;
+                    day.rowCount++; // <-- MODIFIED: Increment the counter
+                }
+            }
+            
+            // --- ADDED: Check for and distribute daily totals ---
+            for (const day of dailyData.values()) {
+                // If a day has only one data row and all the energy is at midnight...
+                const totalForDay = day.hourly.reduce((a,b) => a + b, 0);
+                if (day.rowCount === 1 && day.hourly[0] === totalForDay && totalForDay > 0) {
+                    const month = parseInt(day.date.split('-')[1], 10);
+                    const season = [12,1,2].includes(month) ? 'Q1_Summer' : [3,4,5].includes(month) ? 'Q2_Autumn' : [6,7,8].includes(month) ? 'Q3_Winter' : 'Q4_Spring';
+                    
+                    // ...replace the hourly data with a realistic solar curve.
+                    day.hourly = generateHourlySolarProfileFromDaily(totalForDay, season);
                 }
             }
 

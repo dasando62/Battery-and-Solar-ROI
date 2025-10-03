@@ -1,5 +1,5 @@
 // js/profiles.js
-// Version 1.0.4
+// Version 1.0.6
 export function generateHourlyConsumptionProfileFromDailyTOU(dailyPeak, dailyShoulder, dailyOffPeak) {
   const hourlyConsumption = Array(24).fill(0);
   // This logic assumes a standard TOU schedule. The user-defined hours are handled in the main analysis.

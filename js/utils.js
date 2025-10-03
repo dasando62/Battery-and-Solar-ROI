@@ -1,5 +1,5 @@
 // js/utils.js
-// Version 1.0.5
+// Version 1.0.6
 import { state } from './state.js';
 import { calculateQuarterlyAverages } from './dataParser.js';
 

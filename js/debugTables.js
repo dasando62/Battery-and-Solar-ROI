@@ -1,5 +1,5 @@
 // js/debugTables.js
-// Version 1.0.4
+// Version 1.0.6
 import { 
 	getNumericInput, 
 	getSimulationData, 
@@ -20,22 +20,92 @@ export function hideAllDebugContainers() {
 	
 }
 
+export function calculateAverageDailyGridCharge(provider, batteryConfig, state) {
+    if (!provider.gridChargeEnabled || !state.electricityData) {
+        return 0;
+    }
+
+    let totalGridChargeKWh = 0;
+    let daysProcessed = 0;
+    const solarDataMap = new Map((state.solarData || []).map(d => [d.date, d.hourly]));
+
+    state.electricityData.forEach(day => {
+        const hourlySolar = solarDataMap.get(day.date) || Array(24).fill(0);
+        // We use the same "true consumption" logic as the main simulation
+        const trueHourlyConsumption = Array(24).fill(0);
+        for (let h = 0; h < 24; h++) {
+            const gridImport = day.consumption[h] || 0;
+            const gridExport = day.feedIn[h] || 0;
+            const solarGeneration = hourlySolar[h] || 0;
+            const selfConsumed = Math.max(0, solarGeneration - gridExport);
+            trueHourlyConsumption[h] = gridImport + selfConsumed;
+        }
+
+        const simResults = simulateDay(trueHourlyConsumption, hourlySolar, provider, batteryConfig);
+        totalGridChargeKWh += simResults.dailyBreakdown.gridChargeKWh;
+        daysProcessed++;
+    });
+
+    return daysProcessed > 0 ? totalGridChargeKWh / daysProcessed : 0;
+}
+
+// In debugTables.js, replace the existing helper function
+function calculateAverageSOCAt6am(provider, batteryConfig, state) {
+    if (!batteryConfig || batteryConfig.capacity === 0 || !state.electricityData) {
+        return 0;
+    }
+
+    let totalSocAt6am = 0;
+    let daysProcessed = 0;
+    let currentSOC = 0; // Carry over SOC day-to-day
+    const solarDataMap = new Map((state.solarData || []).map(d => [d.date, d.hourly]));
+
+    state.electricityData.forEach(day => {
+        const hourlySolar = solarDataMap.get(day.date) || Array(24).fill(0);
+        const trueHourlyConsumption = Array(24).fill(0);
+        for (let h = 0; h < 24; h++) {
+            const gridImport = day.consumption[h] || 0;
+            const gridExport = day.feedIn[h] || 0;
+            const solarGeneration = hourlySolar[h] || 0;
+            const selfConsumed = Math.max(0, solarGeneration - gridExport);
+            trueHourlyConsumption[h] = gridImport + selfConsumed;
+        }
+        
+        const simResults = simulateDay(trueHourlyConsumption, hourlySolar, provider, batteryConfig, currentSOC);
+        currentSOC = simResults.finalSOC; // Update SOC for the next day
+        totalSocAt6am += simResults.socAt6am;
+        daysProcessed++;
+    });
+    
+    const avgSocKWh = daysProcessed > 0 ? totalSocAt6am / daysProcessed : 0;
+    const avgSocPercent = (avgSocKWh / batteryConfig.capacity) * 100;
+    return avgSocPercent;
+}
+
 export function createBreakdownTableHTML(title, data, provider, year, escalationRate, fitConfig, getDegradedFitRate) {
     const escalationFactor = Math.pow(1 + escalationRate, year - 1);
-    const dailyCharge = provider.dailyCharge * escalationFactor;
-    const peakRate = (provider.importRates.find(r => r.name === 'Peak')?.rate || 0) * escalationFactor;
-    const shoulderRate = (provider.importRates.find(r => r.name === 'Shoulder')?.rate || 0) * escalationFactor;
-    const offPeakRate = (provider.importRates.find(r => r.name === 'Off-Peak')?.rate || 0) * escalationFactor;
+    const dailyCharge = (provider.dailyCharge || 0) * escalationFactor;
+
+    // FIX: Correctly find rates from the new 'importRules' array, case-insensitive
+    const peakRate = (provider.importRules.find(r => r.name.toLowerCase().includes('peak'))?.rate || 0) * escalationFactor;
+    const shoulderRate = (provider.importRules.find(r => r.name.toLowerCase().includes('shoulder'))?.rate || 0) * escalationFactor;
+    const offPeakRate = (provider.importRules.find(r => r.name.toLowerCase().includes('off-peak'))?.rate || 0) * escalationFactor;
 
     let tier1ExportRate = 0;
     let tier2ExportRate = 0;
-    const exportRule = provider.exportRates[0];
-
-    if (exportRule?.type === 'tiered') {
-        tier1ExportRate = getDegradedFitRate(exportRule.tiers[0]?.rate, year, fitConfig);
-        tier2ExportRate = getDegradedFitRate(exportRule.tiers[1]?.rate, year, fitConfig);
-    } else if (exportRule?.type === 'flat') {
-        tier1ExportRate = getDegradedFitRate(exportRule.rate, year, fitConfig);
+    
+    // FIX: Correctly find export rates from the new 'exportRules' array
+    if (provider.exportRules && provider.exportRules.length > 0) {
+        const firstRule = provider.exportRules[0];
+        if (firstRule.type === 'tiered') {
+            tier1ExportRate = getDegradedFitRate(firstRule.rate, year, fitConfig);
+            // Assume Tier 2 is the next rule in the array
+            if (provider.exportRules.length > 1) {
+                tier2ExportRate = getDegradedFitRate(provider.exportRules[1].rate, year, fitConfig);
+            }
+        } else if (firstRule.type === 'flat') {
+            tier1ExportRate = getDegradedFitRate(firstRule.rate, year, fitConfig);
+        }
     }
 
     let totalDays = 0, totalPeakKWh = 0, totalShoulderKWh = 0, totalOffPeakKWh = 0;
@@ -47,34 +117,25 @@ export function createBreakdownTableHTML(title, data, provider, year, escalation
         const seasonData = data[season];
         if (!seasonData) continue;
         
-        totalDays += seasonData.days;
-        totalPeakKWh += seasonData.peakKWh;
-        totalShoulderKWh += seasonData.shoulderKWh;
-        totalOffPeakKWh += seasonData.offPeakKWh;
-        // --- SAFE ACCESS START ---
+        totalDays += seasonData.days || 0;
+        totalPeakKWh += seasonData.peakKWh || 0;
+        totalShoulderKWh += seasonData.shoulderKWh || 0;
+        totalOffPeakKWh += seasonData.offPeakKWh || 0;
         totalGridChargeKWh += seasonData.gridChargeKWh || 0;
         totalGridChargeCost += seasonData.gridChargeCost || 0;
-        // --- SAFE ACCESS END ---
-
-        let seasonalTier1Export = seasonData.tier1ExportKWh;
-        let seasonalTier2Export = seasonData.tier2ExportKWh;
-        if (exportRule?.type === 'flat') {
-            seasonalTier1Export += seasonalTier2Export;
-            seasonalTier2Export = 0;
-        }
-        totalTier1ExportKWh += seasonalTier1Export;
-        totalTier2ExportKWh += seasonalTier2Export;
+        totalTier1ExportKWh += seasonData.tier1ExportKWh || 0;
+        totalTier2ExportKWh += seasonData.tier2ExportKWh || 0;
 
         tableHTML += `<tr>
-            <td>${season}</td><td>${seasonData.days}</td>
-            <td>$${(seasonData.days * dailyCharge).toFixed(2)}</td>
+            <td>${season}</td><td>${seasonData.days || 0}</td>
+            <td>$${((seasonData.days || 0) * dailyCharge).toFixed(2)}</td>
             <td>${(seasonData.gridChargeKWh || 0).toFixed(2)}</td>
             <td>$${(seasonData.gridChargeCost || 0).toFixed(2)}</td>
-            <td>${seasonData.peakKWh.toFixed(2)}</td><td>$${(seasonData.peakKWh * peakRate).toFixed(2)}</td>
-            <td>${seasonData.shoulderKWh.toFixed(2)}</td><td>$${(seasonData.shoulderKWh * shoulderRate).toFixed(2)}</td>
-            <td>${seasonData.offPeakKWh.toFixed(2)}</td><td>$${(seasonData.offPeakKWh * offPeakRate).toFixed(2)}</td>
-            <td>${seasonalTier1Export.toFixed(2)}</td><td>$${(seasonalTier1Export * tier1ExportRate).toFixed(2)}</td>
-            <td>${seasonalTier2Export.toFixed(2)}</td><td>$${(seasonalTier2Export * tier2ExportRate).toFixed(2)}</td>
+            <td>${(seasonData.peakKWh || 0).toFixed(2)}</td><td>$${((seasonData.peakKWh || 0) * peakRate).toFixed(2)}</td>
+            <td>${(seasonData.shoulderKWh || 0).toFixed(2)}</td><td>$${((seasonData.shoulderKWh || 0) * shoulderRate).toFixed(2)}</td>
+            <td>${(seasonData.offPeakKWh || 0).toFixed(2)}</td><td>$${((seasonData.offPeakKWh || 0) * offPeakRate).toFixed(2)}</td>
+            <td>${(seasonData.tier1ExportKWh || 0).toFixed(2)}</td><td>$${((seasonData.tier1ExportKWh || 0) * tier1ExportRate).toFixed(2)}</td>
+            <td>${(seasonData.tier2ExportKWh || 0).toFixed(2)}</td><td>$${((seasonData.tier2ExportKWh || 0) * tier2ExportRate).toFixed(2)}</td>
         </tr>`;
     }
     
@@ -201,178 +262,69 @@ export function renderExistingSystemDebugTable(state) {
 export function renderNewSystemDebugTable(state) {
     if (!document.getElementById("debugToggle")?.checked) return;
 	clearError();
-
-    const useManual = document.getElementById("manualInputToggle")?.checked;
-    if (!useManual && (!state.electricityData || !state.solarData || state.electricityData.length === 0)) {
-        displayError("Please upload both electricity and solar CSV files to use this debug tool.");
-        return;
-    }
     hideAllDebugContainers();
     const debugContainer = document.getElementById("newSystemDebugTableContainer");
     const recommendationContainer = document.getElementById("recommendationContainer");
     if (!recommendationContainer) return;
 
-    // Get simulation data (calculating averages if needed)
-    let simulationData;
+    const useManual = document.getElementById("manualInputToggle")?.checked;
+    const config = gatherConfigFromUI();
+
     if (useManual) {
-        simulationData = {
+        // --- MANUAL MODE PATH ---
+        // 1. Gather the seasonal averages from the UI, as the old function did.
+        const simulationData = {
             'Q1_Summer': { avgPeak: getNumericInput("summerDailyPeak"), avgShoulder: getNumericInput("summerDailyShoulder"), avgOffPeak: getNumericInput("summerDailyOffPeak"), avgSolar: getNumericInput("summerDailySolar") },
             'Q2_Autumn': { avgPeak: getNumericInput("autumnDailyPeak"), avgShoulder: getNumericInput("autumnDailyShoulder"), avgOffPeak: getNumericInput("autumnDailyOffPeak"), avgSolar: getNumericInput("autumnDailySolar") },
             'Q3_Winter': { avgPeak: getNumericInput("winterDailyPeak"), avgShoulder: getNumericInput("winterDailyShoulder"), avgOffPeak: getNumericInput("winterDailyOffPeak"), avgSolar: getNumericInput("winterDailySolar") },
             'Q4_Spring': { avgPeak: getNumericInput("springDailyPeak"), avgShoulder: getNumericInput("springDailyShoulder"), avgOffPeak: getNumericInput("springDailyOffPeak"), avgSolar: getNumericInput("springDailySolar") },
         };
-    } else {
-        if (!state.quarterlyAverages) {
-			            // 2. GET THE TOU HOURS FROM THE UI CONFIG
-            const config = gatherConfigFromUI();
-            const baselineProvider = config.providers[config.selectedProviders[0]];
-            const touHours = {
-                peak: baselineProvider.importData.peakHours || [],
-                shoulder: baselineProvider.importData.shoulderHours || [],
-			};
-            state.quarterlyAverages = calculateQuarterlyAverages(state.electricityData, state.solarData, touHours);
-        }
-        simulationData = state.quarterlyAverages;
-    }
 
-    if (!simulationData) {
-        recommendationContainer.innerHTML = '<p style="color: red;">Could not calculate seasonal averages from the provided data.</p>';
-        if (debugContainer) debugContainer.style.display = "block";
-        return;
-    }
-
-    const coverageTarget = getNumericInput('recommendationCoverageTarget', 90);
-    const heuristicRecs = calculateSizingRecommendations(coverageTarget, simulationData);
-    
-    let recommendationHTML = `<div class="recommendation-section">`;
-    if (heuristicRecs) {
-        recommendationHTML += `
-            <h4>Heuristic Sizing (based on ${coverageTarget}% annual coverage)</h4>
-            <p>
-                <strong>Recommended Solar: ${heuristicRecs.solar.toFixed(1)} kW</strong><br>
-                <strong>Recommended Battery: ${heuristicRecs.battery.toFixed(1)} kWh</strong><br>
-                <strong>Recommended Inverter: ${heuristicRecs.inverter.toFixed(1)} kW</strong>
-            </p>
-            <hr>`;
-    }
-
-    // Detailed Sizing (CSV only)
-    if (!useManual) {
-        const dailyPeakPeriodData = [];
-        const dailyMaxHourData = [];
-        let totalDays = 0;
-        const newBatterySize = getNumericInput('newBattery', 0);
-        const newBatteryInverter = getNumericInput('newBatteryInverter', 5);
-        const existingSolarKW = getNumericInput('existingSolarKW', 0);
-        const newSolarKW = getNumericInput('newSolarKW', 0);
-        const replaceSystem = document.getElementById("replaceExistingSystem")?.checked;
-        const totalSolarKW = replaceSystem ? newSolarKW : existingSolarKW + newSolarKW;
-        const solarDataMap = new Map(state.solarData.map(day => [day.date, day.hourly]));
-        state.electricityData.forEach(day => {
-            const hourlySolarRaw = solarDataMap.get(day.date);
-            if (!hourlySolarRaw) return;
-            totalDays++;
-            let dailyPeakPeriodKWh = 0;
-            let dailyMaxHourKWh = 0;
-            let batterySOC = 0;
-            const solarProfileSourceKw = existingSolarKW > 0 ? existingSolarKW : 1;
-            const hourlySolar = hourlySolarRaw.map(h => (h / solarProfileSourceKw) * totalSolarKW);
-            for (let h = 0; h < 24; h++) {
-                const consumption = day.consumption[h] || 0;
-                const solar = hourlySolar[h] || 0;
-                const selfConsumption = Math.min(consumption, solar);
-                let remainingConsumption = consumption - selfConsumption;
-                let excessSolar = solar - selfConsumption;
-                dailyMaxHourKWh = Math.max(dailyMaxHourKWh, remainingConsumption);
-                if (remainingConsumption > 0) {
-                    const discharge = Math.min(remainingConsumption, batterySOC, newBatteryInverter);
-                    batterySOC -= discharge;
-                }
-                if (excessSolar > 0) {
-                    const charge = Math.min(excessSolar, newBatterySize - batterySOC, newBatteryInverter);
-                    batterySOC += charge;
-                }
-                if ((h >= 7 && h < 10) || (h >= 16 && h < 22)) {
-                    dailyPeakPeriodKWh += consumption;
-                }
-            }
-            dailyPeakPeriodData.push(dailyPeakPeriodKWh);
-            dailyMaxHourData.push(dailyMaxHourKWh);
-        });
-        if (totalDays > 0) {
-            const getPercentile = (data, percentile) => {
-                const sortedData = [...data].sort((a, b) => a - b);
-                const index = Math.ceil(percentile * sortedData.length) - 1;
-                return sortedData[Math.max(0, index)];
-            };
-            const recommendedBatteryKWh = getPercentile(dailyPeakPeriodData, 0.90);
-            const recommendedInverterKW = getPercentile(dailyMaxHourData, 0.90);
-            const finalBatteryRec = Math.ceil(recommendedBatteryKWh);
-            const finalInverterRec = (Math.ceil(recommendedInverterKW * 2) / 2).toFixed(1);
-            const batteryCoverageDays = dailyPeakPeriodData.filter(d => d <= finalBatteryRec).length;
-            const inverterCoverageDays = dailyMaxHourData.filter(d => d <= finalInverterRec).length;
+        // 2. Call only the heuristic sizing calculation.
+        const heuristicRecs = calculateSizingRecommendations(config.recommendationCoverageTarget, simulationData);
+        
+        // 3. Render ONLY the heuristic results.
+        let recommendationHTML = `<div class="recommendation-section">`;
+        if (heuristicRecs) {
             recommendationHTML += `
-                <h4>Detailed Sizing (based on 90th percentile of daily load)</h4>
+                <h4>Heuristic Sizing (based on ${heuristicRecs.coverageTarget}% annual coverage)</h4>
                 <p>
-                    <strong>Recommended Battery Capacity: ${finalBatteryRec} kWh</strong><br>
-                    <small><em>This would have fully covered peak period needs on ${batteryCoverageDays} of ${totalDays} days.</em></small>
-                </p>
-                <p>
-                    <strong>Recommended Inverter Power: ${finalInverterRec} kW</strong><br>
-                    <small><em>This would have met max power demand on ${inverterCoverageDays} of ${totalDays} days.</em></small>
+                    <strong>Recommended Solar: ${heuristicRecs.solar.toFixed(1)} kW</strong><br>
+                    <strong>Recommended Battery: ${heuristicRecs.battery.toFixed(1)} kWh</strong><br>
+                    <strong>Recommended Inverter: ${heuristicRecs.inverter.toFixed(1)} kW</strong>
                 </p>`;
-            const blackoutSizingEnabled = document.getElementById("enableBlackoutSizing").checked;
-            if (blackoutSizingEnabled) {
-                const blackoutDuration = getNumericInput('blackoutDuration', 0);
-                const blackoutCoverage = getNumericInput('blackoutCoverage', 0) / 100;
-                if (blackoutDuration > 0 && blackoutCoverage > 0) {
-                    const allHours = state.electricityData.flatMap(d => d.consumption);
-                    let maxConsumptionInWindow = 0;
-                    for (let i = 0; i <= allHours.length - blackoutDuration; i++) {
-                        const windowSum = allHours.slice(i, i + blackoutDuration).reduce((a, b) => a + b, 0);
-                        if (windowSum > maxConsumptionInWindow) maxConsumptionInWindow = windowSum;
-                    }
-                    const requiredReserve = maxConsumptionInWindow * blackoutCoverage;
-                    const totalCalculatedSize = finalBatteryRec + requiredReserve;
-                    const standardSizes = [5, 10, 13.5, 16, 20, 24, 32, 40, 48];
-                    const practicalSize = standardSizes.find(size => size >= totalCalculatedSize) || Math.ceil(totalCalculatedSize);
-                    recommendationHTML += `<hr>
-                        <h4>Blackout Protection Sizing</h4>
-                        <p>
-                            For a <strong>${blackoutDuration}-hour</strong> blackout covering <strong>${blackoutCoverage * 100}%</strong> of usage, a reserve of <strong>${requiredReserve.toFixed(2)} kWh</strong> is needed.
-                        </p>
-                        <p>
-                            <strong>Total Recommended Practical Size (Savings + Blackout):</strong><br>
-                            ${finalBatteryRec} kWh + ${requiredReserve.toFixed(2)} kWh = ${totalCalculatedSize.toFixed(2)} kWh.
-                            The next largest standard size is <strong>${practicalSize} kWh</strong>.
-                        </p>`;
-                }
-            }
-            const newSystemEstimatesTable = document.getElementById("newSystemEstimatesTable");
-            if (newSystemEstimatesTable) {
-                newSystemEstimatesTable.innerHTML = `<details class="collapsible-histogram"><summary>📊 Daily Peak Period Load Distribution</summary><canvas id="peakPeriodHistogram"></canvas></details><details class="collapsible-histogram"><summary>📊 Daily Maximum Hourly Load Distribution</summary><canvas id="maxHourlyHistogram"></canvas></details>`;
-            }
-            const maxPeakPeriod = Math.max(...dailyPeakPeriodData);
-            const binSize1 = Math.ceil(maxPeakPeriod / 10) || 1;
-            const bins1 = Array.from({ length: 10 }, (_, i) => ({ label: `${i * binSize1}-${(i + 1) * binSize1} kWh`, count: 0 }));
-            dailyPeakPeriodData.forEach(v => { const binIndex = Math.min(Math.floor(v / binSize1), 9); if (bins1[binIndex]) bins1[binIndex].count++; });
-            const maxHourly = Math.max(...dailyMaxHourData);
-            const binSize2 = Math.ceil(maxHourly / 10 * 10) / 10 || 1;
-            const bins2 = Array.from({ length: 10 }, (_, i) => ({ label: `${(i * binSize2).toFixed(1)}-${((i + 1) * binSize2).toFixed(1)} kW`, count: 0 }));
-            dailyMaxHourData.forEach(v => { const binIndex = Math.min(Math.floor(v / binSize2), 9); if (bins2[binIndex]) bins2[binIndex].count++; });
-            if (state.peakPeriodChart) state.peakPeriodChart.destroy();
-            const ctx1 = document.getElementById("peakPeriodHistogram")?.getContext("2d");
-            if (ctx1) { state.peakPeriodChart = new Chart(ctx1, { type: 'bar', data: { labels: bins1.map(b => b.label), datasets: [{ label: "Days", data: bins1.map(b => b.count), backgroundColor: "rgba(54,162,235,0.6)" }] }, options: { plugins: { title: { display: true, text: 'Peak Period Demand Histogram' } } } }); }
-            if (state.maxHourlyChart) state.maxHourlyChart.destroy();
-            const ctx2 = document.getElementById("maxHourlyHistogram")?.getContext("2d");
-            if(ctx2) { state.maxHourlyChart = new Chart(ctx2, { type: 'bar', data: { labels: bins2.map(b => b.label), datasets: [{ label: "Days", data: bins2.map(b => b.count), backgroundColor: "rgba(255,159,64,0.6)" }] }, options: { plugins: { title: { display: true, text: 'Maximum Hourly Load Histogram' } } } }); }
+        }
+        recommendationHTML += `</div>`;
+        recommendationContainer.innerHTML = recommendationHTML;
+        
+        // 4. Clear the chart area as it's not applicable for manual mode.
+        const newSystemEstimatesTable = document.getElementById("newSystemEstimatesTable");
+        if (newSystemEstimatesTable) {
+            newSystemEstimatesTable.innerHTML = '<p><em>Detailed sizing charts require CSV data.</em></p>';
+        }
+
+    } else {
+        // --- CSV MODE PATH ---
+        if (!state.electricityData || !state.solarData || state.electricityData.length === 0) {
+            displayError("Please upload both electricity and solar CSV files to use this debug tool.");
+            return;
+        }
+
+        // This path works as before, running the full detailed calculation.
+        const sizingResults = calculateDetailedSizing(state.electricityData, state.solarData, config, state.quarterlyAverages);
+
+        if (sizingResults) {
+            renderSizingResults(sizingResults, state);
+            setTimeout(() => {
+                drawDistributionCharts(sizingResults.distributions, state);
+            }, 0);
+        } else {
+            displayError("Sizing calculation failed for debug table.", "sizing-error-message");
         }
     }
-    recommendationHTML += `</div>`;
-    recommendationContainer.innerHTML = recommendationHTML;
+
     if (debugContainer) debugContainer.style.display = "block";
 }
-
 export function renderProvidersDebugTable(state) {
     if (!document.getElementById("debugToggle")?.checked) return;
     hideAllDebugContainers();
@@ -411,8 +363,10 @@ export function renderProvidersDebugTable(state) {
             gridChargeThreshold: getNumericInput("gridChargeThreshold"),
             socChargeTrigger: getNumericInput("socChargeTrigger")
         };
-        const avgCharge = calculateAverageDailyGridCharge(providerConfig, batteryConfig, simulationData);
+        const avgCharge = calculateAverageDailyGridCharge(providerConfig, batteryConfig, state);
         tableHTML += `<tr><td><strong>Average Daily Grid Charge</strong></td><td><strong>${avgCharge.toFixed(2)} kWh</strong></td></tr>`;
+		const avgSocAt6am = calculateAverageSOCAt6am(providerConfig, batteryConfig, state);
+		tableHTML += `<tr><td><strong>Average SOC at 6am</strong></td><td><strong>${avgSocAt6am.toFixed(1)}%</strong></td></tr>`;
         // --- END OF ADDED BLOCK ---
     });
 
@@ -483,30 +437,4 @@ export function renderOpportunityCostDebugTable() {
     tableHTML += "</tbody></table>";
     if(debugContainer) debugContainer.innerHTML = tableHTML;
     if(debugContainer) debugContainer.style.display = "block";
-}
-
-export function calculateAverageDailyGridCharge(provider, batteryConfig, simulationData) {
-    // Updated to use the new top-level property
-    if (!provider.gridChargeEnabled) {
-        return 0;
-    }
-
-    let totalAnnualGridChargeKWh = 0;
-    const daysPerQuarter = { 'Q1_Summer': 90, 'Q2_Autumn': 91, 'Q3_Winter': 92, 'Q4_Spring': 92 };
-
-    for (const quarter in simulationData) {
-        const qData = simulationData[quarter];
-        if (!qData || typeof qData.avgPeak === 'undefined') continue;
-
-        const hourlyConsumption = generateHourlyConsumptionProfileFromDailyTOU(qData.avgPeak, qData.avgShoulder, qData.avgOffPeak);
-        
-        // Use an empty solar profile, as we only want to measure grid charging potential
-        const dailyBreakdown = simulateDay(hourlyConsumption, Array(24).fill(0), provider, batteryConfig).dailyBreakdown;
-        
-        if (daysPerQuarter[quarter]) {
-            totalAnnualGridChargeKWh += (dailyBreakdown.gridChargeKWh || 0) * daysPerQuarter[quarter];
-        }
-    }
-
-    return totalAnnualGridChargeKWh > 0 ? totalAnnualGridChargeKWh / 365 : 0;
 }

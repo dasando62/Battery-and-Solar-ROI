@@ -1,10 +1,40 @@
 // js/analysis.js
-// Version 1.0.4
+// Version 1.0.6
 import { state } from './state.js';
 import { getNumericInput, escalate, getRateForHour, parseRangesToHours } from './utils.js';
 import { tariffComponents } from './tariffComponents.js';
 import { generateHourlyConsumptionProfileFromDailyTOU, generateHourlySolarProfileFromDaily } from './profiles.js';
 
+function calculateAverageSOCAt6am(provider, batteryConfig, simulationData) {
+    if (!batteryConfig || batteryConfig.capacity === 0) {
+        return 0; // Can't calculate SOC without a battery
+    }
+    
+    let totalAnnualSocKWhDays = 0;
+    const daysPerQuarter = { 'Q1_Summer': 90, 'Q2_Autumn': 91, 'Q3_Winter': 92, 'Q4_Spring': 92 };
+
+    for (const quarter in simulationData) {
+        const qData = simulationData[quarter];
+        if (!qData || typeof qData.avgPeak === 'undefined') continue;
+
+        const hourlyConsumption = generateHourlyConsumptionProfileFromDailyTOU(qData.avgPeak, qData.avgShoulder, qData.avgOffPeak);
+        
+        // Run a simulation for an average day in this season
+        // We assume no solar to see the "worst-case" morning SOC after overnight usage.
+        const simResults = simulateDay(hourlyConsumption, Array(24).fill(0), provider, batteryConfig);
+        
+        if (daysPerQuarter[quarter]) {
+            // Add the weighted result to the annual total
+            totalAnnualSocKWhDays += (simResults.socAt6am || 0) * daysPerQuarter[quarter];
+        }
+    }
+    
+    const avgSocKWh = totalAnnualSocKWhDays > 0 ? totalAnnualSocKWhDays / 365 : 0;
+    // Convert the average kWh value to a percentage of the battery's capacity
+    const avgSocPercent = (avgSocKWh / batteryConfig.capacity) * 100;
+
+    return avgSocPercent;
+}
 
 function applySpecialConditions(dailyCost, dailyBreakdown, conditions, dateString) {
     let adjustedCost = dailyCost;
@@ -89,35 +119,30 @@ export function getDegradedFitRate(baseRate, year, fitConfig) {
 }
 
 export function simulateDay(hourlyConsumption, hourlySolar, provider, batteryConfig = null, startingSOC = 0) {
-    const results = { 
-        peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, 
-        tier1ExportKWh: 0, tier2ExportKWh: 0, 
-        gridChargeKWh: 0, gridChargeCost: 0, 
-        hourlyImports: Array(24).fill(0), 
-        hourlyExports: Array(24).fill(0) 
+    const results = {
+        peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0,
+        tier1ExportKWh: 0, tier2ExportKWh: 0,
+        gridChargeKWh: 0,
+        hourlyImports: Array(24).fill(0),
+        hourlyExports: Array(24).fill(0),
+        hourlyGridCharge: Array(24).fill(0)
     };
     let batterySOC = startingSOC;
+    let socAt6am = 0;
 
     // Get Peak/Shoulder hours from the new rule-based system
     const peakRule = (provider.importRules || []).find(r => r.name.toLowerCase().includes('peak'));
     const shoulderRule = (provider.importRules || []).find(r => r.name.toLowerCase().includes('shoulder'));
     const peakHours = parseRangesToHours(peakRule?.hours || '');
     const shoulderHours = parseRangesToHours(shoulderRule?.hours || '');
-    
-    // Find the off-peak rule to get the rate for grid charging
-    const offPeakRule = (provider.importRules || []).find(r => r.name.toLowerCase().includes('off-peak'));
-    const offPeakRate = offPeakRule?.rate || 0;
 
     if (!batteryConfig) {
         // --- NO BATTERY SCENARIO ---
+        socAt6am = 0;
         for (let h = 0; h < 24; h++) {
             const net = (hourlyConsumption[h] || 0) - (hourlySolar[h] || 0);
             if (net > 0) {
                 results.hourlyImports[h] = net;
-                // Correctly categorize into TOU bins
-                if (peakHours.includes(h)) results.peakKWh += net;
-                else if (shoulderHours.includes(h)) results.shoulderKWh += net;
-                else results.offPeakKWh += net;
             } else {
                 results.hourlyExports[h] = -net;
             }
@@ -125,6 +150,10 @@ export function simulateDay(hourlyConsumption, hourlySolar, provider, batteryCon
     } else {
         // --- WITH BATTERY SCENARIO ---
         for (let h = 0; h < 24; h++) {
+            if (h === 6) {
+                socAt6am = batterySOC;
+            }
+
             const consumption = hourlyConsumption[h] || 0;
             const solar = hourlySolar[h] || 0;
             const selfConsumption = Math.min(consumption, solar);
@@ -145,47 +174,59 @@ export function simulateDay(hourlyConsumption, hourlySolar, provider, batteryCon
             }
             results.hourlyImports[h] = remainingConsumption;
 
-            // Grid Charging Logic
             const startHour = provider.gridChargeStart;
             const endHour = provider.gridChargeEnd;
             let inChargeWindow = (startHour > endHour) ? (h >= startHour || h < endHour) : (h >= startHour && h < endHour);
-            
+
             if (provider.gridChargeEnabled && inChargeWindow && batterySOC < (batteryConfig.socChargeTrigger / 100) * batteryConfig.capacity) {
                 const chargeNeeded = batteryConfig.capacity * (batteryConfig.gridChargeThreshold / 100) - batterySOC;
                 const chargeFromGrid = Math.min(chargeNeeded, batteryConfig.inverterKW);
                 if (chargeFromGrid > 0) {
                     batterySOC += chargeFromGrid;
-                    results.hourlyImports[h] += chargeFromGrid; // Add to total hourly import
-                    results.gridChargeKWh += chargeFromGrid;
-                    results.gridChargeCost += chargeFromGrid * offPeakRate; // Use the found off-peak rate
+                    results.hourlyGridCharge[h] = chargeFromGrid;
                 }
-            }
-        }
-        
-        // Categorize the final grid imports into TOU bins
-        for (let h = 0; h < 24; h++) {
-            const totalImport = results.hourlyImports[h];
-            if (totalImport > 0) {
-                if (peakHours.includes(h)) results.peakKWh += totalImport;
-                else if (shoulderHours.includes(h)) results.shoulderKWh += totalImport;
-                else results.offPeakKWh += totalImport;
             }
         }
     }
 
-    // Tiered export logic updated for new rule structure
+    // --- FINAL CATEGORIZATION ---
+    // First, categorize the normal (non-grid-charge) home consumption imports.
+    for (let h = 0; h < 24; h++) {
+        const homeImport = results.hourlyImports[h];
+        if (homeImport > 0) {
+            if (peakHours.includes(h)) results.peakKWh += homeImport;
+            else if (shoulderHours.includes(h)) results.shoulderKWh += homeImport;
+            else results.offPeakKWh += homeImport;
+        }
+    }
+
+    // Now, separately categorize the grid charge imports into the correct TOU buckets for costing.
+    for (let h = 0; h < 24; h++) {
+        const gridChargeAmount = results.hourlyGridCharge[h];
+        if (gridChargeAmount > 0) {
+            results.gridChargeKWh += gridChargeAmount; // Accumulate total for the raw data table
+            if (peakHours.includes(h)) {
+                results.peakKWh += gridChargeAmount;
+            } else if (shoulderHours.includes(h)) {
+                results.shoulderKWh += gridChargeAmount;
+            } else {
+                results.offPeakKWh += gridChargeAmount;
+            }
+        }
+    }
+
+    // Tiered export logic
     const dailyTotalExport = results.hourlyExports.reduce((a, b) => a + b, 0);
     const firstExportRule = (provider.exportRules || [])[0];
-    // This is a simplified check for a single tier, consistent with the old system's capability
     if (firstExportRule && firstExportRule.type === 'tiered') {
         results.tier1ExportKWh = Math.min(dailyTotalExport, firstExportRule.limit || Infinity);
         results.tier2ExportKWh = Math.max(0, dailyTotalExport - results.tier1ExportKWh);
-    } else { // For flat or TOU-only export, put everything in tier 1
+    } else {
         results.tier1ExportKWh = dailyTotalExport;
         results.tier2ExportKWh = 0;
     }
-    
-    return { dailyBreakdown: results, finalSOC: batterySOC };
+
+    return { dailyBreakdown: results, finalSOC: batterySOC, socAt6am: socAt6am };
 }
 
 export function runSimulation(config, simulationData, electricityData) {
@@ -194,9 +235,8 @@ export function runSimulation(config, simulationData, electricityData) {
     const batteryDegradationFactors = Array.from({ length: config.numYears + 1 }, (_, i) => Math.pow(1 - config.batteryDegradation, i));
     const fitConfig = getFitDegradationConfig();
     const finalResults = { baselineCosts: {} };
-    const rawData = { baseline: { year1: {}, year2: {} }, system: {} };
+    const rawData = { baseline: { year1: {} }, system: {} };
 
-    // Helper to get the season from a date string
     const getSeason = (date) => {
         const month = parseInt(date.split('-')[1], 10);
         if ([12, 1, 2].includes(month)) return 'Summer';
@@ -209,7 +249,7 @@ export function runSimulation(config, simulationData, electricityData) {
         const provider = config.providers.find(p => p.id === pId);
         if (!provider) return;
         finalResults[provider.id] = { annualCosts: [], cumulativeSavingsPerYear: [], npv: 0, roiYear: null };
-        rawData.system[provider.id] = { year1: {}, year2: {} };
+        rawData.system[provider.id] = { year1: {} };
         for (const q of ['Summer', 'Autumn', 'Winter', 'Spring']) {
             rawData.baseline.year1[q] = { days: 0, peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, tier1ExportKWh: 0, tier2ExportKWh: 0, gridChargeKWh: 0, gridChargeCost: 0 };
             rawData.system[provider.id].year1[q] = { days: 0, peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, tier1ExportKWh: 0, tier2ExportKWh: 0, gridChargeKWh: 0, gridChargeCost: 0 };
@@ -229,7 +269,7 @@ export function runSimulation(config, simulationData, electricityData) {
         let daysProcessed = 0;
         const importCalculator = tariffComponents.IMPORT_RULES.calculate;
         const exportCalculator = tariffComponents.EXPORT_RULES.calculate;
-        const solarDataMap = config.noExistingSolar ? new Map() : new Map((state.solarData || []).map(day => [day.date, day.hourly]));
+        
         const peakRule = (baselineProvider.importRules || []).find(r => r.name.toLowerCase().includes('peak'));
         const shoulderRule = (baselineProvider.importRules || []).find(r => r.name.toLowerCase().includes('shoulder'));
         const peakHours = parseRangesToHours(peakRule?.hours || '');
@@ -237,22 +277,29 @@ export function runSimulation(config, simulationData, electricityData) {
 
         electricityData.forEach(day => {
             daysProcessed++;
-            const dailyBreakdown = { peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, hourlyImports: Array(24).fill(0), hourlyExports: Array(24).fill(0) };
-            const hourlySolar = solarDataMap.get(day.date) || Array(24).fill(0);
+
+            // --- FIX: Directly use the historical data from the CSV ---
+            const dailyBreakdown = { 
+                peakKWh: 0, 
+                shoulderKWh: 0, 
+                offPeakKWh: 0, 
+                hourlyImports: day.consumption, // Use historical imports directly
+                hourlyExports: day.feedIn     // Use historical exports directly
+            };
+
+            // Categorize the historical grid imports into TOU bins
             for (let h = 0; h < 24; h++) {
-                const consumption = day.consumption[h] || 0;
-                const solar = hourlySolar[h] || 0;
-                const net = consumption - solar;
-                if (net > 0) {
-                    dailyBreakdown.hourlyImports[h] = net;
-                    if (peakHours.includes(h)) dailyBreakdown.peakKWh += net;
-                    else if (shoulderHours.includes(h)) dailyBreakdown.shoulderKWh += net;
-                    else dailyBreakdown.offPeakKWh += net;
+                const gridImport = day.consumption[h] || 0;
+                if (peakHours.includes(h)) {
+                    dailyBreakdown.peakKWh += gridImport;
+                } else if (shoulderHours.includes(h)) {
+                    dailyBreakdown.shoulderKWh += gridImport;
                 } else {
-                    dailyBreakdown.hourlyExports[h] = -net;
+                    dailyBreakdown.offPeakKWh += gridImport;
                 }
             }
-            
+
+            // Record the raw data for the baseline table
             const season = getSeason(day.date);
             const rawSeason = rawData.baseline.year1[season];
             if (rawSeason) {
@@ -260,26 +307,32 @@ export function runSimulation(config, simulationData, electricityData) {
                 rawSeason.peakKWh += dailyBreakdown.peakKWh;
                 rawSeason.shoulderKWh += dailyBreakdown.shoulderKWh;
                 rawSeason.offPeakKWh += dailyBreakdown.offPeakKWh;
-                const dailyTotalExport = dailyBreakdown.hourlyExports.reduce((a,b)=>a+b,0);
+                
+                const dailyTotalExport = dailyBreakdown.hourlyExports.reduce((a, b) => a + b, 0);
                 const firstExportRule = (baselineProvider.exportRules || [])[0];
                 if (firstExportRule && firstExportRule.type === 'tiered') {
-                    rawSeason.tier1ExportKWh += Math.min(dailyTotalExport, firstExportRule.limit || Infinity);
-                    rawSeason.tier2ExportKWh += Math.max(0, dailyTotalExport - rawSeason.tier1ExportKWh);
+                    const tier1Amount = Math.min(dailyTotalExport, firstExportRule.limit || Infinity);
+                    rawSeason.tier1ExportKWh += tier1Amount;
+                    rawSeason.tier2ExportKWh += dailyTotalExport - tier1Amount;
                 } else {
                     rawSeason.tier1ExportKWh += dailyTotalExport;
                 }
             }
             
+            // Calculate cost based on this historically accurate breakdown
             let dailyEnergyCost = importCalculator(baselineProvider.importRules, dailyBreakdown, { rate: 0, year: 1 });
             dailyEnergyCost -= exportCalculator(baselineProvider.exportRules, dailyBreakdown, 1, fitConfig, getDegradedFitRate);
             
-			let totalDailyAdjustment = (baselineProvider.dailyCharge || 0) + dailyEnergyCost;
-			totalDailyAdjustment = applySpecialConditions(totalDailyAdjustment, dailyBreakdown, baselineProvider.specialConditions, day.date);
-			totalCostForPeriod += totalDailyAdjustment;
+            let totalDailyAdjustment = (baselineProvider.dailyCharge || 0) + dailyEnergyCost;
+            totalDailyAdjustment = applySpecialConditions(totalDailyAdjustment, dailyBreakdown, baselineProvider.specialConditions, day.date);
+            totalCostForPeriod += totalDailyAdjustment;
         });
+
         const annualizationFactor = daysProcessed > 0 ? 365 / daysProcessed : 0;
         annualizedBaseCost = totalCostForPeriod * annualizationFactor;
     }
+
+
 
     // --- MAIN SIMULATION LOOP (BY YEAR) ---
     for (let y = 1; y <= config.numYears; y++) {
@@ -287,14 +340,11 @@ export function runSimulation(config, simulationData, electricityData) {
         const batteryFactor = batteryDegradationFactors[y - 1];
         const escalationConfig = { rate: config.tariffEscalation, year: y };
         
-        if (config.useManual) {
-             // Manual mode baseline calculation would go here
-             // For now, we assume CSV mode provides the baseline
-        } else {
+        if (config.useManual) { /* manual mode logic */ } 
+        else {
             finalResults.baselineCosts[y] = escalate(annualizedBaseCost, config.tariffEscalation, y);
         }
 
-        // --- PROVIDER-SPECIFIC SIMULATION ---
         config.selectedProviders.forEach(p => {
             const providerData = config.providers.find(provider => provider.id === p);
             if (!providerData) return;
@@ -303,16 +353,14 @@ export function runSimulation(config, simulationData, electricityData) {
             let totalDaysProcessed = 0;
             let currentSOC = 0;
             
-            if (config.useManual) {
-                // Manual mode provider simulation would go here
-            } else { // CSV Mode
+            if (config.useManual) { /* manual mode logic */ } 
+            else { // CSV Mode
                 const solarDataMap = new Map(state.solarData.map(day => [day.date, day.hourly]));
                 const totalSystemKw = config.replaceExistingSystem ? config.newSolarKW : config.existingSolarKW + config.newSolarKW;
                 const solarProfileSourceKw = config.existingSolarKW > 0 ? config.existingSolarKW : 1;
                 
                 electricityData.forEach(day => {
                     totalDaysProcessed++;
-                    
                     const hourlySolarRaw = solarDataMap.get(day.date);
                     if (!hourlySolarRaw && !config.noExistingSolar) return;
 
@@ -335,7 +383,7 @@ export function runSimulation(config, simulationData, electricityData) {
                     if (config.noExistingSolar) {
                         const totalDailySolar = totalSystemKw * config.manualSolarProfile;
                         const month = parseInt(day.date.split('-')[1], 10);
-                        const season = [12,1,2].includes(month) ? 'Q1_Summer' : [3,4,5].includes(month) ? 'Q2_Autumn' : [6,7,8].includes(month) ? 'Q3_Winter' : 'Q4_Spring';
+                        const season = getSeason(day.date);
                         newHourlySolar = generateHourlySolarProfileFromDaily(totalDailySolar, season);
                     } else if (hourlySolarRaw) {
                         newHourlySolar = hourlySolarRaw.map(h => (h / solarProfileSourceKw) * totalSystemKw * solarFactor);
@@ -375,15 +423,10 @@ export function runSimulation(config, simulationData, electricityData) {
                     let dailyEnergyCost = dailyBreakdown.gridChargeCost || 0;
                     dailyEnergyCost += importCalculator(providerData.importRules, dailyBreakdown, escalationConfig);
                     dailyEnergyCost -= exportCalculator(providerData.exportRules, dailyBreakdown, y, fitConfig, getDegradedFitRate);
-                    //changed to add special conditions. left as unsure of change at this point.
-                    //const dailySupplyCharge = (providerData.dailyCharge || 0);
-                    //const dailySpecialCredits = (providerData.zeroHeroCredit || 0);
-                    //
-                    //const totalDailyAdjustment = escalate(dailySupplyCharge, config.tariffEscalation, y) + dailyEnergyCost + dailySpecialCredits;
-                    //annualCost += totalDailyAdjustment;
-					let totalDailyAdjustment = escalate((providerData.dailyCharge || 0), config.tariffEscalation, y) + dailyEnergyCost;
-					totalDailyAdjustment = applySpecialConditions(totalDailyAdjustment, dailyBreakdown, providerData.specialConditions, day.date);
-					annualCost += totalDailyAdjustment;
+                    
+                    let totalDailyAdjustment = escalate((providerData.dailyCharge || 0), config.tariffEscalation, y) + dailyEnergyCost;
+                    totalDailyAdjustment = applySpecialConditions(totalDailyAdjustment, dailyBreakdown, providerData.specialConditions, day.date);
+                    annualCost += totalDailyAdjustment;
                 });
 
                 const annualizationFactor = totalDaysProcessed > 0 ? 365 / totalDaysProcessed : 0;
