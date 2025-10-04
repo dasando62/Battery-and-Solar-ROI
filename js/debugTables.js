@@ -1,5 +1,5 @@
 // js/debugTables.js
-// Version 1.0.6
+// Version 1.0.7
 import { 
 	getNumericInput, 
 	getSimulationData, 
@@ -49,7 +49,6 @@ export function calculateAverageDailyGridCharge(provider, batteryConfig, state) 
     return daysProcessed > 0 ? totalGridChargeKWh / daysProcessed : 0;
 }
 
-// In debugTables.js, replace the existing helper function
 function calculateAverageSOCAt6am(provider, batteryConfig, state) {
     if (!batteryConfig || batteryConfig.capacity === 0 || !state.electricityData) {
         return 0;
@@ -80,68 +79,6 @@ function calculateAverageSOCAt6am(provider, batteryConfig, state) {
     const avgSocKWh = daysProcessed > 0 ? totalSocAt6am / daysProcessed : 0;
     const avgSocPercent = (avgSocKWh / batteryConfig.capacity) * 100;
     return avgSocPercent;
-}
-
-export function createBreakdownTableHTML(title, data, provider, year, escalationRate, fitConfig, getDegradedFitRate) {
-    const escalationFactor = Math.pow(1 + escalationRate, year - 1);
-    const dailyCharge = (provider.dailyCharge || 0) * escalationFactor;
-
-    // FIX: Correctly find rates from the new 'importRules' array, case-insensitive
-    const peakRate = (provider.importRules.find(r => r.name.toLowerCase().includes('peak'))?.rate || 0) * escalationFactor;
-    const shoulderRate = (provider.importRules.find(r => r.name.toLowerCase().includes('shoulder'))?.rate || 0) * escalationFactor;
-    const offPeakRate = (provider.importRules.find(r => r.name.toLowerCase().includes('off-peak'))?.rate || 0) * escalationFactor;
-
-    let tier1ExportRate = 0;
-    let tier2ExportRate = 0;
-    
-    // FIX: Correctly find export rates from the new 'exportRules' array
-    if (provider.exportRules && provider.exportRules.length > 0) {
-        const firstRule = provider.exportRules[0];
-        if (firstRule.type === 'tiered') {
-            tier1ExportRate = getDegradedFitRate(firstRule.rate, year, fitConfig);
-            // Assume Tier 2 is the next rule in the array
-            if (provider.exportRules.length > 1) {
-                tier2ExportRate = getDegradedFitRate(provider.exportRules[1].rate, year, fitConfig);
-            }
-        } else if (firstRule.type === 'flat') {
-            tier1ExportRate = getDegradedFitRate(firstRule.rate, year, fitConfig);
-        }
-    }
-
-    let totalDays = 0, totalPeakKWh = 0, totalShoulderKWh = 0, totalOffPeakKWh = 0;
-    let totalTier1ExportKWh = 0, totalTier2ExportKWh = 0, totalGridChargeKWh = 0, totalGridChargeCost = 0;
-
-    let tableHTML = `<h3>${title}</h3><table class="raw-data-table"><thead><tr><th>Period</th><th>Days</th><th>Supply Charge</th><th>Grid Charge (kWh)</th><th>Grid Charge Cost</th><th>Peak Import (kWh)</th><th>Peak Charge</th><th>Shoulder Import (kWh)</th><th>Shoulder Charge</th><th>Off-Peak Import (kWh)</th><th>Off-Peak Charge</th><th>Tier 1 Export (kWh)</th><th>Tier 1 Credit</th><th>Tier 2 Export (kWh)</th><th>Tier 2 Credit</th></tr></thead><tbody>`;
-
-    for (const season of ['Summer', 'Autumn', 'Winter', 'Spring']) {
-        const seasonData = data[season];
-        if (!seasonData) continue;
-        
-        totalDays += seasonData.days || 0;
-        totalPeakKWh += seasonData.peakKWh || 0;
-        totalShoulderKWh += seasonData.shoulderKWh || 0;
-        totalOffPeakKWh += seasonData.offPeakKWh || 0;
-        totalGridChargeKWh += seasonData.gridChargeKWh || 0;
-        totalGridChargeCost += seasonData.gridChargeCost || 0;
-        totalTier1ExportKWh += seasonData.tier1ExportKWh || 0;
-        totalTier2ExportKWh += seasonData.tier2ExportKWh || 0;
-
-        tableHTML += `<tr>
-            <td>${season}</td><td>${seasonData.days || 0}</td>
-            <td>$${((seasonData.days || 0) * dailyCharge).toFixed(2)}</td>
-            <td>${(seasonData.gridChargeKWh || 0).toFixed(2)}</td>
-            <td>$${(seasonData.gridChargeCost || 0).toFixed(2)}</td>
-            <td>${(seasonData.peakKWh || 0).toFixed(2)}</td><td>$${((seasonData.peakKWh || 0) * peakRate).toFixed(2)}</td>
-            <td>${(seasonData.shoulderKWh || 0).toFixed(2)}</td><td>$${((seasonData.shoulderKWh || 0) * shoulderRate).toFixed(2)}</td>
-            <td>${(seasonData.offPeakKWh || 0).toFixed(2)}</td><td>$${((seasonData.offPeakKWh || 0) * offPeakRate).toFixed(2)}</td>
-            <td>${(seasonData.tier1ExportKWh || 0).toFixed(2)}</td><td>$${((seasonData.tier1ExportKWh || 0) * tier1ExportRate).toFixed(2)}</td>
-            <td>${(seasonData.tier2ExportKWh || 0).toFixed(2)}</td><td>$${((seasonData.tier2ExportKWh || 0) * tier2ExportRate).toFixed(2)}</td>
-        </tr>`;
-    }
-    
-    tableHTML += `<tr class="total-row"><td>Annual Total</td><td>${totalDays}</td><td>$${(totalDays * dailyCharge).toFixed(2)}</td><td>${totalGridChargeKWh.toFixed(2)}</td><td>$${totalGridChargeCost.toFixed(2)}</td><td>${totalPeakKWh.toFixed(2)}</td><td>$${(totalPeakKWh * peakRate).toFixed(2)}</td><td>${totalShoulderKWh.toFixed(2)}</td><td>$${(totalShoulderKWh * shoulderRate).toFixed(2)}</td><td>${totalOffPeakKWh.toFixed(2)}</td><td>$${(totalOffPeakKWh * offPeakRate).toFixed(2)}</td><td>${totalTier1ExportKWh.toFixed(2)}</td><td>$${(totalTier1ExportKWh * tier1ExportRate).toFixed(2)}</td><td>${totalTier2ExportKWh.toFixed(2)}</td><td>$${(totalTier2ExportKWh * tier2ExportRate).toFixed(2)}</td></tr>`;
-    tableHTML += '</tbody></table>';
-    return tableHTML;
 }
 
 export function renderDebugDataTable(state) {
@@ -205,11 +142,23 @@ export function renderDebugDataTable(state) {
 
 export function renderExistingSystemDebugTable(state) {
     if (!document.getElementById("debugToggle")?.checked) return;
-	clearError();
-    if (document.getElementById("manualInputToggle")?.checked || !state.electricityData || !state.solarData || state.electricityData.length === 0) {
-        displayError("This debug table requires uploaded CSV data.");
+    
+    // Use the new, specific ID for clearing and displaying errors
+    const errorId = "existing-system-error";
+    clearError(errorId);
+    
+    // Check for manual mode first
+    if (document.getElementById("manualInputToggle")?.checked) {
+        displayError("This debug table is not available in manual mode as it requires CSV data.", errorId);
         return;
     }
+
+    // Then check for the required data
+    if (!state.electricityData || !state.solarData || state.electricityData.length === 0) {
+        displayError("This debug table requires uploaded CSV data.", errorId);
+        return;
+    }
+    
     hideAllDebugContainers();
     const debugContainer = document.getElementById("existingSystemDebugTableContainer");
 

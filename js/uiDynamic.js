@@ -1,5 +1,5 @@
 // js/uiDynamic.js
-//Version 1.0.6
+//Version 1.0.7
 import { getProviders } from './providerManager.js';
 import { sanitize } from './utils.js';
 

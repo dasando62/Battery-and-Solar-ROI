@@ -1,7 +1,15 @@
 // js/utils.js
-// Version 1.0.6
+// Version 1.0.7
 import { state } from './state.js';
 import { calculateQuarterlyAverages } from './dataParser.js';
+
+export function getSeason(date) {
+    const month = parseInt(date.split('-')[1], 10);
+    if ([12, 1, 2].includes(month)) return 'Summer';
+    if ([3, 4, 5].includes(month)) return 'Autumn';
+    if ([6, 7, 8].includes(month)) return 'Winter';
+    return 'Spring';
+};
 
 export function getRateForHour(hour, rates) {
     for (const rateInfo of rates) {
@@ -79,21 +87,12 @@ export function parseRangesToHours(rangesStr) {
 }
 
 export function getSimulationData(touHours, electricityData) {
-    const useManual = document.getElementById("manualInputToggle")?.checked;
-    if (useManual) {
-        return {
-            'Q1_Summer': { avgPeak: getNumericInput("summerDailyPeak"), avgShoulder: getNumericInput("summerDailyShoulder"), avgOffPeak: getNumericInput("summerDailyOffPeak"), avgSolar: getNumericInput("summerDailySolar") },
-            'Q2_Autumn': { avgPeak: getNumericInput("autumnDailyPeak"), avgShoulder: getNumericInput("autumnDailyShoulder"), avgOffPeak: getNumericInput("autumnDailyOffPeak"), avgSolar: getNumericInput("autumnDailySolar") },
-            'Q3_Winter': { avgPeak: getNumericInput("winterDailyPeak"), avgShoulder: getNumericInput("winterDailyShoulder"), avgOffPeak: getNumericInput("winterDailyOffPeak"), avgSolar: getNumericInput("winterDailySolar") },
-            'Q4_Spring': { avgPeak: getNumericInput("springDailyPeak"), avgShoulder: getNumericInput("springDailyShoulder"), avgOffPeak: getNumericInput("springDailyOffPeak"), avgSolar: getNumericInput("springDailySolar") },
-        };
-    } else {
-        if (!state.quarterlyAverages) {
-            if (!electricityData || !state.solarData) return null;
-            state.quarterlyAverages = calculateQuarterlyAverages(electricityData, state.solarData, touHours);
-        }
-        return state.quarterlyAverages;
+    // This function is now only for CSV data. Manual data is handled by the config.
+    if (!state.quarterlyAverages) {
+        if (!electricityData || !state.solarData) return null;
+        state.quarterlyAverages = calculateQuarterlyAverages(electricityData, state.solarData, touHours);
     }
+    return state.quarterlyAverages;
 }
 
 export function displayError(message, elementId) {

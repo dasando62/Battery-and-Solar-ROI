@@ -1,5 +1,5 @@
 // js/uiEvents.js 
-// Version 1.0.6
+// Version 1.0.7
 import { state } from './state.js';
 import { gatherConfigFromUI } from './config.js';
 import { calculateDetailedSizing, runSimulation } from './analysis.js';
@@ -63,7 +63,10 @@ export function wireStaticEvents() {
     document.getElementById('debugToggle')?.addEventListener('change', (e) => {
         const display = e.target.checked ? 'inline-block' : 'none';
         document.querySelectorAll('.debug-button').forEach(button => button.style.display = display);
-        if (!e.target.checked) hideAllDebugContainers();
+        if (!e.target.checked) {
+			hideAllDebugContainers();
+			clearError();
+		}
     });
     document.getElementById("usageCsv")?.addEventListener("change", handleUsageCsv);
     document.getElementById("solarCsv")?.addEventListener("change", handleSolarCsv);
@@ -330,7 +333,9 @@ function handleCalculateSizing() {
             };
             
             // --- SAFETY CHECK 5: Ensure subsequent calculations succeed ---
-            const simulationData = getSimulationData(touHours, correctedElectricityData);
+            const simulationData = config.useManual 
+                ? config.manualData 
+                : getSimulationData(touHours, correctedElectricityData);
             if (!simulationData) {
                 displayError("Could not get seasonal data. Please check CSV or manual inputs.", "sizing-error-message");
                 return;
@@ -362,12 +367,7 @@ function handleRunAnalysis() {
             }
             let simulationData;
             if (config.useManual) {
-                simulationData = {
-                    'Q1_Summer': { avgPeak: getNumericInput("summerDailyPeak"), avgShoulder: getNumericInput("summerDailyShoulder"), avgOffPeak: getNumericInput("summerDailyOffPeak"), avgSolar: getNumericInput("summerDailySolar") },
-                    'Q2_Autumn': { avgPeak: getNumericInput("autumnDailyPeak"), avgShoulder: getNumericInput("autumnDailyShoulder"), avgOffPeak: getNumericInput("autumnDailyOffPeak"), avgSolar: getNumericInput("autumnDailySolar") },
-                    'Q3_Winter': { avgPeak: getNumericInput("winterDailyPeak"), avgShoulder: getNumericInput("winterDailyShoulder"), avgOffPeak: getNumericInput("winterDailyOffPeak"), avgSolar: getNumericInput("winterDailySolar") },
-                    'Q4_Spring': { avgPeak: getNumericInput("springDailyPeak"), avgShoulder: getNumericInput("springDailyShoulder"), avgOffPeak: getNumericInput("springDailyOffPeak"), avgSolar: getNumericInput("springDailySolar") },
-                };
+                simulationData = config.manualData;
             } else {
                 if (!state.electricityData || state.electricityData.length === 0) {
                     displayError("Please upload your electricity usage CSV to run the analysis.", "data-input-error");

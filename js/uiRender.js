@@ -1,7 +1,6 @@
 // js/uiRender.js
-//Version 1.0.6
+//Version 1.0.7
 import { state } from './state.js';
-import { createBreakdownTableHTML } from './debugTables.js';
 import { getNumericInput } from './utils.js';
 import { getDegradedFitRate } from './analysis.js';
 
@@ -216,7 +215,7 @@ function renderFinancialTable(financials, baselineCosts, config) {
     config.selectedProviders.forEach(pKey => {
         const providerDetails = config.providers.find(p => p.id === pKey);
         if (providerDetails) { // Safety check
-            tableHTML += `<th>${providerDetails.name} Cost w/ System</th><th>${providerDetails.name} Cumulative Savings</th>`;
+            tableHTML += `<th>${providerDetails.name} Cost w/ System</th><th>${providerDetails.name} Cumulative Net Cash Flow</th>`;
         }
     });
 

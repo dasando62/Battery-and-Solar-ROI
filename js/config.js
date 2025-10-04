@@ -1,6 +1,7 @@
 // js/config.js
-//Version 1.0.6
-import { getNumericInput, parseRangesToHours } from './utils.js';
+//Version 1.0.7
+
+import { getNumericInput } from './utils.js';
 import { getProviders } from './providerManager.js';
 
 export function gatherConfigFromUI() {
@@ -10,10 +11,12 @@ export function gatherConfigFromUI() {
     // Get the IDs of only the providers the user has checked
     const selectedProviderIds = Array.from(document.querySelectorAll(".providerCheckbox:checked")).map(cb => cb.value);
 
+    const useManual = document.getElementById("manualInputToggle")?.checked;
+
     const config = {
         // General Settings
         selectedProviders: selectedProviderIds,
-        useManual: document.getElementById("manualInputToggle")?.checked,
+        useManual: useManual,
         noExistingSolar: document.getElementById("noExistingSolar")?.checked,
         
         // System Sizing
@@ -44,19 +47,30 @@ export function gatherConfigFromUI() {
         tariffEscalation: getNumericInput("tariffEscalation", 2) / 100,
         solarDegradation: getNumericInput("solarDegradation", 0.5) / 100,
         batteryDegradation: getNumericInput("batteryDegradation", 2) / 100,
+		fitDegradationStartYear: getNumericInput("fitDegradationStartYear", 1),
+        fitDegradationEndYear: getNumericInput("fitDegradationEndYear", 10),
+        fitMinimumRate: getNumericInput("fitMinimumRate", -0.03),
         
         // Battery Settings
         gridChargeThreshold: getNumericInput("gridChargeThreshold", 80),
 		socChargeTrigger: getNumericInput("socChargeTrigger", 50),
         
-        // Manual Mode Settings
-        manualSolarProfile: getNumericInput("manualSolarProfile", 4),
+        // Manual Mode Settings (now collected here)
+        manualSolarProfile: getNumericInput("manualSolarProfile", 4.0),
+        manualData: null,
 
         // --- NEW SIMPLIFIED PROVIDER LOGIC ---
-        // Filter the full list of providers to include only the ones selected for this analysis.
-        // The provider objects in 'allProviders' already have the correct structure with import/export rules.
         providers: allProviders.filter(p => selectedProviderIds.includes(p.id))
     };
+
+    if (useManual) {
+        config.manualData = {
+            'Q1_Summer': { avgPeak: getNumericInput("summerDailyPeak"), avgShoulder: getNumericInput("summerDailyShoulder"), avgOffPeak: getNumericInput("summerDailyOffPeak"), avgSolar: getNumericInput("summerDailySolar") },
+            'Q2_Autumn': { avgPeak: getNumericInput("autumnDailyPeak"), avgShoulder: getNumericInput("autumnDailyShoulder"), avgOffPeak: getNumericInput("autumnDailyOffPeak"), avgSolar: getNumericInput("autumnDailySolar") },
+            'Q3_Winter': { avgPeak: getNumericInput("winterDailyPeak"), avgShoulder: getNumericInput("winterDailyShoulder"), avgOffPeak: getNumericInput("winterDailyOffPeak"), avgSolar: getNumericInput("winterDailySolar") },
+            'Q4_Spring': { avgPeak: getNumericInput("springDailyPeak"), avgShoulder: getNumericInput("springDailyShoulder"), avgOffPeak: getNumericInput("springDailyOffPeak"), avgSolar: getNumericInput("springDailySolar") },
+        };
+    }
 
     // Calculate total system cost
     config.initialSystemCost = config.costSolar + config.costBattery;

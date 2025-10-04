@@ -1,31 +1,46 @@
 // js/export.js
-//Version 1.0.6
+//Version 1.0.7
 import { state } from './state.js';
 
 export function exportCsv() {
-  const analysisResults = state.analysisResults;
-  if (!analysisResults) {
+  const { analysisResults, analysisConfig } = state;
+
+  if (!analysisResults || !analysisConfig) {
     alert("Please run an analysis before exporting.");
     return;
   }
-  const analysisConfig = state.analysisConfig;
-  const analysisBaselineCosts = state.analysisBaselineCosts;
-  const analysisSelectedProviders = state.analysisSelectedProviders;
-  let csvContent = "data:text/csv;charset=utf-8,";
-  const headers = ["Year", `Baseline Cost (${analysisSelectedProviders[0]})`];
-  analysisSelectedProviders.forEach(p => {
-    headers.push(`${p} Cost w/ System`, `${p} Cumulative Savings`);
+
+  const baselineProvider = analysisConfig.providers.find(p => p.id === analysisConfig.selectedProviders[0]);
+  const baselineName = baselineProvider ? baselineProvider.name : 'Baseline';
+
+  const headers = ["Year", `Baseline Cost (${baselineName})`];
+  
+  analysisConfig.selectedProviders.forEach(pKey => {
+    const provider = analysisConfig.providers.find(p => p.id === pKey);
+    const providerName = provider ? provider.name : pKey;
+    headers.push(`${providerName} Cost w/ System`, `${providerName} Cumulative Savings`);
   });
-  csvContent += headers.join(",") + "\r\n";
+
+  let csvContent = headers.join(",") + "\r\n";
+
   for (let y = 0; y < analysisConfig.numYears; y++) {
-    const row = [y + 1, analysisBaselineCosts[y + 1].toFixed(2)];
-    analysisSelectedProviders.forEach(p => {
-      row.push(analysisResults[p].annualCosts[y].toFixed(2));
-      row.push(analysisResults[p].cumulativeSavingsPerYear[y].toFixed(2));
+    const yearNum = y + 1;
+    const baselineCost = (analysisResults.baselineCosts[yearNum] || 0).toFixed(2);
+    const row = [yearNum, baselineCost];
+
+    analysisConfig.selectedProviders.forEach(pKey => {
+      const result = analysisResults[pKey];
+      if (result) {
+        row.push((result.annualCosts[y] || 0).toFixed(2));
+        row.push((result.cumulativeSavingsPerYear[y] || 0).toFixed(2));
+      } else {
+        row.push("0.00", "0.00");
+      }
     });
     csvContent += row.join(",") + "\r\n";
   }
-  const encodedUri = encodeURI(csvContent);
+
+  const encodedUri = encodeURI("data:text/csv;charset=utf-8," + csvContent);
   const link = document.createElement("a");
   link.setAttribute("href", encodedUri);
   link.setAttribute("download", "roi_results.csv");

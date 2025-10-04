@@ -1,5 +1,5 @@
 // js/providerManager.js
-//Version 1.0.6
+//Version 1.0.7
 const PROVIDERS_KEY = 'roiAnalyzer_providers';
 const DEFAULTS_LOADED_KEY = 'roiAnalyzer_defaults_loaded';
 
