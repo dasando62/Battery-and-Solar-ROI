@@ -1,5 +1,5 @@
 // js/state.js
-//Version 1.0.8
+//Version 1.0.9
 export const state = {
   electricityData: null,
   solarData: null,

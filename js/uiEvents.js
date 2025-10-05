@@ -1,5 +1,5 @@
 // js/uiEvents.js 
-// Version 1.0.8
+// Version 1.0.9
 import { state } from './state.js';
 import { gatherConfigFromUI } from './config.js';
 import { calculateDetailedSizing, runSimulation } from './analysis.js';

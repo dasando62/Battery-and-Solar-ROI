@@ -1,5 +1,5 @@
 // js/main.js
-//Version 1.0.8
+//Version 1.0.9
 import { wireStaticEvents, wireDynamicProviderEvents } from './uiEvents.js';
 import { state } from './state.js';
 import { exportCsv, exportPdf } from './export.js';

@@ -1,5 +1,5 @@
 // js/uiRender.js
-//Version 1.0.8
+//Version 1.0.9
 import { state } from './state.js';
 import { getNumericInput } from './utils.js';
 import { getDegradedFitRate } from './analysis.js';
