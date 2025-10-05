@@ -1,5 +1,5 @@
 // js/storage.js
-//Version 1.0.7
+//Version 1.0.8
 import { getProviders, saveAllProviders } from './providerManager.js';
 import { renderProviderSettings } from './uiDynamic.js';
 import { downloadBlob } from './utils.js';

@@ -1,5 +1,5 @@
 // js/analysis.js
-// Version 1.0.7
+// Version 1.0.8
 import { state } from './state.js';
 import { getNumericInput, escalate, parseRangesToHours, getSeason } from './utils.js';
 import { tariffComponents } from './tariffComponents.js';

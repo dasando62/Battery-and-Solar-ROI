@@ -1,5 +1,5 @@
 // js/tariffComponents.js
-// Version 1.0.7
+// Version 1.0.8
 
 import { escalate, parseRangesToHours } from './utils.js';
 

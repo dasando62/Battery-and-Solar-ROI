@@ -1,5 +1,5 @@
 // js/debugTables.js
-// Version 1.0.7
+// Version 1.0.8
 import { 
 	getNumericInput, 
 	getSimulationData, 
@@ -290,7 +290,7 @@ export function renderProvidersDebugTable(state) {
 
     const simulationData = state.quarterlyAverages;
 
-    tableHTML += `<tr><td colspan="2" class="provider-header-cell"><strong>Quarterly Averages (Daily)</strong></td></tr>`;
+    tableHTML += `<tr><td colspan="2" class="provider-header-cell"><strong>Total Household Consumption Quarterly Averages (Daily)</strong></td></tr>`;
     for (const quarter in simulationData) {
         const q = simulationData[quarter];
         tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Peak</td><td>${(q.avgPeak).toFixed(2)} kWh</td></tr>`;
@@ -328,13 +328,70 @@ export function renderAnalysisPeriodDebugTable() {
     if (!document.getElementById("debugToggle")?.checked) return;
     hideAllDebugContainers();
     const debugContainer = document.getElementById("analysisPeriodDebugTableContainer");
+
+    // Get all necessary values from the UI
+    const numYears = getNumericInput("numYears", 15);
+    const solarDegradation = getNumericInput("solarDegradation", 0.5) / 100;
+    const batteryDegradation = getNumericInput("batteryDegradation", 2) / 100;
+
+    const replaceExisting = document.getElementById("replaceExistingSystem")?.checked;
+    const initialSolarKW = getNumericInput("newSolarKW") + (replaceExisting ? 0 : getNumericInput("existingSolarKW"));
+    const initialBatteryKWH = getNumericInput("newBattery") + (replaceExisting ? 0 : getNumericInput("existingBattery"));
+    const initialInverterKW = getNumericInput("newBatteryInverter") + (replaceExisting ? 0 : getNumericInput("existingBatteryInverter"));
+
+
+    // --- Table 1: Original Inputs ---
     let tableHTML = "<h3>Analysis Period Inputs</h3><table><tbody>";
-    tableHTML += `<tr><td>Analysis Years (System Lifespan)</td><td>${getNumericInput("numYears", 15)}</td></tr>`;
-    tableHTML += `<tr><td>Solar Degradation (% per year)</td><td>${getNumericInput("solarDegradation", 0.5)}</td></tr>`;
-    tableHTML += `<tr><td>Battery Degradation (% per year)</td><td>${getNumericInput("batteryDegradation", 2)}</td></tr>`;
+    tableHTML += `<tr><td>Analysis Years (System Lifespan)</td><td>${numYears}</td></tr>`;
+    tableHTML += `<tr><td>Solar Degradation (% per year)</td><td>${(solarDegradation * 100).toFixed(1)}</td></tr>`;
+    tableHTML += `<tr><td>Battery Degradation (% per year)</td><td>${(batteryDegradation * 100).toFixed(1)}</td></tr>`;
     tableHTML += "</tbody></table>";
-    if (debugContainer) debugContainer.innerHTML = tableHTML;
-    if (debugContainer) debugContainer.style.display = "block";
+
+    // --- Table 2: New Degradation Schedule ---
+    tableHTML += "<h3 style='margin-top: 20px;'>Component Performance Schedule</h3>";
+    tableHTML += `<table>
+                    <thead>
+                        <tr>
+                            <th>Year</th>
+                            <th>Solar Efficiency</th>
+                            <th>Solar kW</th>
+                            <th>Battery Efficiency</th>
+                            <th>Battery kWh</th>
+                            <th>Inverter kW</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+
+    for (let year = 1; year <= numYears; year++) {
+        // Calculate the efficiency factor for the start of the given year
+        const solarEfficiencyFactor = Math.pow(1 - solarDegradation, year - 1);
+        const batteryEfficiencyFactor = Math.pow(1 - batteryDegradation, year - 1);
+
+        // Calculate the effective size/capacity for that year
+        const degradedSolarKW = initialSolarKW * solarEfficiencyFactor;
+        const degradedBatteryKWH = initialBatteryKWH * batteryEfficiencyFactor;
+
+        tableHTML += `<tr>
+                        <td>${year}</td>
+                        <td>${(solarEfficiencyFactor * 100).toFixed(2)}%</td>
+                        <td>${degradedSolarKW.toFixed(2)} kW</td>
+                        <td>${(batteryEfficiencyFactor * 100).toFixed(2)}%</td>
+                        <td>${degradedBatteryKWH.toFixed(2)} kWh</td>
+                        <td>${initialInverterKW.toFixed(2)} kW</td>
+                      </tr>`;
+    }
+    tableHTML += "</tbody></table>";
+    
+    // Note about Inverter Degradation
+    tableHTML += `<p style="font-size: 0.9em; font-style: italic; margin-top: 10px;">
+                    <strong>Note:</strong> Inverter degradation is not currently modeled in the simulation. The inverter's power is treated as constant.
+                 </p>`;
+
+
+    if (debugContainer) {
+        debugContainer.innerHTML = tableHTML;
+        debugContainer.style.display = "block";
+    }
 }
 
 export function renderLoanDebugTable() {

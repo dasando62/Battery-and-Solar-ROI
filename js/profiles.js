@@ -1,5 +1,5 @@
 // js/profiles.js
-//Version 1.0.7
+//Version 1.0.8
 
 import { parseRangesToHours } from './utils.js';
 
