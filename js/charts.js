@@ -1,5 +1,5 @@
 // js/charts.js
-// Version 1.0.7
+// Version 1.1.0
 
 import { state } from './state.js';
 

@@ -1,5 +1,5 @@
 // js/config.js
-//Version 1.0.7
+//Version 1.1.0
 
 import { getNumericInput } from './utils.js';
 import { getProviders } from './providerManager.js';
@@ -21,6 +21,9 @@ export function gatherConfigFromUI() {
         
         // System Sizing
         existingSolarKW: getNumericInput("existingSolarKW"),
+        existingBattery: getNumericInput("existingBattery"), // Make sure this is here
+        existingBatteryInverter: getNumericInput("existingBatteryInverter"), // Make sure this is here
+        existingSystemAge: getNumericInput("existingSystemAge", 0), // <-- THIS IS THE NEW LINE
         newSolarKW: getNumericInput("newSolarKW"),
         replaceExistingSystem: document.getElementById("replaceExistingSystem")?.checked,
         newBatteryKWH: getNumericInput("newBattery"),
@@ -47,7 +50,7 @@ export function gatherConfigFromUI() {
         tariffEscalation: getNumericInput("tariffEscalation", 2) / 100,
         solarDegradation: getNumericInput("solarDegradation", 0.5) / 100,
         batteryDegradation: getNumericInput("batteryDegradation", 2) / 100,
-		fitDegradationStartYear: getNumericInput("fitDegradationStartYear", 1),
+        fitDegradationStartYear: getNumericInput("fitDegradationStartYear", 1),
         fitDegradationEndYear: getNumericInput("fitDegradationEndYear", 10),
         fitMinimumRate: getNumericInput("fitMinimumRate", -0.03),
         
@@ -55,11 +58,10 @@ export function gatherConfigFromUI() {
         gridChargeThreshold: getNumericInput("gridChargeThreshold", 80),
 		socChargeTrigger: getNumericInput("socChargeTrigger", 50),
         
-        // Manual Mode Settings (now collected here)
+        // Manual Mode Settings
         manualSolarProfile: getNumericInput("manualSolarProfile", 4.0),
         manualData: null,
 
-        // --- NEW SIMPLIFIED PROVIDER LOGIC ---
         providers: allProviders.filter(p => selectedProviderIds.includes(p.id))
     };
 
@@ -72,13 +74,11 @@ export function gatherConfigFromUI() {
         };
     }
 
-    // Calculate total system cost
     config.initialSystemCost = config.costSolar + config.costBattery;
 
-    // Calculate loan repayments if enabled
     if (config.loanEnabled && config.loanAmount > 0 && config.loanInterestRate > 0 && config.loanTerm > 0) {
-        const i = config.loanInterestRate / 12; // Monthly interest rate
-        const n = config.loanTerm * 12; // Total number of payments
+        const i = config.loanInterestRate / 12;
+        const n = config.loanTerm * 12;
         const monthlyPayment = (config.loanAmount * i * Math.pow(1 + i, n)) / (Math.pow(1 + i, n) - 1);
         config.annualLoanRepayment = monthlyPayment * 12;
     } else {

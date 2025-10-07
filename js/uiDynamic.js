@@ -1,5 +1,6 @@
 // js/uiDynamic.js
-//Version 1.0.7
+//Version 1.1.0
+
 import { getProviders } from './providerManager.js';
 import { sanitize } from './utils.js';
 
@@ -45,12 +46,9 @@ function renderConditionRow(condition, providerId, index) {
 }
 
 function renderRuleRow(rule, providerId, ruleType, index) {
-    const hoursInput = (rule.type === 'tou')
-        ? `<input type="text" class="provider-input" data-field="hours" placeholder="Hours (e.g., 7am-10am)" value="${rule.hours || ''}">`
-        : '';
-    const limitInput = (rule.type === 'tiered')
-        ? `<input type="number" step="0.1" class="provider-input" data-field="limit" placeholder="Limit (kWh)" value="${rule.limit || ''}">`
-        : '';
+    // Show/hide styles based on the rule's type
+    const touStyle = rule.type === 'tou' ? '' : 'style="display:none;"';
+    const tieredStyle = rule.type === 'tiered' ? '' : 'style="display:none;"';
 
     return `
         <div class="rule-row" data-index="${index}">
@@ -63,8 +61,14 @@ function renderRuleRow(rule, providerId, ruleType, index) {
                 <input type="text" class="provider-input" data-field="name" placeholder="Rule Name" value="${rule.name || ''}">
                 <label class="rule-label">$</label>
                 <input type="number" step="0.001" class="provider-input" data-field="rate" value="${rule.rate || 0}">
-                ${hoursInput}
-                ${limitInput}
+                
+                <span class="hours-input-wrapper" ${touStyle}>
+                    <input type="text" class="provider-input" data-field="hours" placeholder="Hours (e.g., 7am-10am)" value="${rule.hours || ''}">
+                </span>
+                <span class="limit-input-wrapper" ${tieredStyle}>
+                    <input type="number" step="0.1" class="provider-input" data-field="limit" placeholder="Limit (kWh)" value="${rule.limit || ''}">
+                </span>
+
                 <button class="remove-rule-button" data-type="${ruleType}" data-index="${index}" title="Remove this Rule">-</button>
             </div>
         </div>`;
@@ -79,19 +83,20 @@ export function renderProviderSettings() {
     allProviders.forEach((provider, index) => {
         if (!provider) return;
 
-        let importHTML = '<h4>Import Rules</h4><div class="import-rules-container">';
+        // FIX #1: Use backticks (`) instead of single quotes (')
+        let importHTML = `<h4>Import Rules</h4><div class="import-rules-container">`;
         (provider.importRules || []).forEach((rule, ruleIndex) => {
             importHTML += renderRuleRow(rule, provider.id, 'import', ruleIndex);
         });
-        importHTML += '</div><button class="add-rule-button" data-id="${provider.id}" data-type="import">+ Add Import Rule</button>';
+        importHTML += `</div><button class="add-rule-button" data-id="${provider.id}" data-type="import">+ Add Import Rule</button>`;
 
-        let exportHTML = '<h4>Export Rules</h4><div class="export-rules-container">';
+        // FIX #1: Use backticks (`) instead of single quotes (')
+        let exportHTML = `<h4>Export Rules</h4><div class="export-rules-container">`;
         (provider.exportRules || []).forEach((rule, ruleIndex) => {
             exportHTML += renderRuleRow(rule, provider.id, 'export', ruleIndex);
         });
-        exportHTML += '</div><button class="add-rule-button" data-id="${provider.id}" data-type="export">+ Add Export Rule</button>';
+        exportHTML += `</div><button class="add-rule-button" data-id="${provider.id}" data-type="export">+ Add Export Rule</button>`;
 
-        // --- NEW: A section for Special Conditions ---
         let conditionsHTML = '<h4>Special Conditions</h4><div class="conditions-container">';
         (provider.specialConditions || []).forEach((condition, conditionIndex) => {
             conditionsHTML += renderConditionRow(condition, provider.id, conditionIndex);
@@ -108,10 +113,10 @@ export function renderProviderSettings() {
                 </span>
             </summary>
             <div class="subsettings">
-                <label>Provider Name: <input type="text" class="provider-input" data-id="${provider.id}" data-field="name" value="${sanitize(provider.name || '')}"></label>
-                <label>Daily Charge ($): <input type="number" step="0.001" class="provider-input" data-id="${provider.id}" data-field="dailyCharge" value="${provider.dailyCharge ?? ''}"></label>
-                <label>Rebate ($): <input type="number" step="0.01" class="provider-input" data-id="${provider.id}" data-field="rebate" value="${provider.rebate ?? 0}"></label>
-                <label>Monthly Fee ($): <input type="number" step="0.01" class="provider-input" data-id="${provider.id}" data-field="monthlyFee" value="${provider.monthlyFee ?? 0}"></label>
+                <label>Provider Name: <input type="text" class="provider-input" data-field="name" value="${sanitize(provider.name || '')}"></label>
+                <label>Daily Charge ($): <input type="number" step="0.001" class="provider-input" data-field="dailyCharge" value="${provider.dailyCharge ?? ''}"></label>
+                <label>Rebate ($): <input type="number" step="0.01" class="provider-input" data-field="rebate" value="${provider.rebate ?? 0}"></label>
+                <label>Monthly Fee ($): <input type="number" step="0.01" class="provider-input" data-field="monthlyFee" value="${provider.monthlyFee ?? 0}"></label>
                 
                 <hr>${importHTML}
                 <hr>${exportHTML}
@@ -121,9 +126,9 @@ export function renderProviderSettings() {
                 <details class="collapsible-section">
                     <summary>Grid Charging Options</summary>
                     <div class="subsettings">
-                        <label><input type="checkbox" class="provider-input" data-id="${provider.id}" data-field="gridChargeEnabled" ${provider.gridChargeEnabled ? 'checked' : ''}> Enable Grid Charging</label>
-                        <label>Charge Start Hour: <input type="number" class="provider-input" data-id="${provider.id}" data-field="gridChargeStart" min="0" max="23" value="${provider.gridChargeStart ?? 0}"></label>
-                        <label>Charge End Hour: <input type="number" class="provider-input" data-id="${provider.id}" data-field="gridChargeEnd" min="0" max="23" value="${provider.gridChargeEnd ?? 0}"></label>
+                        <label><input type="checkbox" class="provider-input" data-field="gridChargeEnabled" ${provider.gridChargeEnabled ? 'checked' : ''} Title="You need to save any changes for them to come into effect"> Enable Grid Charging</label>
+                        <label>Charge Start Hour: <input type="number" class="provider-input" data-field="gridChargeStart" min="0" max="23" value="${provider.gridChargeStart ?? 0}"></label>
+                        <label>Charge End Hour: <input type="number" class="provider-input" data-field="gridChargeEnd" min="0" max="23" value="${provider.gridChargeEnd ?? 0}"></label>
                     </div>
                 </details>
                 <hr>

@@ -1,32 +1,34 @@
 // js/uiRender.js
-//Version 1.0.7
-import { state } from './state.js';
-import { getNumericInput } from './utils.js';
-import { getDegradedFitRate } from './analysis.js';
+// Version 1.2.0 (Final)
 
+import { state } from './state.js';
+
+// --- START: FINAL FIX for Chart Rendering ---
+// This new version is more robust and prevents race conditions.
 export function drawDistributionCharts(distributions, state) {
     if (!distributions) return;
-
-    // Destroy old charts if they exist
-    if (state.peakPeriodChart) state.peakPeriodChart.destroy();
-    if (state.maxHourlyChart) state.maxHourlyChart.destroy();
 
     const { peakPeriod: dailyPeakPeriodData, maxHourly: dailyMaxHourData } = distributions;
 
     // --- Chart 1: Peak Period Load Distribution ---
-    const maxPeakPeriod = Math.max(...dailyPeakPeriodData);
-    const binSize1 = Math.ceil(maxPeakPeriod / 10) || 1;
-    const bins1 = Array.from({ length: 10 }, (_, i) => ({ 
-        label: `${i * binSize1}-${(i + 1) * binSize1} kWh`, 
-        count: 0 
-    }));
-    dailyPeakPeriodData.forEach(v => { 
-        const binIndex = Math.min(Math.floor(v / binSize1), 9); 
-        if (bins1[binIndex]) bins1[binIndex].count++; 
-    });
-
     const ctx1 = document.getElementById("peakPeriodHistogram")?.getContext("2d");
-    if (ctx1) { 
+    if (ctx1) {
+        // Destroy the old chart only AFTER we confirm the new canvas is ready.
+        if (state.peakPeriodChart) {
+            state.peakPeriodChart.destroy();
+        }
+
+        const maxPeakPeriod = Math.max(...dailyPeakPeriodData);
+        const binSize1 = Math.ceil(maxPeakPeriod / 10) || 1;
+        const bins1 = Array.from({ length: 10 }, (_, i) => ({ 
+            label: `${i * binSize1}-${(i + 1) * binSize1} kWh`, 
+            count: 0 
+        }));
+        dailyPeakPeriodData.forEach(v => { 
+            const binIndex = Math.min(Math.floor(v / binSize1), 9); 
+            if (bins1[binIndex]) bins1[binIndex].count++; 
+        });
+
         state.peakPeriodChart = new Chart(ctx1, { 
             type: 'bar', 
             data: { 
@@ -38,19 +40,24 @@ export function drawDistributionCharts(distributions, state) {
     }
 
     // --- Chart 2: Maximum Hourly Load Distribution ---
-    const maxHourly = Math.max(...dailyMaxHourData);
-    const binSize2 = (Math.ceil(maxHourly / 10 * 10) / 10) || 1;
-    const bins2 = Array.from({ length: 10 }, (_, i) => ({ 
-        label: `${(i * binSize2).toFixed(1)}-${((i + 1) * binSize2).toFixed(1)} kW`, 
-        count: 0 
-    }));
-    dailyMaxHourData.forEach(v => { 
-        const binIndex = Math.min(Math.floor(v / binSize2), 9); 
-        if (bins2[binIndex]) bins2[binIndex].count++; 
-    });
-
     const ctx2 = document.getElementById("maxHourlyHistogram")?.getContext("2d");
     if (ctx2) { 
+        // Destroy the old chart only AFTER we confirm the new canvas is ready.
+        if (state.maxHourlyChart) {
+            state.maxHourlyChart.destroy();
+        }
+
+        const maxHourly = Math.max(...dailyMaxHourData);
+        const binSize2 = (Math.ceil(maxHourly / 10 * 10) / 10) || 1;
+        const bins2 = Array.from({ length: 10 }, (_, i) => ({ 
+            label: `${(i * binSize2).toFixed(1)}-${((i + 1) * binSize2).toFixed(1)} kW`, 
+            count: 0 
+        }));
+        dailyMaxHourData.forEach(v => { 
+            const binIndex = Math.min(Math.floor(v / binSize2), 9); 
+            if (bins2[binIndex]) bins2[binIndex].count++; 
+        });
+
         state.maxHourlyChart = new Chart(ctx2, { 
             type: 'bar', 
             data: { 
@@ -61,8 +68,8 @@ export function drawDistributionCharts(distributions, state) {
         }); 
     }
 }
+// --- END: FINAL FIX ---
 
-// Replace the existing buildRawDataTable function in uiRender.js with this one
 function buildRawDataTable(data) {
     let tableHTML = `<table class="raw-data-table">
         <thead>
@@ -79,15 +86,12 @@ function buildRawDataTable(data) {
         </thead>
         <tbody>`;
     
-    // 1. Initialize variables to hold the totals
     let totalDays = 0, totalPeakKWh = 0, totalShoulderKWh = 0, totalOffPeakKWh = 0;
     let totalGridChargeKWh = 0, totalTier1ExportKWh = 0, totalTier2ExportKWh = 0;
 
-    // Loop through each season (Summer, Autumn, etc.) in the data
     for (const seasonName in data) {
         const seasonData = data[seasonName];
         if (seasonData && seasonData.days > 0) {
-            // 2. Add the current season's data to the running totals
             totalDays += seasonData.days || 0;
             totalPeakKWh += seasonData.peakKWh || 0;
             totalShoulderKWh += seasonData.shoulderKWh || 0;
@@ -96,7 +100,6 @@ function buildRawDataTable(data) {
             totalTier1ExportKWh += seasonData.tier1ExportKWh || 0;
             totalTier2ExportKWh += seasonData.tier2ExportKWh || 0;
 
-            // Render the individual season row (this is unchanged)
             tableHTML += `
                 <tr>
                     <td>${seasonName}</td>
@@ -111,7 +114,6 @@ function buildRawDataTable(data) {
         }
     }
 
-    // 3. Add the final "Annual Total" row to the table HTML
     tableHTML += `
         <tr class="total-row">
             <td><strong>Annual Total</strong></td>
@@ -135,7 +137,6 @@ export function renderSizingResults(sizingResults, state) {
     const { heuristic, detailed, blackout } = sizingResults;
     let recommendationHTML = `<div class="recommendation-section">`;
 
-    // --- Heuristic Sizing Section ---
     if (heuristic) {
         recommendationHTML += `
             <h4>Heuristic Sizing (based on ${heuristic.coverageTarget}% annual coverage)</h4>
@@ -146,7 +147,6 @@ export function renderSizingResults(sizingResults, state) {
             </p>`;
     }
 
-    // --- Detailed Sizing Section ---
     if (detailed) {
         recommendationHTML += `<hr>
             <h4>Detailed Sizing (based on 90th percentile of daily load)</h4>
@@ -160,7 +160,6 @@ export function renderSizingResults(sizingResults, state) {
             </p>`;
     }
 
-    // --- Blackout Sizing Section (only if enabled and calculated) ---
     if (blackout) {
         recommendationHTML += `<hr>
             <h4>Blackout Protection Sizing</h4>
@@ -177,7 +176,6 @@ export function renderSizingResults(sizingResults, state) {
     recommendationHTML += `</div>`;
     recommendationContainer.innerHTML = recommendationHTML;
 
-    // --- Create the empty canvas elements for the charts ---
     const newSystemEstimatesTable = document.getElementById("newSystemEstimatesTable");
     if (newSystemEstimatesTable) {
         newSystemEstimatesTable.innerHTML = `
@@ -195,26 +193,27 @@ function renderFinancialSummary(financials, config) {
         if (!result) return;
         
         const systemCostForProvider = config.initialSystemCost - (providerDetails.rebate || 0);
-
-        // CORRECTED NPV Calculation: Subtract the full initial system cost.
         const finalNPV = result.npv - systemCostForProvider;
 
-        summaryHTML += `<p><strong>${providerDetails.name}</strong></p><ul><li>Payback Period: Year ${result.roiYear ? result.roiYear : `> ${config.numYears}`}</li>${config.discountRateEnabled ? `<li>Net Present Value (NPV): <strong>$${finalNPV.toFixed(2)}</strong></li>` : ''}</ul>`;
+        summaryHTML += `<p><strong>${providerDetails.name}</strong></p>
+            <ul>
+                <li>Payback Period: Year ${result.roiYear ? result.roiYear : `> ${config.numYears}`}</li>
+                ${config.discountRateEnabled ? `<li>Net Present Value (NPV): <strong>$${finalNPV.toFixed(2)}</strong></li>` : ''}
+                ${result.irr !== null ? `<li>Internal Rate of Return (IRR): <strong>${result.irr.toFixed(2)}%</strong></li>` : ''}
+            </ul>`;
     });
     document.getElementById("roiSummary").innerHTML = summaryHTML;
 }
 
 function renderFinancialTable(financials, baselineCosts, config) {
-    // --- FIX 1: Use .find() to get the baseline provider object first ---
     const baselineProviderDetails = config.providers.find(p => p.id === config.selectedProviders[0]);
     const baselineProviderName = baselineProviderDetails ? baselineProviderDetails.name : "Baseline";
 
     let tableHTML = `<h3>Financial Breakdown by Year</h3><table><thead><tr><th>Year</th><th>Baseline Cost (${baselineProviderName})</th>`;
 
-    // --- FIX 2: Use .find() inside the header loop to get each provider's name ---
     config.selectedProviders.forEach(pKey => {
         const providerDetails = config.providers.find(p => p.id === pKey);
-        if (providerDetails) { // Safety check
+        if (providerDetails) {
             tableHTML += `<th>${providerDetails.name} Cost w/ System</th><th>${providerDetails.name} Cumulative Net Cash Flow</th>`;
         }
     });
@@ -224,7 +223,6 @@ function renderFinancialTable(financials, baselineCosts, config) {
         tableHTML += `<tr><td>${y + 1}</td><td>$${(baselineCosts[y + 1] || 0).toFixed(2)}</td>`;
         
         config.selectedProviders.forEach(pKey => {
-            // --- FIX 3: Removed the unnecessary and incorrect 'if (providerId === ...)' check ---
             const result = financials[pKey];
             const annualCost = result?.annualCosts[y] || 0;
             const cumulativeSaving = result?.cumulativeSavingsPerYear[y] || 0;
@@ -244,9 +242,8 @@ function renderCharts(financials, config) {
     if (!ctx) return;
 
     const datasets = config.selectedProviders.map(pKey => {
-        // --- FIX 1: Use .find() to get the provider's details ---
         const providerDetails = config.providers.find(p => p.id === pKey);
-        if (!providerDetails) return null; // Safety check
+        if (!providerDetails) return null;
 
         return {
             label: `${providerDetails.name} Cumulative Savings`,
@@ -255,12 +252,11 @@ function renderCharts(financials, config) {
             fill: false,
             yAxisID: 'y'
         };
-    }).filter(Boolean); // Removes any null entries if a provider wasn't found
+    }).filter(Boolean);
 
     const costDatasets = config.selectedProviders.map(pKey => {
-        // --- FIX 2: Use .find() here as well ---
         const providerDetails = config.providers.find(p => p.id === pKey);
-        if (!providerDetails) return null; // Safety check
+        if (!providerDetails) return null;
 
         const systemCostForProvider = config.initialSystemCost - (providerDetails.rebate || 0);
         return {
@@ -272,7 +268,7 @@ function renderCharts(financials, config) {
             pointRadius: 0,
             yAxisID: 'y'
         };
-    }).filter(Boolean); // Removes any null entries
+    }).filter(Boolean);
 
     state.savingsChart = new Chart(ctx, {
         type: 'line',
@@ -287,22 +283,18 @@ function renderCharts(financials, config) {
     });
 }
 
-// Replace your existing renderRawDataTables function with this one
 function renderRawDataTables(rawData, config) {
     const container = document.getElementById('raw-data-tables-container');
     if (!container) return;
 
     let tablesHTML = '';
 
-    // Handle the 'baseline' data first
     const baselineProviderDetails = config.providers.find(p => p.id === config.selectedProviders[0]);
     if (rawData.baseline?.year1 && baselineProviderDetails) {
         tablesHTML += `<h3>Baseline Performance (Year 1)</h3>`;
-        // --- FIX: Call the helper to generate the table HTML ---
         tablesHTML += buildRawDataTable(rawData.baseline.year1);
     }
     
-    // Then, loop through the actual providers in rawData.system
     Object.keys(rawData.system).forEach(providerId => {
         const providerDetails = config.providers.find(p => p.id === providerId);
         if (!providerDetails) return;
@@ -310,7 +302,6 @@ function renderRawDataTables(rawData, config) {
         const providerSystemData = rawData.system[providerId];
         if (providerSystemData?.year1) {
             tablesHTML += `<h3>${providerDetails.name} - System Performance (Year 1)</h3>`;
-            // --- FIX: Call the helper here too ---
             tablesHTML += buildRawDataTable(providerSystemData.year1);
         }
     });

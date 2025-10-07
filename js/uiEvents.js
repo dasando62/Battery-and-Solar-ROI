@@ -1,5 +1,6 @@
 // js/uiEvents.js 
-// Version 1.0.7
+// Version 1.1.0
+
 import { state } from './state.js';
 import { gatherConfigFromUI } from './config.js';
 import { calculateDetailedSizing, runSimulation } from './analysis.js';
@@ -11,6 +12,36 @@ import { hideAllDebugContainers, renderDebugDataTable, renderExistingSystemDebug
 import { saveProvider, deleteProvider, getProviders, saveAllProviders } from './providerManager.js';
 import { renderProviderSettings } from './uiDynamic.js';
 
+// --- NEW HELPER FUNCTION to Refreshing visible debug tables ---
+function refreshVisibleDebugTables() {
+    // First, check if debug mode is even enabled. If not, do nothing.
+    if (!document.getElementById("debugToggle")?.checked) {
+        return;
+    }
+
+    console.log("Refreshing visible debug tables...");
+
+    // Check each debug container. If it's currently visible, re-run its render function.
+    if (document.getElementById('dataDebugTableContainer')?.style.display !== 'none') {
+        renderDebugDataTable(state);
+    }
+    if (document.getElementById('existingSystemDebugTableContainer')?.style.display !== 'none') {
+        renderExistingSystemDebugTable(state);
+    }
+    if (document.getElementById('providersDebugTableContainer')?.style.display !== 'none') {
+        renderProvidersDebugTable(state);
+    }
+    if (document.getElementById('analysisPeriodDebugTableContainer')?.style.display !== 'none') {
+        renderAnalysisPeriodDebugTable();
+    }
+    if (document.getElementById('loanDebugTableContainer')?.style.display !== 'none') {
+        renderLoanDebugTable();
+    }
+    if (document.getElementById('opportunityCostDebugTableContainer')?.style.display !== 'none') {
+        renderOpportunityCostDebugTable();
+    }
+}
+
 function setNestedProperty(obj, path, value) {
     const keys = path.split('.');
     let current = obj;
@@ -21,6 +52,67 @@ function setNestedProperty(obj, path, value) {
         current = current[keys[i]];
     }
     current[keys[keys.length - 1]] = value;
+}
+
+
+// --- HELPER FUNCTION TO SAVE A PROVIDER'S CURRENT STATE FROM THE DOM ---
+function saveProviderFromDOM(providerId) {
+    let providers = getProviders();
+    const providerToSave = providers.find(p => p.id === providerId);
+    const providerDetailsContainer = document.querySelector(`.provider-details[data-provider-id="${providerId}"]`);
+    
+    if (!providerToSave || !providerDetailsContainer) return;
+
+    // Save top-level fields (name, dailyCharge, etc.)
+    providerDetailsContainer.querySelectorAll('.provider-input[data-field]').forEach(input => {
+        const field = input.dataset.field;
+        // Skip inputs that are inside a rule row, they are handled below
+        if (input.closest('.rule-row')) return;
+
+        if (input.type === 'checkbox') providerToSave[field] = input.checked;
+        else if (input.type === 'number') providerToSave[field] = parseFloat(input.value) || 0;
+        else providerToSave[field] = input.value;
+    });
+
+    // Save import rule rows
+    providerToSave.importRules = [];
+    providerDetailsContainer.querySelectorAll('.import-rules-container .rule-row').forEach(row => {
+        const rule = {};
+        row.querySelectorAll('.provider-input[data-field]').forEach(input => {
+            const field = input.dataset.field;
+            if (input.type === 'number') rule[field] = parseFloat(input.value) || 0;
+            else rule[field] = input.value;
+        });
+        providerToSave.importRules.push(rule);
+    });
+    
+    // Save export rule rows
+    providerToSave.exportRules = [];
+    providerDetailsContainer.querySelectorAll('.export-rules-container .rule-row').forEach(row => {
+        const rule = {};
+        row.querySelectorAll('.provider-input[data-field]').forEach(input => {
+            const field = input.dataset.field;
+            if (input.type === 'number') rule[field] = parseFloat(input.value) || 0;
+            else rule[field] = input.value;
+        });
+        providerToSave.exportRules.push(rule);
+    });
+
+    // Save special condition rows
+    providerToSave.specialConditions = [];
+    providerDetailsContainer.querySelectorAll('.conditions-container .rule-row').forEach(row => {
+        const condition = {};
+        row.querySelectorAll('.provider-input[data-field]').forEach(input => {
+            const field = input.dataset.field;
+            let value = input.value;
+            if (input.type === 'number') value = parseFloat(value) || 0;
+            else if (field === 'months') value = value.split(',').map(m => parseInt(m.trim(), 10)).filter(Number.isInteger);
+            setNestedProperty(condition, field, value);
+        });
+        providerToSave.specialConditions.push(condition);
+    });
+
+    saveProvider(providerToSave);
 }
 
 export function toggleExistingSolar() {
@@ -106,40 +198,71 @@ export function wireStaticEvents() {
 export function wireDynamicProviderEvents() {
     const providerContainer = document.getElementById('provider-settings-container');
     if (!providerContainer) return;
-
-    // Listener for saving the open/closed state of a provider section
-    providerContainer.addEventListener('toggle', (event) => {
+    
+    // --- NEW: Event listener for dropdown changes to show/hide fields ---
+    providerContainer.addEventListener('change', (event) => {
         const target = event.target;
-        if (target.classList.contains('provider-details')) {
-            const providerId = target.dataset.providerId;
-            const isNowOpen = target.open;
+        if (target.matches('select[data-field="type"]')) {
+            const parent = target.closest('.rule-row-content');
+            if (parent) {
+                const hoursWrapper = parent.querySelector('.hours-input-wrapper');
+                const limitWrapper = parent.querySelector('.limit-input-wrapper');
+                const selectedType = target.value;
 
-            let providers = getProviders();
-            const providerToUpdate = providers.find(p => p.id === providerId);
-
-            if (providerToUpdate) {
-                providerToUpdate.isExpanded = isNowOpen;
-                saveAllProviders(providers);
+                if (hoursWrapper) hoursWrapper.style.display = selectedType === 'tou' ? '' : 'none';
+                if (limitWrapper) limitWrapper.style.display = selectedType === 'tiered' ? '' : 'none';
             }
         }
-    }, true);
+    });
 
-    // Main listener for all button clicks within the provider sections
+    // Main listener for all button clicks
     providerContainer.addEventListener('click', (event) => {
         const target = event.target;
         let providers = getProviders();
 
-        // Helper function to save all provider data and then re-render the UI
         const updateAndRender = () => {
             saveAllProviders(providers);
             renderProviderSettings();
         };
 
-        // --- MOVE PROVIDER UP/DOWN ---
+        if (target.matches('.add-rule-button')) {
+            const providerId = target.dataset.id;
+            // --- FIX: Save any pending changes before re-rendering ---
+            saveProviderFromDOM(providerId);
+
+            // Re-fetch providers array after saving
+            providers = getProviders();
+            const ruleType = target.dataset.type;
+            const provider = providers.find(p => p.id === providerId);
+
+            if (provider) {
+                const newRule = { type: 'flat', name: 'New Rule', rate: 0 };
+                const rulesKey = ruleType === 'import' ? 'importRules' : 'exportRules';
+                if (!Array.isArray(provider[rulesKey])) {
+                    provider[rulesKey] = [];
+                }
+                provider[rulesKey].push(newRule);
+                updateAndRender();
+            }
+        }
+        
+        if (target.matches('.save-provider-button')) {
+            const providerId = target.dataset.id;
+            saveProviderFromDOM(providerId);
+            
+            // Give user feedback
+            const statusEl = document.getElementById(`save-status-${providerId.toLowerCase()}`);
+            if (statusEl) {
+                statusEl.textContent = "Saved!";
+                setTimeout(() => { statusEl.textContent = ""; }, 2000);
+            }
+        }
+
+        // --- Other button handlers remain the same ---
+
         if (target.matches('.move-provider-up, .move-provider-down')) {
             const index = parseInt(target.dataset.index, 10);
             const direction = target.classList.contains('move-provider-up') ? 'up' : 'down';
-            
             if (direction === 'up' && index > 0) {
                 [providers[index], providers[index - 1]] = [providers[index - 1], providers[index]];
             } else if (direction === 'down' && index < providers.length - 1) {
@@ -148,7 +271,6 @@ export function wireDynamicProviderEvents() {
             updateAndRender();
         }
 
-        // --- DELETE PROVIDER ---
         if (target.matches('.delete-provider-button')) {
             const providerId = target.dataset.id;
             if (confirm(`Are you sure you want to delete this provider?`)) {
@@ -156,38 +278,27 @@ export function wireDynamicProviderEvents() {
                 updateAndRender();
             }
         }
-
-        // --- ADD TARIFF RULE ---
-        if (target.matches('.add-rule-button')) {
-            const providerId = target.dataset.id;
-            const ruleType = target.dataset.type;
-            const provider = providers.find(p => p.id === providerId);
-
-            if (provider) {
-                const newRule = { type: 'flat', name: 'New Rule', rate: 0 };
-                const rulesArray = ruleType === 'import' ? provider.importRules : provider.exportRules;
-                rulesArray.push(newRule);
-                updateAndRender();
-            }
-        }
-
-        // --- REMOVE TARIFF RULE ---
+        
         if (target.matches('.remove-rule-button')) {
             const providerId = target.closest('.provider-details').dataset.providerId;
-            const ruleType = target.dataset.type;
-            const ruleIndex = parseInt(target.dataset.index, 10);
+            saveProviderFromDOM(providerId); // Save before deleting a rule
+            providers = getProviders(); // Re-fetch
             const provider = providers.find(p => p.id === providerId);
-
             if (provider) {
-                const rulesArray = ruleType === 'import' ? provider.importRules : provider.exportRules;
-                rulesArray.splice(ruleIndex, 1);
-                updateAndRender();
+                const ruleType = target.dataset.type;
+                const ruleIndex = parseInt(target.dataset.index, 10);
+                const rulesKey = ruleType === 'import' ? 'importRules' : 'exportRules';
+                if (provider[rulesKey]) {
+                    provider[rulesKey].splice(ruleIndex, 1);
+                    updateAndRender();
+                }
             }
         }
         
-        // --- ADD SPECIAL CONDITION ---
         if (target.matches('.add-condition-button')) {
             const providerId = target.dataset.id;
+            saveProviderFromDOM(providerId); // Save before adding
+            providers = getProviders();
             const provider = providers.find(p => p.id === providerId);
             if (provider) {
                 const newCondition = {
@@ -203,87 +314,33 @@ export function wireDynamicProviderEvents() {
             }
         }
 
-        // --- REMOVE SPECIAL CONDITION ---
         if (target.matches('.remove-condition-button')) {
             const providerId = target.dataset.id;
-            const ruleIndex = parseInt(target.dataset.index, 10);
+            saveProviderFromDOM(providerId);
+            providers = getProviders();
             const provider = providers.find(p => p.id === providerId);
             if (provider && provider.specialConditions) {
+                const ruleIndex = parseInt(target.dataset.index, 10);
                 provider.specialConditions.splice(ruleIndex, 1);
                 updateAndRender();
             }
         }
+    });
 
-        // --- SAVE ALL PROVIDER CHANGES ---
-        if (target.matches('.save-provider-button')) {
-            const providerId = target.dataset.id;
-            const providerDetailsContainer = document.querySelector(`.provider-details[data-provider-id="${providerId}"]`);
-            const providerToSave = providers.find(p => p.id === providerId);
-            
-            if (!providerToSave || !providerDetailsContainer) return;
-
-            // Save top-level fields
-            providerDetailsContainer.querySelectorAll('.provider-input[data-field]').forEach(input => {
-                const field = input.dataset.field;
-                if (input.closest('.rule-row')) return;
-
-                if (input.type === 'checkbox') providerToSave[field] = input.checked;
-                else if (input.type === 'number') providerToSave[field] = parseFloat(input.value) || 0;
-                else providerToSave[field] = input.value;
-            });
-
-            // Save import rule rows
-            providerToSave.importRules = [];
-            providerDetailsContainer.querySelectorAll('.import-rules-container .rule-row').forEach(row => {
-                const rule = {};
-                row.querySelectorAll('.provider-input[data-field]').forEach(input => {
-                    const field = input.dataset.field;
-                    if (input.type === 'number') rule[field] = parseFloat(input.value) || 0;
-                    else rule[field] = input.value;
-                });
-                providerToSave.importRules.push(rule);
-            });
-            
-            // Save export rule rows
-            providerToSave.exportRules = [];
-            providerDetailsContainer.querySelectorAll('.export-rules-container .rule-row').forEach(row => {
-                const rule = {};
-                row.querySelectorAll('.provider-input[data-field]').forEach(input => {
-                    const field = input.dataset.field;
-                    if (input.type === 'number') rule[field] = parseFloat(input.value) || 0;
-                    else rule[field] = input.value;
-                });
-                providerToSave.exportRules.push(rule);
-            });
-
-            // Save special condition rows
-            providerToSave.specialConditions = [];
-            providerDetailsContainer.querySelectorAll('.conditions-container .rule-row').forEach(row => {
-                const condition = {};
-                row.querySelectorAll('.provider-input[data-field]').forEach(input => {
-                    const field = input.dataset.field;
-                    let value = input.value;
-                    
-                    if (input.type === 'number') {
-                        value = parseFloat(value) || 0;
-                    } else if (field === 'months') {
-                        value = value.split(',').map(m => parseInt(m.trim(), 10)).filter(Number.isInteger);
-                    }
-                    
-                    setNestedProperty(condition, field, value);
-                });
-                providerToSave.specialConditions.push(condition);
-            });
-
-            saveProvider(providerToSave);
-            
-            const statusEl = document.getElementById(`save-status-${providerId.toLowerCase()}`);
-            if (statusEl) {
-                statusEl.textContent = "Saved!";
-                setTimeout(() => { statusEl.textContent = ""; }, 2000);
+    // Listener for saving the open/closed state of a provider section (no changes needed here)
+    providerContainer.addEventListener('toggle', (event) => {
+        const target = event.target;
+        if (target.classList.contains('provider-details')) {
+            const providerId = target.dataset.providerId;
+            const isNowOpen = target.open;
+            let providers = getProviders();
+            const providerToUpdate = providers.find(p => p.id === providerId);
+            if (providerToUpdate) {
+                providerToUpdate.isExpanded = isNowOpen;
+                saveAllProviders(providers);
             }
         }
-    });
+    }, true);
 }
 
 function handleCalculateSizing() {
@@ -404,6 +461,10 @@ function handleRunAnalysis() {
             state.analysisResults = resultsObject.financials;
             state.analysisConfig = resultsObject.config;
             state.rawData = resultsObject.rawData;
+			// Refresh debug tables that are open
+			refreshVisibleDebugTables();
+			
+			
         } catch (error) {
             console.error("An error occurred during analysis:", error);
             displayError("An unexpected error occurred during analysis. Check the console.", "run-analysis-error");

@@ -207,3 +207,17 @@ th { background-color: #f2f2f2; }
 .rule-row-content input[data-field="action.value"] { width: 60px; }
 .rule-row-content input[data-field="rate"] { width: 70px; }
 .rule-row-content input[data-field="limit"] { width: 80px; }
+
+/* --- PDF Export Mode Styles --- */
+body.pdf-export-mode .container > *:not(#pdf-report-generator) {
+    display: none; /* Hide everything in the container EXCEPT our report generator */
+}
+
+body.pdf-export-mode #pdf-report-generator {
+    display: block !important; /* Make the report generator visible */
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: 1000px; /* Give it a consistent width for rendering */
+    margin: 0 auto;
+}
