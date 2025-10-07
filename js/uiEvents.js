@@ -1,5 +1,6 @@
 // js/uiEvents.js 
-// Version 1.0.9
+// Version 1.1.0
+
 import { state } from './state.js';
 import { gatherConfigFromUI } from './config.js';
 import { calculateDetailedSizing, runSimulation } from './analysis.js';
@@ -10,6 +11,36 @@ import { wireSaveLoadEvents } from './storage.js';
 import { hideAllDebugContainers, renderDebugDataTable, renderExistingSystemDebugTable, renderProvidersDebugTable, renderAnalysisPeriodDebugTable, renderLoanDebugTable, renderOpportunityCostDebugTable } from './debugTables.js';
 import { saveProvider, deleteProvider, getProviders, saveAllProviders } from './providerManager.js';
 import { renderProviderSettings } from './uiDynamic.js';
+
+// --- NEW HELPER FUNCTION to Refreshing visible debug tables ---
+function refreshVisibleDebugTables() {
+    // First, check if debug mode is even enabled. If not, do nothing.
+    if (!document.getElementById("debugToggle")?.checked) {
+        return;
+    }
+
+    console.log("Refreshing visible debug tables...");
+
+    // Check each debug container. If it's currently visible, re-run its render function.
+    if (document.getElementById('dataDebugTableContainer')?.style.display !== 'none') {
+        renderDebugDataTable(state);
+    }
+    if (document.getElementById('existingSystemDebugTableContainer')?.style.display !== 'none') {
+        renderExistingSystemDebugTable(state);
+    }
+    if (document.getElementById('providersDebugTableContainer')?.style.display !== 'none') {
+        renderProvidersDebugTable(state);
+    }
+    if (document.getElementById('analysisPeriodDebugTableContainer')?.style.display !== 'none') {
+        renderAnalysisPeriodDebugTable();
+    }
+    if (document.getElementById('loanDebugTableContainer')?.style.display !== 'none') {
+        renderLoanDebugTable();
+    }
+    if (document.getElementById('opportunityCostDebugTableContainer')?.style.display !== 'none') {
+        renderOpportunityCostDebugTable();
+    }
+}
 
 function setNestedProperty(obj, path, value) {
     const keys = path.split('.');
@@ -430,6 +461,10 @@ function handleRunAnalysis() {
             state.analysisResults = resultsObject.financials;
             state.analysisConfig = resultsObject.config;
             state.rawData = resultsObject.rawData;
+			// Refresh debug tables that are open
+			refreshVisibleDebugTables();
+			
+			
         } catch (error) {
             console.error("An error occurred during analysis:", error);
             displayError("An unexpected error occurred during analysis. Check the console.", "run-analysis-error");

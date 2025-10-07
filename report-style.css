@@ -1,0 +1,55 @@
+/* report-style.css */
+/* This stylesheet is only for formatting the PDF report */
+
+body {
+    background-color: #fff; /* Ensure a white background for capture */
+}
+
+#pdf-report-generator {
+    font-family: Arial, sans-serif;
+    color: #333;
+    width: 1000px; /* A fixed width for consistent rendering */
+}
+
+#pdf-report-generator h1 {
+    font-size: 24pt;
+    color: #003366;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+#pdf-report-generator h2 {
+    font-size: 18pt;
+    color: #003366;
+    border-bottom: 2px solid #003366;
+    padding-bottom: 5px;
+    margin-top: 30px;
+}
+
+#pdf-report-generator table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    font-size: 10pt;
+}
+
+#pdf-report-generator th, #pdf-report-generator td {
+    border: 1px solid #ccc;
+    padding: 8px;
+    text-align: left;
+}
+
+#pdf-report-generator th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+}
+
+#pdf-report-generator .summary-table td:first-child {
+    font-weight: bold;
+    width: 40%;
+}
+
+#pdf-report-generator .provider-details-report {
+    margin-bottom: 20px;
+    page-break-inside: avoid;
+}

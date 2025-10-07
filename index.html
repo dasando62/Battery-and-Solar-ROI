@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Home Battery & Solar ROI Analyzer</title>
 <link rel="stylesheet" href="style.css">
-
+<link rel="stylesheet" href="report-style.css">
 </head>
 <body>
 
 <div class="container">
 <h1>Home Battery & Solar ROI Analyzer</h1>
-<div class="version-number">Version V1.0.9</div>
-
+<div class="version-number">Version V1.1.0</div>
+<div id="pdf-report-generator"></div> <section>
 <section>
     <h2>Save/Load Settings</h2>
 <div class="settings-controls">
@@ -218,7 +218,9 @@
 </div>
 <button id="add-provider-button" class="run-button" style="margin-top: 15px;">Add New Provider</button>
 <div id="provider-selection-error" class="error-message"></div>
+<div>
 <button id="showProvidersDebugTable" class="debug-button">Show Debug Table</button>
+</div>
 <div id="providersDebugTableContainer" style="display:none;"></div>
 </section>
 

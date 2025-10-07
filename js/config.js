@@ -1,5 +1,5 @@
 // js/config.js
-//Version 1.0.9
+//Version 1.1.0
 
 import { getNumericInput } from './utils.js';
 import { getProviders } from './providerManager.js';

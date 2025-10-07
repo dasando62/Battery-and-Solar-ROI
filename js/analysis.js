@@ -1,9 +1,33 @@
 // js/analysis.js
-// Version 1.0.9
+// Version 1.1.0
 import { state } from './state.js';
 import { getNumericInput, escalate, parseRangesToHours, getSeason } from './utils.js';
 import { tariffComponents } from './tariffComponents.js';
 import { generateHourlyConsumptionProfileFromDailyTOU, generateHourlySolarProfileFromDaily } from './profiles.js';
+
+function calculateIRR(cashFlows, guess = 0.1) {
+    const maxIterations = 100;
+    const tolerance = 1e-6;
+
+    let rate = guess;
+
+    for (let i = 0; i < maxIterations; i++) {
+        let npv = 0;
+        let derivative = 0;
+        for (let t = 0; t < cashFlows.length; t++) {
+            npv += cashFlows[t] / Math.pow(1 + rate, t);
+            if (t > 0) {
+                derivative -= t * cashFlows[t] / Math.pow(1 + rate, t + 1);
+            }
+        }
+        const newRate = rate - npv / derivative;
+        if (Math.abs(newRate - rate) < tolerance) {
+            return newRate;
+        }
+        rate = newRate;
+    }
+    return null; // Return null if it doesn't converge
+}
 
 function calculateAverageSOCAt6am(provider, batteryConfig, simulationData) {
     if (!batteryConfig || batteryConfig.capacity === 0) {
@@ -462,6 +486,29 @@ export function runSimulation(config, simulationData, electricityData) {
             }
         });
     }
+	config.selectedProviders.forEach(p => {
+    const providerData = config.providers.find(prov => prov.id === p);
+    if (!providerData) return;
+
+    // Create the cash flow array: [-investment, savings_yr1, savings_yr2, ...]
+    const initialInvestment = config.initialSystemCost - (providerData.rebate || 0);
+    const annualSavings = [];
+    for (let y = 1; y <= config.numYears; y++) {
+        const systemCostForYear = finalResults[p].annualCosts[y - 1];
+        const baselineCostForYear = finalResults.baselineCosts[y];
+        annualSavings.push(baselineCostForYear - systemCostForYear);
+    }
+
+    const cashFlows = [-initialInvestment, ...annualSavings];
+
+    // Only calculate IRR if there are positive savings
+    if (annualSavings.some(s => s > 0)) {
+        const irr = calculateIRR(cashFlows);
+        finalResults[p].irr = irr !== null ? irr * 100 : null; // Store as a percentage
+    } else {
+        finalResults[p].irr = null;
+    }
+});
 
     return { financials: finalResults, rawData: rawData, config: config };
 }

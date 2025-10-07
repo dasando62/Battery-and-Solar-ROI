@@ -1,8 +1,8 @@
 // js/debugTables.js
-// Version 1.0.9
+// Version 1.4.0 (Final)
+
 import { 
 	getNumericInput, 
-	getSimulationData, 
 	displayError, 
 	clearError 
 } from './utils.js';
@@ -10,94 +10,77 @@ import {
 	generateHourlyConsumptionProfileFromDailyTOU, 
 	generateHourlySolarProfileFromDaily 
 } from './profiles.js';
-import { simulateDay, calculateSizingRecommendations } from './analysis.js';
+import { simulateDay, calculateSizingRecommendations, calculateDetailedSizing } from './analysis.js';
 import { state } from './state.js';
-import { calculateQuarterlyAverages } from './dataParser.js';
-import { gatherConfigFromUI } from './config.js'; 
+import { renderSizingResults, drawDistributionCharts } from './uiRender.js';
 
 export function hideAllDebugContainers() {
-    document.querySelectorAll('[id$="DebugTableContainer"]').forEach(el => el.style.display = "none");
-	
+    document.querySelectorAll('[id$="DebugTableContainer"], #sizing-recommendation-section').forEach(el => el.style.display = "none");
 }
 
-export function calculateAverageDailyGridCharge(provider, batteryConfig, state) {
-    if (!provider.gridChargeEnabled || !state.electricityData) {
-        return 0;
+function calculateSeasonalAverages(provider, batteryConfig, state) {
+    const seasonalData = {
+        Summer: { totalGridCharge: 0, totalSocAt6am: 0, days: 0 },
+        Autumn: { totalGridCharge: 0, totalSocAt6am: 0, days: 0 },
+        Winter: { totalGridCharge: 0, totalSocAt6am: 0, days: 0 },
+        Spring: { totalGridCharge: 0, totalSocAt6am: 0, days: 0 },
+    };
+
+    if (!state.electricityData || state.electricityData.length === 0) {
+        return seasonalData;
     }
 
-    let totalGridChargeKWh = 0;
-    let daysProcessed = 0;
+    let currentSOC = batteryConfig.capacity * 0.5;
     const solarDataMap = new Map((state.solarData || []).map(d => [d.date, d.hourly]));
 
     state.electricityData.forEach(day => {
-        const hourlySolar = solarDataMap.get(day.date) || Array(24).fill(0);
-        // We use the same "true consumption" logic as the main simulation
-        const trueHourlyConsumption = Array(24).fill(0);
-        for (let h = 0; h < 24; h++) {
-            const gridImport = day.consumption[h] || 0;
-            const gridExport = day.feedIn[h] || 0;
-            const solarGeneration = hourlySolar[h] || 0;
-            const selfConsumed = Math.max(0, solarGeneration - gridExport);
-            trueHourlyConsumption[h] = gridImport + selfConsumed;
-        }
+        const month = parseInt(day.date.split('-')[1], 10);
+        let season;
+        if ([12, 1, 2].includes(month)) season = 'Summer';
+        else if ([3, 4, 5].includes(month)) season = 'Autumn';
+        else if ([6, 7, 8].includes(month)) season = 'Winter';
+        else season = 'Spring';
 
-        const simResults = simulateDay(trueHourlyConsumption, hourlySolar, provider, batteryConfig);
-        totalGridChargeKWh += simResults.dailyBreakdown.gridChargeKWh;
-        daysProcessed++;
-    });
-
-    return daysProcessed > 0 ? totalGridChargeKWh / daysProcessed : 0;
-}
-
-function calculateAverageSOCAt6am(provider, batteryConfig, state) {
-    if (!batteryConfig || batteryConfig.capacity === 0 || !state.electricityData) {
-        return 0;
-    }
-
-    let totalSocAt6am = 0;
-    let daysProcessed = 0;
-    let currentSOC = 0; // Carry over SOC day-to-day
-    const solarDataMap = new Map((state.solarData || []).map(d => [d.date, d.hourly]));
-
-    state.electricityData.forEach(day => {
         const hourlySolar = solarDataMap.get(day.date) || Array(24).fill(0);
         const trueHourlyConsumption = Array(24).fill(0);
         for (let h = 0; h < 24; h++) {
-            const gridImport = day.consumption[h] || 0;
-            const gridExport = day.feedIn[h] || 0;
-            const solarGeneration = hourlySolar[h] || 0;
-            const selfConsumed = Math.max(0, solarGeneration - gridExport);
-            trueHourlyConsumption[h] = gridImport + selfConsumed;
+            const selfConsumed = Math.max(0, (hourlySolar[h] || 0) - (day.feedIn[h] || 0));
+            trueHourlyConsumption[h] = (day.consumption[h] || 0) + selfConsumed;
         }
-        
+
         const simResults = simulateDay(trueHourlyConsumption, hourlySolar, provider, batteryConfig, currentSOC);
-        currentSOC = simResults.finalSOC; // Update SOC for the next day
-        totalSocAt6am += simResults.socAt6am;
-        daysProcessed++;
+        currentSOC = simResults.finalSOC;
+
+        if (seasonalData[season]) {
+            seasonalData[season].totalGridCharge += simResults.dailyBreakdown.gridChargeKWh;
+            seasonalData[season].totalSocAt6am += simResults.socAt6am;
+            seasonalData[season].days++;
+        }
     });
-    
-    const avgSocKWh = daysProcessed > 0 ? totalSocAt6am / daysProcessed : 0;
-    const avgSocPercent = (avgSocKWh / batteryConfig.capacity) * 100;
-    return avgSocPercent;
+
+    for (const season in seasonalData) {
+        const data = seasonalData[season];
+        data.avgGridCharge = data.days > 0 ? data.totalGridCharge / data.days : 0;
+        const avgSocKWh = data.days > 0 ? data.totalSocAt6am / data.days : 0;
+        data.avgSocPercent = batteryConfig.capacity > 0 ? (avgSocKWh / batteryConfig.capacity) * 100 : 0;
+    }
+
+    return seasonalData;
 }
 
-export function renderDebugDataTable(state) {
-    if (!document.getElementById("debugToggle")?.checked) return;
+export function renderDebugDataTable(state, shouldShow = true) {
+    if (shouldShow && !document.getElementById("debugToggle")?.checked) return;
     const useManual = document.getElementById("manualInputToggle")?.checked;
     
     if (!useManual && (!state.electricityData || state.electricityData.length === 0)) {
         displayError("Please upload an electricity CSV file with data first.", "data-input-error");
         return;
     }
-
-    hideAllDebugContainers();
-    const debugContainer = document.getElementById("dataDebugTableContainer");
     
-    // 1. Add "Feed In" to the table header
+    const debugContainer = document.getElementById("dataDebugTableContainer");
     let tableHTML = "<h3>Debug Data</h3><table><thead><tr><th>Date</th><th>Hour</th><th>Consumption (kWh)</th><th>Feed In (kWh)</th><th>Solar (kWh)</th></tr></thead><tbody>";
     
     if (useManual) {
-        // ... (manual mode logic remains the same, you can add a column of zeros for Feed In if you like) ...
         const dailyPeak = (getNumericInput("summerDailyPeak") + getNumericInput("autumnDailyPeak") + getNumericInput("winterDailyPeak") + getNumericInput("springDailyPeak")) / 4;
         const dailyShoulder = (getNumericInput("summerDailyShoulder") + getNumericInput("autumnDailyShoulder") + getNumericInput("winterShoulder") + getNumericInput("springShoulder")) / 4;
         const dailyOffPeak = (getNumericInput("summerDailyOffPeak") + getNumericInput("autumnDailyOffPeak") + getNumericInput("winterOffPeak") + getNumericInput("springOffPeak")) / 4;
@@ -107,72 +90,54 @@ export function renderDebugDataTable(state) {
         const hourlySolar = generateHourlySolarProfileFromDaily(dailySolar);
 
         for (let h = 0; h < 24; h++) {
-            tableHTML += `<tr>
-                            <td>Manual Average</td>
-                            <td>${(h<10?'0':'')+h}:00</td>
-                            <td>${(hourlyConsumption[h] || 0).toFixed(3)}</td>
-                            <td>0.000</td>
-                            <td>${(hourlySolar[h] || 0).toFixed(3)}</td>
-                          </tr>`;
+            tableHTML += `<tr><td>Manual Average</td><td>${(h<10?'0':'')+h}:00</td><td>${(hourlyConsumption[h] || 0).toFixed(3)}</td><td>0.000</td><td>${(hourlySolar[h] || 0).toFixed(3)}</td></tr>`;
         }
     } else {
-        // This is the main part to change for CSV mode
         const numEntries = Math.min(state.electricityData.length, 100);
         const solarDataMap = new Map((state.solarData || []).map(d => [d.date, d.hourly]));
         for (let d = 0; d < numEntries; d++) {
             const dayData = state.electricityData[d];
             const hourlySolar = solarDataMap.get(dayData.date) || Array(24).fill(0);
             for (let h = 0; h < 24; h++) {
-                // 2. Add the dayData.feedIn value to the table row
-                tableHTML += `<tr>
-                                <td>${dayData.date}</td>
-                                <td>${(h<10?'0':'')+h}:00</td>
-                                <td>${(dayData.consumption[h] || 0).toFixed(3)}</td>
-                                <td>${(dayData.feedIn[h] || 0).toFixed(3)}</td>
-                                <td>${(hourlySolar[h] || 0).toFixed(3)}</td>
-                              </tr>`;
+                tableHTML += `<tr><td>${dayData.date}</td><td>${(h<10?'0':'')+h}:00</td><td>${(dayData.consumption[h] || 0).toFixed(3)}</td><td>${(dayData.feedIn[h] || 0).toFixed(3)}</td><td>${(hourlySolar[h] || 0).toFixed(3)}</td></tr>`;
             }
         }
     }
 
     tableHTML += "</tbody></table>";
     if (debugContainer) debugContainer.innerHTML = tableHTML;
-    if (debugContainer) debugContainer.style.display = "block";
+    
+    if (shouldShow) {
+        hideAllDebugContainers();
+        if (debugContainer) debugContainer.style.display = "block";
+    }
 }
 
-export function renderExistingSystemDebugTable(state) {
-    if (!document.getElementById("debugToggle")?.checked) return;
+export function renderExistingSystemDebugTable(state, shouldShow = true) {
+    if (shouldShow && !document.getElementById("debugToggle")?.checked) return;
     
-    // Use the new, specific ID for clearing and displaying errors
     const errorId = "existing-system-error";
     clearError(errorId);
     
-    // Check for manual mode first
     if (document.getElementById("manualInputToggle")?.checked) {
         displayError("This debug table is not available in manual mode as it requires CSV data.", errorId);
+        if (shouldShow) hideAllDebugContainers();
         return;
     }
-
-    // Then check for the required data
     if (!state.electricityData || !state.solarData || state.electricityData.length === 0) {
         displayError("This debug table requires uploaded CSV data.", errorId);
+        if (shouldShow) hideAllDebugContainers();
         return;
     }
     
-    hideAllDebugContainers();
     const debugContainer = document.getElementById("existingSystemDebugTableContainer");
-
-    let totalGridImports = 0,
-        totalGridExports = 0,
-        totalSolarGeneration = 0;
+    
+    let totalGridImports = 0, totalGridExports = 0, totalSolarGeneration = 0;
     let totalDays = 0;
-
     const solarDataMap = new Map(state.solarData.map(day => [day.date, day.hourly]));
-
     state.electricityData.forEach(day => {
         const dateKey = day.date;
         const hourlySolar = solarDataMap.get(dateKey);
-
         if (hourlySolar) {
             totalDays++;
             totalSolarGeneration += hourlySolar.reduce((a, b) => a + b, 0);
@@ -183,13 +148,11 @@ export function renderExistingSystemDebugTable(state) {
 
     if (totalDays === 0) {
         displayError("No overlapping data found between the two CSV files. Please ensure the date ranges are aligned.");
+        if (shouldShow) hideAllDebugContainers();
         return;
     }
-    
     const totalSelfConsumed = totalSolarGeneration - totalGridExports;
     const totalConsumption = totalSelfConsumed + totalGridImports;
-
-
     let tableHTML = "<h3>Existing System & Baseline Data</h3><table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>";
     tableHTML += `<tr><td colspan="2"><strong>Existing System Inputs</strong></td></tr>`;
     tableHTML += `<tr><td>Existing Solar Panel Size (kW)</td><td>${document.getElementById("existingSolarKW")?.value || ''}</td></tr>`;
@@ -204,202 +167,190 @@ export function renderExistingSystemDebugTable(state) {
     tableHTML += `<tr><td>Total Imported from Grid (from Usage CSV)</td><td>${totalGridImports.toFixed(2)} kWh</td></tr>`;
     tableHTML += `<tr><td>Total Exported to Grid (from Usage CSV)</td><td>${totalGridExports.toFixed(2)} kWh</td></tr>`;
     tableHTML += "</tbody></table>";
+
     if (debugContainer) debugContainer.innerHTML = tableHTML;
-    if (debugContainer) debugContainer.style.display = "block";
+    
+    if (shouldShow) {
+        hideAllDebugContainers();
+        if (debugContainer) debugContainer.style.display = "block";
+    }
 }
 
-export function renderNewSystemDebugTable(state) {
-    if (!document.getElementById("debugToggle")?.checked) return;
+export function renderNewSystemDebugTable(state, shouldShow = true) {
+    if (shouldShow && !document.getElementById("debugToggle")?.checked) return;
 	clearError();
-    hideAllDebugContainers();
-    const debugContainer = document.getElementById("newSystemDebugTableContainer");
+    
+    const debugContainer = document.getElementById("sizing-recommendation-section");
     const recommendationContainer = document.getElementById("recommendationContainer");
-    if (!recommendationContainer) return;
+    if (!recommendationContainer || !debugContainer) return;
 
     const useManual = document.getElementById("manualInputToggle")?.checked;
-    const config = gatherConfigFromUI();
+    const config = state.analysisConfig;
+    if (!config) return;
 
     if (useManual) {
-        // --- MANUAL MODE PATH ---
-        // 1. Gather the seasonal averages from the UI, as the old function did.
         const simulationData = {
             'Q1_Summer': { avgPeak: getNumericInput("summerDailyPeak"), avgShoulder: getNumericInput("summerDailyShoulder"), avgOffPeak: getNumericInput("summerDailyOffPeak"), avgSolar: getNumericInput("summerDailySolar") },
             'Q2_Autumn': { avgPeak: getNumericInput("autumnDailyPeak"), avgShoulder: getNumericInput("autumnDailyShoulder"), avgOffPeak: getNumericInput("autumnDailyOffPeak"), avgSolar: getNumericInput("autumnDailySolar") },
             'Q3_Winter': { avgPeak: getNumericInput("winterDailyPeak"), avgShoulder: getNumericInput("winterDailyShoulder"), avgOffPeak: getNumericInput("winterDailyOffPeak"), avgSolar: getNumericInput("winterDailySolar") },
             'Q4_Spring': { avgPeak: getNumericInput("springDailyPeak"), avgShoulder: getNumericInput("springDailyShoulder"), avgOffPeak: getNumericInput("springDailyOffPeak"), avgSolar: getNumericInput("springDailySolar") },
         };
-
-        // 2. Call only the heuristic sizing calculation.
         const heuristicRecs = calculateSizingRecommendations(config.recommendationCoverageTarget, simulationData);
-        
-        // 3. Render ONLY the heuristic results.
         let recommendationHTML = `<div class="recommendation-section">`;
         if (heuristicRecs) {
-            recommendationHTML += `
-                <h4>Heuristic Sizing (based on ${heuristicRecs.coverageTarget}% annual coverage)</h4>
-                <p>
-                    <strong>Recommended Solar: ${heuristicRecs.solar.toFixed(1)} kW</strong><br>
-                    <strong>Recommended Battery: ${heuristicRecs.battery.toFixed(1)} kWh</strong><br>
-                    <strong>Recommended Inverter: ${heuristicRecs.inverter.toFixed(1)} kW</strong>
-                </p>`;
+            recommendationHTML += `<h4>Heuristic Sizing (based on ${heuristicRecs.coverageTarget}% annual coverage)</h4><p><strong>Recommended Solar: ${heuristicRecs.solar.toFixed(1)} kW</strong><br><strong>Recommended Battery: ${heuristicRecs.battery.toFixed(1)} kWh</strong><br><strong>Recommended Inverter: ${heuristicRecs.inverter.toFixed(1)} kW</strong></p>`;
         }
         recommendationHTML += `</div>`;
         recommendationContainer.innerHTML = recommendationHTML;
-        
-        // 4. Clear the chart area as it's not applicable for manual mode.
         const newSystemEstimatesTable = document.getElementById("newSystemEstimatesTable");
         if (newSystemEstimatesTable) {
             newSystemEstimatesTable.innerHTML = '<p><em>Detailed sizing charts require CSV data.</em></p>';
         }
 
-    } else {
-        // --- CSV MODE PATH ---
+    } else { 
         if (!state.electricityData || !state.solarData || state.electricityData.length === 0) {
             displayError("Please upload both electricity and solar CSV files to use this debug tool.");
             return;
         }
-
-        // This path works as before, running the full detailed calculation.
         const sizingResults = calculateDetailedSizing(state.electricityData, state.solarData, config, state.quarterlyAverages);
-
         if (sizingResults) {
+            // --- FINAL FIX: Temporarily show the container to allow charts to render with correct dimensions ---
+            const originalDisplay = debugContainer.style.display;
+            const originalVisibility = debugContainer.style.visibility;
+
+            // Make container part of the layout but keep it invisible to prevent flicker
+            debugContainer.style.visibility = 'hidden';
+            debugContainer.style.display = 'block';
+
+            // Now render the content and draw the charts
             renderSizingResults(sizingResults, state);
-            setTimeout(() => {
-                drawDistributionCharts(sizingResults.distributions, state);
-            }, 0);
+            drawDistributionCharts(sizingResults.distributions, state);
+
+            // Restore the original styles
+            debugContainer.style.display = originalDisplay;
+            debugContainer.style.visibility = originalVisibility;
+            // --- END FINAL FIX ---
         } else {
             displayError("Sizing calculation failed for debug table.", "sizing-error-message");
         }
     }
-
-    if (debugContainer) debugContainer.style.display = "block";
+    
+    if (shouldShow) {
+        hideAllDebugContainers();
+        debugContainer.style.display = "block";
+    }
 }
-export function renderProvidersDebugTable(state) {
-    if (!document.getElementById("debugToggle")?.checked) return;
-    hideAllDebugContainers();
-    const debugContainer = document.getElementById("providersDebugTableContainer");
-    let tableHTML = "<h3>Provider & Tariff Inputs</h3><table><tbody>";
 
-    if (!state.analysisConfig || !state.quarterlyAverages) {
-        tableHTML += `<tr><td>Please run a successful analysis first to see provider debug info.</td></tr>`;
-        tableHTML += "</tbody></table>";
-        if (debugContainer) debugContainer.innerHTML = tableHTML;
-        if (debugContainer) debugContainer.style.display = "block";
+export function renderProvidersDebugTable(state, shouldShow = true) {
+    if (shouldShow && !document.getElementById("debugToggle")?.checked) return;
+    
+    const debugContainer = document.getElementById("providersDebugTableContainer");
+    let tableHTML = "<h3>Provider & Tariff Inputs</h3>";
+
+    const useManual = document.getElementById("manualInputToggle")?.checked;
+    if (!useManual && (!state.electricityData || state.electricityData.length === 0)) {
+        displayError("This debug table requires uploaded CSV data to calculate seasonal averages.", "provider-selection-error");
         return;
     }
+    clearError("provider-selection-error");
+    
+    const config = state.analysisConfig;
+    if (!config) return;
 
-    const simulationData = state.quarterlyAverages;
-
-    tableHTML += `<tr><td colspan="2" class="provider-header-cell"><strong>Total Household Consumption Quarterly Averages (Daily)</strong></td></tr>`;
-    for (const quarter in simulationData) {
-        const q = simulationData[quarter];
-        tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Peak</td><td>${(q.avgPeak).toFixed(2)} kWh</td></tr>`;
-        tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Shoulder</td><td>${(q.avgShoulder).toFixed(2)} kWh</td></tr>`;
-        tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Off-Peak</td><td>${(q.avgOffPeak).toFixed(2)} kWh</td></tr>`;
-        tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Solar</td><td>${(q.avgSolar).toFixed(2)} kWh</td></tr>`;
-    }
-
-    state.analysisConfig.selectedProviders.forEach(pKey => {
-        const providerConfig = state.analysisConfig.providers.find(p => p.id === pKey);
+	if (state.quarterlyAverages) {
+		tableHTML += `<table><thead><tr><th colspan="2" class="provider-header-cell"><strong>Total Household Consumption Quarterly Averages (Daily)</strong></th></tr></thead><tbody>`;
+		for (const quarter in state.quarterlyAverages) {
+			const q = state.quarterlyAverages[quarter];
+			tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Peak</td><td>${(q.avgPeak).toFixed(2)} kWh</td></tr>`;
+			tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Shoulder</td><td>${(q.avgShoulder).toFixed(2)} kWh</td></tr>`;
+			tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Off-Peak</td><td>${(q.avgOffPeak).toFixed(2)} kWh</td></tr>`;
+			tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Solar</td><td>${(q.avgSolar).toFixed(2)} kWh</td></tr>`;
+		}
+		tableHTML += `</tbody></table>`;
+	}
+    config.selectedProviders.forEach(pKey => {
+        const providerConfig = config.providers.find(p => p.id === pKey);
         if (!providerConfig) return;
-
-        tableHTML += `<tr><td colspan="2" class="provider-header-cell"><strong>${providerConfig.name}</strong></td></tr>`;
-        
-        // --- ADDED THIS BLOCK BACK ---
-        const batteryConfig = {
-            capacity: getNumericInput("newBattery"),
-            inverterKW: getNumericInput("newBatteryInverter"),
-            gridChargeThreshold: getNumericInput("gridChargeThreshold"),
-            socChargeTrigger: getNumericInput("socChargeTrigger")
-        };
-        const avgCharge = calculateAverageDailyGridCharge(providerConfig, batteryConfig, state);
-        tableHTML += `<tr><td><strong>Average Daily Grid Charge</strong></td><td><strong>${avgCharge.toFixed(2)} kWh</strong></td></tr>`;
-		const avgSocAt6am = calculateAverageSOCAt6am(providerConfig, batteryConfig, state);
-		tableHTML += `<tr><td><strong>Average SOC at 6am</strong></td><td><strong>${avgSocAt6am.toFixed(1)}%</strong></td></tr>`;
-        // --- END OF ADDED BLOCK ---
+        tableHTML += `<h4 style="margin-top:20px;">${providerConfig.name}</h4>`;
+        if (!useManual) {
+            const batteryConfig = {
+                capacity: (config.replaceExistingSystem ? 0 : config.existingBattery) + config.newBatteryKWH,
+                inverterKW: (config.replaceExistingSystem ? 0 : config.existingBatteryInverter) + config.newBatteryInverterKW,
+                gridChargeThreshold: config.gridChargeThreshold,
+                socChargeTrigger: config.socChargeTrigger
+            };
+            const seasonalAverages = calculateSeasonalAverages(providerConfig, batteryConfig, state);
+            tableHTML += `<table><thead><tr><th>Season</th><th>Avg Daily Grid Charge (kWh)</th><th>Avg SOC at 6am (%)</th></tr></thead><tbody>`;
+            for (const season in seasonalAverages) {
+                const data = seasonalAverages[season];
+                tableHTML += `<tr><td>${season}</td><td>${data.avgGridCharge.toFixed(2)}</td><td>${data.avgSocPercent.toFixed(1)}%</td></tr>`;
+            }
+            tableHTML += `</tbody></table>`;
+        } else {
+            tableHTML += `<p><em>Seasonal averages are only available in CSV mode.</em></p>`;
+        }
     });
 
-    tableHTML += "</tbody></table>";
     if (debugContainer) debugContainer.innerHTML = tableHTML;
-    if (debugContainer) debugContainer.style.display = "block";
+    
+    if (shouldShow) {
+        hideAllDebugContainers();
+        if (debugContainer) debugContainer.style.display = "block";
+    }
 }
 
-export function renderAnalysisPeriodDebugTable() {
-    if (!document.getElementById("debugToggle")?.checked) return;
-    hideAllDebugContainers();
-    const debugContainer = document.getElementById("analysisPeriodDebugTableContainer");
+export function renderAnalysisPeriodDebugTable(shouldShow = true) {
+    if (shouldShow && !document.getElementById("debugToggle")?.checked) return;
 
-    // Get all necessary values from the UI
+    const debugContainer = document.getElementById("analysisPeriodDebugTableContainer");
+    
     const numYears = getNumericInput("numYears", 15);
     const solarDegradation = getNumericInput("solarDegradation", 0.5) / 100;
     const batteryDegradation = getNumericInput("batteryDegradation", 2) / 100;
     const existingSystemAge = getNumericInput("existingSystemAge", 0);
-
     const replaceExisting = document.getElementById("replaceExistingSystem")?.checked;
     const newSolarKW = getNumericInput("newSolarKW");
     const existingSolarKW = replaceExisting ? 0 : getNumericInput("existingSolarKW");
     const newBatteryKWH = getNumericInput("newBattery");
     const existingBatteryKWH = replaceExisting ? 0 : getNumericInput("existingBattery");
     const totalInverterKW = getNumericInput("newBatteryInverter") + (replaceExisting ? 0 : getNumericInput("existingBatteryInverter"));
-
-    // --- Table 1: Inputs ---
+    
     let tableHTML = "<h3>Analysis Period Inputs</h3><table><tbody>";
     tableHTML += `<tr><td>Analysis Years (System Lifespan)</td><td>${numYears}</td></tr>`;
     tableHTML += `<tr><td>Solar Degradation (% per year)</td><td>${(solarDegradation * 100).toFixed(1)}</td></tr>`;
     tableHTML += `<tr><td>Battery Degradation (% per year)</td><td>${(batteryDegradation * 100).toFixed(1)}</td></tr>`;
-    tableHTML += `<tr><td>Existing System Age (Years)</td><td>${existingSystemAge}</td></tr>`; // Added the age here
+    tableHTML += `<tr><td>Existing System Age (Years)</td><td>${existingSystemAge}</td></tr>`;
     tableHTML += "</tbody></table>";
-
-    // --- Table 2: New Degradation Schedule ---
+    
     tableHTML += "<h3 style='margin-top: 20px;'>Component Performance Schedule</h3>";
-    tableHTML += `<table>
-                    <thead>
-                        <tr>
-                            <th>Year</th>
-                            <th>Total Solar kW</th>
-                            <th>Total Battery kWh</th>
-                            <th>Inverter kW</th>
-                        </tr>
-                    </thead>
-                    <tbody>`;
-
+    tableHTML += `<table><thead><tr><th>Year</th><th>Total Solar kW</th><th>Total Battery kWh</th><th>Inverter kW</th></tr></thead><tbody>`;
+    
     for (let year = 1; year <= numYears; year++) {
-        // --- NEW LOGIC ---
-        // Calculate the total age of each component for the current simulation year
         const currentExistingAge = existingSystemAge + year - 1;
         const currentNewAge = year - 1;
-
-        // Calculate the degraded size of each component separately
         const degradedExistingSolar = existingSolarKW * Math.pow(1 - solarDegradation, currentExistingAge);
         const degradedNewSolar = newSolarKW * Math.pow(1 - solarDegradation, currentNewAge);
         const totalDegradedSolar = degradedExistingSolar + degradedNewSolar;
-
         const degradedExistingBattery = existingBatteryKWH * Math.pow(1 - batteryDegradation, currentExistingAge);
         const degradedNewBattery = newBatteryKWH * Math.pow(1 - batteryDegradation, currentNewAge);
         const totalDegradedBattery = degradedExistingBattery + degradedNewBattery;
-        
-        tableHTML += `<tr>
-                        <td>${year}</td>
-                        <td>${totalDegradedSolar.toFixed(2)} kW</td>
-                        <td>${totalDegradedBattery.toFixed(2)} kWh</td>
-                        <td>${totalInverterKW.toFixed(2)} kW</td>
-                      </tr>`;
+        tableHTML += `<tr><td>${year}</td><td>${totalDegradedSolar.toFixed(2)} kW</td><td>${totalDegradedBattery.toFixed(2)} kWh</td><td>${totalInverterKW.toFixed(2)} kW</td></tr>`;
     }
-    tableHTML += "</tbody></table>";
     
-    tableHTML += `<p style="font-size: 0.9em; font-style: italic; margin-top: 10px;">
-                    <strong>Note:</strong> Inverter degradation is not currently modeled in the simulation.
-                 </p>`;
+    tableHTML += "</tbody></table>";
+    tableHTML += `<p style="font-size: 0.9em; font-style: italic; margin-top: 10px;"><strong>Note:</strong> Inverter degradation is not currently modeled in the simulation.</p>`;
 
-    if (debugContainer) {
-        debugContainer.innerHTML = tableHTML;
-        debugContainer.style.display = "block";
+    if (debugContainer) debugContainer.innerHTML = tableHTML;
+    
+    if (shouldShow) {
+        hideAllDebugContainers();
+        if (debugContainer) debugContainer.style.display = "block";
     }
 }
 
-export function renderLoanDebugTable() {
-    if (!document.getElementById("debugToggle")?.checked) return;
-    hideAllDebugContainers();
+export function renderLoanDebugTable(shouldShow = true) {
+    if (shouldShow && !document.getElementById("debugToggle")?.checked) return;
+
     const debugContainer = document.getElementById("loanDebugTableContainer");
     const P = getNumericInput("loanAmount");
     const annualRate = getNumericInput("loanInterestRate");
@@ -407,30 +358,30 @@ export function renderLoanDebugTable() {
 
     if (P === 0 || annualRate === 0 || termYears === 0) {
         if(debugContainer) debugContainer.innerHTML = "<p>Please enter valid loan details (Amount, Rate, and Term > 0).</p>";
-        if(debugContainer) debugContainer.style.display = "block";
-        return;
+    } else {
+        const i = (annualRate / 100) / 12;
+        const n = termYears * 12;
+        const monthlyPayment = P * (i * Math.pow(1 + i, n)) / (Math.pow(1 + i, n) - 1);
+        const annualPayment = monthlyPayment * 12;
+        let tableHTML = "<h3>Loan Amortization Schedule</h3><table><thead><tr><th>Year</th><th>Annual Repayment</th><th>Cumulative Repayments</th><th>Remaining Balance</th></tr></thead><tbody>";
+        for (let y = 1; y <= termYears; y++) {
+            let cumulativeRepayments = annualPayment * y;
+            let yearEndBalance = P * (Math.pow(1 + i, n) - Math.pow(1 + i, y * 12)) / (Math.pow(1 + i, n) - 1);
+            tableHTML += `<tr><td>${y}</td><td>$${annualPayment.toFixed(2)}</td><td>$${cumulativeRepayments.toFixed(2)}</td><td>$${Math.max(0, yearEndBalance).toFixed(2)}</td></tr>`;
+        }
+        tableHTML += "</tbody></table>";
+        if(debugContainer) debugContainer.innerHTML = tableHTML;
     }
-
-    const i = (annualRate / 100) / 12;
-    const n = termYears * 12;
-    const monthlyPayment = P * (i * Math.pow(1 + i, n)) / (Math.pow(1 + i, n) - 1);
-    const annualPayment = monthlyPayment * 12;
-
-    let tableHTML = "<h3>Loan Amortization Schedule</h3><table><thead><tr><th>Year</th><th>Annual Repayment</th><th>Cumulative Repayments</th><th>Remaining Balance</th></tr></thead><tbody>";
     
-    for (let y = 1; y <= termYears; y++) {
-        let cumulativeRepayments = annualPayment * y;
-        let yearEndBalance = P * (Math.pow(1 + i, n) - Math.pow(1 + i, y * 12)) / (Math.pow(1 + i, n) - 1);
-        tableHTML += `<tr><td>${y}</td><td>$${annualPayment.toFixed(2)}</td><td>$${cumulativeRepayments.toFixed(2)}</td><td>$${Math.max(0, yearEndBalance).toFixed(2)}</td></tr>`;
+    if (shouldShow) {
+        hideAllDebugContainers();
+        if (debugContainer) debugContainer.style.display = "block";
     }
-    tableHTML += "</tbody></table>";
-    if(debugContainer) debugContainer.innerHTML = tableHTML;
-    if(debugContainer) debugContainer.style.display = "block";
 }
 
-export function renderOpportunityCostDebugTable() {
-    if (!document.getElementById("debugToggle")?.checked) return;
-    hideAllDebugContainers();
+export function renderOpportunityCostDebugTable(shouldShow = true) {
+    if (shouldShow && !document.getElementById("debugToggle")?.checked) return;
+
     const debugContainer = document.getElementById("opportunityCostDebugTableContainer");
     const costSolar = getNumericInput("costSolar");
     const costBattery = getNumericInput("costBattery");
@@ -445,5 +396,9 @@ export function renderOpportunityCostDebugTable() {
     }
     tableHTML += "</tbody></table>";
     if(debugContainer) debugContainer.innerHTML = tableHTML;
-    if(debugContainer) debugContainer.style.display = "block";
+
+    if (shouldShow) {
+        hideAllDebugContainers();
+        if (debugContainer) debugContainer.style.display = "block";
+    }
 }

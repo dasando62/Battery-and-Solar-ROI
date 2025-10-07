@@ -1,5 +1,6 @@
 // js/uiDynamic.js
-//Version 1.0.9
+//Version 1.1.0
+
 import { getProviders } from './providerManager.js';
 import { sanitize } from './utils.js';
 
@@ -125,7 +126,7 @@ export function renderProviderSettings() {
                 <details class="collapsible-section">
                     <summary>Grid Charging Options</summary>
                     <div class="subsettings">
-                        <label><input type="checkbox" class="provider-input" data-field="gridChargeEnabled" ${provider.gridChargeEnabled ? 'checked' : ''}> Enable Grid Charging</label>
+                        <label><input type="checkbox" class="provider-input" data-field="gridChargeEnabled" ${provider.gridChargeEnabled ? 'checked' : ''} Title="You need to save any changes for them to come into effect"> Enable Grid Charging</label>
                         <label>Charge Start Hour: <input type="number" class="provider-input" data-field="gridChargeStart" min="0" max="23" value="${provider.gridChargeStart ?? 0}"></label>
                         <label>Charge End Hour: <input type="number" class="provider-input" data-field="gridChargeEnd" min="0" max="23" value="${provider.gridChargeEnd ?? 0}"></label>
                     </div>
