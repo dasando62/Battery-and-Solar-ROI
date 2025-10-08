@@ -1,14 +1,50 @@
 // js/uiDynamic.js
-//Version 1.1.0
+//Version 1.1.1
+// This module is responsible for dynamically generating the HTML for the
+// provider settings section. It reads the provider data from the manager
+// and builds the complex UI with all its nested rules and conditions.
+
+/*
+ * Home Battery & Solar ROI Analyzer
+ * Copyright (c) 2025 [DaSando62]
+ *
+ * This software is licensed under the MIT License.
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
 
 import { getProviders } from './providerManager.js';
 import { sanitize } from './utils.js';
 
+/**
+ * Renders the HTML for a single "special condition" rule row.
+ * @param {object} condition - The special condition object.
+ * @param {string} providerId - The ID of the parent provider.
+ * @param {number} index - The index of this condition in the provider's array.
+ * @returns {string} The HTML string for the condition row.
+ */
 function renderConditionRow(condition, providerId, index) {
+    // Conditionally show the 'hours' input only if the metric requires it.
     const hoursInput = (condition.condition.metric === 'import_in_window')
         ? `<input type="text" class="provider-input" data-field="condition.hours" placeholder="e.g., 5pm-7pm" value="${condition.condition.hours || ''}">`
         : '';
 
+    // Returns a template literal with all the inputs for a special condition.
     return `
         <div class="rule-row condition-row" data-index="${index}">
             <div class="rule-row-content">
@@ -45,11 +81,20 @@ function renderConditionRow(condition, providerId, index) {
         </div>`;
 }
 
+/**
+ * Renders the HTML for a single import or export rule row.
+ * @param {object} rule - The rule object (e.g., { type: 'tou', rate: 0.5, ... }).
+ * @param {string} providerId - The ID of the parent provider.
+ * @param {string} ruleType - 'import' or 'export'.
+ * @param {number} index - The index of this rule in its array.
+ * @returns {string} The HTML string for the rule row.
+ */
 function renderRuleRow(rule, providerId, ruleType, index) {
-    // Show/hide styles based on the rule's type
+    // Conditionally show/hide the 'hours' or 'limit' input based on the rule type.
     const touStyle = rule.type === 'tou' ? '' : 'style="display:none;"';
     const tieredStyle = rule.type === 'tiered' ? '' : 'style="display:none;"';
 
+    // Returns a template literal with all the inputs for a tariff rule.
     return `
         <div class="rule-row" data-index="${index}">
             <div class="rule-row-content">
@@ -74,35 +119,42 @@ function renderRuleRow(rule, providerId, ruleType, index) {
         </div>`;
 }
 
+/**
+ * The main function to render the entire provider settings section.
+ * It gets all providers and loops through them, building the HTML for each one.
+ */
 export function renderProviderSettings() {
     const container = document.getElementById('provider-settings-container');
     if (!container) return;
     const allProviders = getProviders();
     let providersHTML = '';
 
+    // Iterate through each provider and build its HTML block.
     allProviders.forEach((provider, index) => {
         if (!provider) return;
 
-        // FIX #1: Use backticks (`) instead of single quotes (')
+        // Build the HTML for import rules.
         let importHTML = `<h4>Import Rules</h4><div class="import-rules-container">`;
         (provider.importRules || []).forEach((rule, ruleIndex) => {
             importHTML += renderRuleRow(rule, provider.id, 'import', ruleIndex);
         });
         importHTML += `</div><button class="add-rule-button" data-id="${provider.id}" data-type="import">+ Add Import Rule</button>`;
 
-        // FIX #1: Use backticks (`) instead of single quotes (')
+        // Build the HTML for export rules.
         let exportHTML = `<h4>Export Rules</h4><div class="export-rules-container">`;
         (provider.exportRules || []).forEach((rule, ruleIndex) => {
             exportHTML += renderRuleRow(rule, provider.id, 'export', ruleIndex);
         });
         exportHTML += `</div><button class="add-rule-button" data-id="${provider.id}" data-type="export">+ Add Export Rule</button>`;
 
+        // Build the HTML for special conditions.
         let conditionsHTML = '<h4>Special Conditions</h4><div class="conditions-container">';
         (provider.specialConditions || []).forEach((condition, conditionIndex) => {
             conditionsHTML += renderConditionRow(condition, provider.id, conditionIndex);
         });
         conditionsHTML += `<button class="add-condition-button" data-id="${provider.id}">+ Add Condition</button>`;
         
+        // Assemble the complete HTML for the provider's collapsible section.
         providersHTML += `<details class="collapsible-section provider-details" ${provider.isExpanded ? 'open' : ''} data-provider-id="${provider.id}">
             <summary>
                 <input type="checkbox" class="providerCheckbox" value="${provider.id}" checked>
@@ -139,5 +191,7 @@ export function renderProviderSettings() {
         </details>`;
     });
 
+    // Replace the container's content with the newly generated HTML.
+    // A timeout ensures this happens after other potential DOM updates, preventing conflicts.
     setTimeout(() => { container.innerHTML = providersHTML; }, 0);
 }
