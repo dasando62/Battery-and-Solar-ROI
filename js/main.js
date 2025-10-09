@@ -1,5 +1,5 @@
 // js/main.js
-//Version 1.1.1
+//Version 1.1.2
 // This is the main entry point for the application. It initializes the application state,
 // sets up default data, and wires up all the necessary event listeners once the DOM is fully loaded.
 

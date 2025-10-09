@@ -80,18 +80,20 @@ th { background-color: #f2f2f2; }
 }
 
 .file-upload-button {
-  background-color: #f0ad4e; /* Orange to stand out */
-  color: white;
-  border: 1px solid #eea236;
-  padding: 8px 12px;
-  border-radius: 5px;
+  background-color: #f0f0f0; /* A standard light grey, closer to default buttons */
+  color: #333;              /* Standard dark text */
+  border: 1px solid #a9a9a9; /* A mid-grey border that mimics the default style */
+  padding: 0px 8px;          /* Reduced vertical and horizontal padding */
+  border-radius: 3px;        /* Slightly less rounded corners */
+  font-size: 0.85em;         /* Smaller font to match the default button text */
   cursor: pointer;
-  display: inline-block; /* Important for label styling */
+  display: inline-block;
+  line-height: 1.5;          /* Helps ensure vertical centering */
 }
 
 .file-upload-button:hover {
-  background-color: #ec971f;
-  border-color: #d58512;
+  background-color: #e0e0e0; /* A subtle hover effect */
+  border-color: #767676;
 }
 
 /* Wrapper to align the "Choose File" button and its status text */
@@ -113,8 +115,12 @@ th { background-color: #f2f2f2; }
 
 /* Default style for the status text ("No file chosen") */
 .file-status-text {
-  font-style: italic;
-  color: #666;
+  font-style: normal; /* Removes the unwanted italics */
+  color: inherit;     /* Ensures the text color matches the surrounding labels */
+  vertical-align: middle; /* Helps with precise centering */
+  font-size: 0.85em;  /* Make font smaller to match default file inputs */
+  position: relative; /* Allows you to manually adjust the element's position */
+  top: 5px;           /* Nudges the text down. You can change this number. */
 }
 
 /* This style is ADDED by JavaScript when a file is successfully loaded */

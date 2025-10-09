@@ -1,5 +1,5 @@
 // js/export.js
-// Version 1.1.1
+// Version 1.1.2
 
 
 // This module handles all functionality related to exporting analysis results,
@@ -358,6 +358,13 @@ async function generateCsvModeReport(pdf, commonData, config) {
         addHeaderFooter(pdf, pdf.internal.getNumberOfPages(), today);
         reportContainer.innerHTML = `<h2>Appendix D: Provider Simulation Averages</h2>`;
         yPos = await addElementToPdf(pdf, reportContainer, yPos);
+		//added to capture important note in Provider & Tariff Inputs table
+        const noteElement = providerDebugEl.querySelector('.pdf-export-note');
+        if (noteElement) {
+            reportContainer.innerHTML = ''; // Clear the temp container
+            reportContainer.appendChild(noteElement.cloneNode(true));
+            yPos = await addElementToPdf(pdf, reportContainer, yPos);
+        }
 
         // --- FIX #2: Group headings and tables to prevent orphans ---
         // Process the household averages table first.

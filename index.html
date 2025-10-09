@@ -11,17 +11,20 @@
 
 <div class="container">
 <h1>Home Battery & Solar ROI Analyzer</h1>
-<div class="version-number">Version V1.1.1</div>
+<div class="version-number">Version V1.1.2</div>
 <div id="pdf-report-generator"></div> <section>
 <section>
     <h2>Save/Load Settings</h2>
-<div class="settings-controls">
-    <label>Configuration File:
-        <input type="file" id="loadSettings" accept=".json">
-    </label>
-    <div id="settingsFileStatus" class="line-count-info"></div>
-    <button id="saveSettings" class="export-button">Save Current Settings</button>
-</div>
+    <div class="settings-controls">
+        <label>Configuration File:</label>
+        <div class="file-upload-wrapper">
+            <label for="loadSettings" class="file-upload-button">Choose File</label>
+            <input type="file" id="loadSettings" accept=".json" style="display: none;">
+            <span id="settingsFileName" class="file-status-text">No file chosen</span>
+        </div>
+        <div id="settingsFileStatus" class="line-count-info"></div>
+        <button id="saveSettings" class="export-button">Save Current Settings</button>
+    </div>
 </section>
 
 <section>

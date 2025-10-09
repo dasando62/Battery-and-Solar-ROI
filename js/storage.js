@@ -1,5 +1,5 @@
 // js/storage.js
-//Version 1.1.1
+//Version 1.1.2
 // This module handles the saving and loading of the entire application state
 // to and from a JSON configuration file. This allows users to persist their
 // settings and provider configurations.
@@ -101,55 +101,57 @@ function saveStateToFile() {
 function loadStateFromFile(event) {
     const file = event.target.files[0];
     const statusEl = document.getElementById('settingsFileStatus');
-    
-    // Clear any previous status messages.
+    // Get the new span element for the filename
+    const fileNameEl = document.getElementById('settingsFileName');
+
+    if (!file) {
+        // If the user cancels the file dialog, reset both text elements
+        if (fileNameEl) fileNameEl.textContent = 'No file chosen';
+        if (statusEl) statusEl.textContent = '';
+        return;
+    }
+
+    // --- NEW LOGIC ---
+    // 1. Immediately display the filename in the span next to the button
+    if (fileNameEl) {
+        fileNameEl.textContent = file.name;
+    }
+    // 2. Clear the status message below, to prepare for the load result
     if (statusEl) {
         statusEl.textContent = '';
-        statusEl.style.color = ''; // Reset color.
     }
-    
-    if (!file) return;
 
     const reader = new FileReader();
     reader.onload = (e) => {
         try {
             const appState = JSON.parse(e.target.result);
             
-            // Validate the file structure.
             if (!appState.version || !appState.providers || !appState.uiInputs) {
-                const errorMsg = "Error: This does not appear to be a valid settings file.";
                 if (statusEl) {
-                    statusEl.textContent = errorMsg;
+                    statusEl.textContent = "Error: This does not appear to be a valid settings file.";
                     statusEl.style.color = 'red';
-                } else {
-                    alert(errorMsg);
                 }
                 return;
             }
 
-            // If valid, apply the loaded state.
-            saveAllProviders(appState.providers); // Overwrite existing providers.
-            applyAllInputs(appState.uiInputs);   // Restore UI input values.
-            renderProviderSettings();             // Re-render the provider UI with new data.
+            saveAllProviders(appState.providers);
+            applyAllInputs(appState.uiInputs);
+            renderProviderSettings();
             
-            // Display a success message to the user.
+            // 3. Display the success message
             if (statusEl) {
                 const providerCount = appState.providers.length;
-                statusEl.textContent = `Loaded '${file.name}' with ${providerCount} provider configuration(s).`;
+                statusEl.textContent = `Successfully loaded with ${providerCount} provider configuration(s).`;
                 statusEl.style.color = 'green';
             }
 
         } catch (error) {
             console.error("Failed to load or parse settings file:", error);
-            const errorMsg = "Failed to load settings. The file may be corrupt.";
             if (statusEl) {
-                statusEl.textContent = errorMsg;
+                statusEl.textContent = "Failed to load settings. The file may be corrupt.";
                 statusEl.style.color = 'red';
-            } else {
-                alert(errorMsg);
             }
         } finally {
-            // Reset the file input so the user can load the same file again if needed.
             event.target.value = null;
         }
     };
