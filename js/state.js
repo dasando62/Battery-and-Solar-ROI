@@ -1,5 +1,5 @@
 // js/state.js
-//Version 1.1.1
+//Version 1.1.2
 // This file defines and exports a central, global `state` object.
 // This object acts as a single source of truth for shared application data,
 // making it accessible across different modules without passing it as a function parameter everywhere.

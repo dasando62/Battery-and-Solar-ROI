@@ -1,5 +1,5 @@
 // js/debugTables.js
-// Version 1.1.1
+// Version 1.1.2
 // This module contains all functions related to rendering the "Debug Tables".
 // These tables provide transparency into the calculator's inputs, intermediate calculations,
 // and simulation results, aiding in validation and troubleshooting.
@@ -326,7 +326,11 @@ export function renderProvidersDebugTable(state, shouldShow = true) {
     
     const debugContainer = document.getElementById("providersDebugTableContainer");
     let tableHTML = "<h3>Provider & Tariff Inputs</h3>";
-
+	    tableHTML += `
+      <p class="pdf-export-note" style="font-size: 0.9em; font-style: italic; border: 1px solid #f0ad4e; padding: 10px; border-radius: 5px; background-color: #fcf8e3;">
+        <strong>Important Note:</strong> The daily averages in this table are calculated from <strong>isolated daily simulations</strong> and are for diagnostic purposes. They may differ from the final "System Performance" results, which use a more realistic, <strong>continuous simulation</strong> where the battery's state of charge carries over from one day to the next.
+      </p>
+    `;
     // This table's calculations require CSV data.
     const useManual = document.getElementById("manualInputToggle")?.checked;
     if (!useManual && (!state.electricityData || state.electricityData.length === 0)) {

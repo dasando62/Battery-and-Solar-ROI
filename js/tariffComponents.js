@@ -1,5 +1,5 @@
 // js/tariffComponents.js
-// Version 1.1.1
+// Version 1.1.2
 // This module contains the core "rules engines" for calculating daily electricity costs and credits.
 // It provides a generic, data-driven way to handle various complex tariff structures,
 // making the system extensible to new types of rules in the future.
