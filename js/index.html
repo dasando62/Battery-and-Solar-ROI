@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Home Battery & Solar ROI Analyzer</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="report-style.css">
+</head>
+<body>
+
+<div class="container">
+<h1>Home Battery & Solar ROI Analyzer</h1>
+<div class="version-number">Version V1.1.2</div>
+<div id="pdf-report-generator"></div> <section>
+<section>
+    <h2>Save/Load Settings</h2>
+    <div class="settings-controls">
+        <label>Configuration File:</label>
+        <div class="file-upload-wrapper">
+            <label for="loadSettings" class="file-upload-button">Choose File</label>
+            <input type="file" id="loadSettings" accept=".json" style="display: none;">
+            <span id="settingsFileName" class="file-status-text">No file chosen</span>
+        </div>
+        <div id="settingsFileStatus" class="line-count-info"></div>
+        <button id="saveSettings" class="export-button">Save Current Settings</button>
+    </div>
+</section>
+
+<section>
+    <h2>1. Data Input</h2>
+    
+    <label><input type="checkbox" id="manualInputToggle"> Use manual daily averages instead of CSV upload</label>
+    <label style="margin-top: 15px;"><input type="checkbox" id="debugToggle"> Enable/Disable Debug Tools</label>
+
+    <div id="csvInputSection">
+        <label>Electricity Usage CSV: <input type="file" id="usageCsv" accept=".csv"></label>
+        <div id="usageCounts" class="line-count-info"></div>
+        <label><input type="checkbox" id="noExistingSolar"> No existing solar system</label>
+        <label id="solarCsvLabel">Solar Generation CSV: <input type="file" id="solarCsv" accept=".csv"></label>
+        <div id="solarCounts" class="line-count-info"></div>
+        <button id="showDataDebugTable" class="debug-button">Show Debug Table</button>
+        <div id="dataDebugTableContainer" style="display:none;"></div>
+    </div>
+	<div id="data-input-error" class="error-message"></div>
+	<div id="manualInputSection" style="display:none;">
+    <p>Enter your estimated average daily values for each season. All values are in kWh.</p>
+    
+    <label><strong>Average Daily Solar Generation per kW of Panels (kWh):</strong>
+        <input type="number" step="0.1" id="manualSolarProfile" value="4.0">
+    </label>
+    <hr>
+
+    <details class="collapsible-section" open>
+        <summary>☀️ Summer (Dec, Jan, Feb)</summary>
+        <div class="subsettings">
+            <label>Average Daily Peak Consumption (kWh): <input type="number" step="0.01" id="summerDailyPeak" value="10"></label>
+            <label>Average Daily Shoulder Consumption (kWh): <input type="number" step="0.01" id="summerDailyShoulder" value="5"></label>
+            <label>Average Daily Off-Peak Consumption (kWh): <input type="number" step="0.01" id="summerDailyOffPeak" value="3"></label>
+            <label>Average Daily Solar Generation (kWh/day): <input type="number" step="0.01" id="summerDailySolar" value="25"></label>
+        </div>
+    </details>
+
+    <details class="collapsible-section">
+        <summary>🍂 Autumn (Mar, Apr, May)</summary>
+        <div class="subsettings">
+            <label>Average Daily Peak Consumption (kWh): <input type="number" step="0.01" id="autumnDailyPeak" value="8"></label>
+            <label>Average Daily Shoulder Consumption (kWh): <input type="number" step="0.01" id="autumnDailyShoulder" value="6"></label>
+            <label>Average Daily Off-Peak Consumption (kWh): <input type="number" step="0.01" id="autumnDailyOffPeak" value="4"></label>
+            <label>Average Daily Solar Generation (kWh/day): <input type="number" step="0.01" id="autumnDailySolar" value="20"></label>
+        </div>
+    </details>
+
+    <details class="collapsible-section">
+        <summary>❄️ Winter (Jun, Jul, Aug)</summary>
+        <div class="subsettings">
+            <label>Average Daily Peak Consumption (kWh): <input type="number" step="0.01" id="winterDailyPeak" value="12"></label>
+            <label>Average Daily Shoulder Consumption (kWh): <input type="number" step="0.01" id="winterDailyShoulder" value="7"></label>
+            <label>Average Daily Off-Peak Consumption (kWh): <input type="number" step="0.01" id="winterDailyOffPeak" value="5"></label>
+            <label>Average Daily Solar Generation (kWh/day): <input type="number" step="0.01" id="winterDailySolar" value="15"></label>
+        </div>
+    </details>
+
+    <details class="collapsible-section">
+        <summary>🌸 Spring (Sep, Oct, Nov)</summary>
+        <div class="subsettings">
+            <label>Average Daily Peak Consumption (kWh): <input type="number" step="0.01" id="springDailyPeak" value="7"></label>
+            <label>Average Daily Shoulder Consumption (kWh): <input type="number" step="0.01" id="springDailyShoulder" value="5"></label>
+            <label>Average Daily Off-Peak Consumption (kWh): <input type="number" step="0.01" id="springDailyOffPeak" value="3"></label>
+            <label>Average Daily Solar Generation (kWh/day): <input type="number" step="0.01" id="springDailySolar" value="22"></label>
+        </div>
+    </details>
+</div>
+</section>
+
+<section>
+<details class="collapsible-section">
+    <summary>Advanced CSV Options</summary>
+    <div class="subsettings">
+        <p>
+            <strong>Important:</strong> Check that these settings match the column headers and data formats in your CSV files.
+        </p>
+        <hr>
+        <h4>Energy Usage CSV</h4>
+        <label>Date/Time Header:
+            <input type="text" id="elecDateTimeHeader" value="From (date/time)">
+        </label>
+        <label>Date Format (e.g., YYYY-MM-DD or DD/MM/YYYY):
+            <input type="text" id="elecDateFormat" value="YYYY-MM-DD" placeholder="YYYY-MM-DD">
+        </label>
+        <label>Type Header (contains Import/Export text):
+            <input type="text" id="usageTypeHeader" value="Usage Type">
+        </label>
+        
+        <label>Identifier for Grid Imports:
+            <input type="text" id="importIdentifier" value="Consumption">
+        </label>
+        <label>Identifier for Grid Exports (Feed-in):
+            <input type="text" id="exportIdentifier" value="Feed In">
+        </label>
+        
+        <label>Data (kWh) Header:
+            <input type="text" id="consumptionHeader" value="Usage in kWh,Amount Used">
+        </label>
+        
+        <hr style="margin-top: 20px;">
+        <h4>Solar Generation CSV</h4>
+        <label>Date/Time Header:
+            <input type="text" id="solarDateTimeHeader" value="Date/Time">
+        </label>
+        <label>Date Format (e.g., DD.MM.YYYY or YYYY-MM-DD):
+            <input type="text" id="solarDateFormat" value="DD.MM.YYYY" placeholder="DD.MM.YYYY">
+        </label>
+        <label>Generation (kWh) Header:
+            <input type="text" id="solarGenerationHeader" value="Generation,Total Generation (kWh)">
+        </label>
+    </div>
+</details>
+</section>
+
+<section>
+<h2>2. Existing System</h2>
+<label>Existing Solar Panel Size (kW): <input type="number" step="0.1" id="existingSolarKW" value="0"></label>
+<label>Existing Solar Inverter Size (kWh): <input type="number" step="0.1" id="existingSolarInverter" value="0"></label>
+<label>Existing Battery Size (kWh): <input type="number" step="0.1" id="existingBattery" value="0"></label>
+<label>Existing Battery Inverter (kW): <input type="number" step="0.1" id="existingBatteryInverter" value="0"></label>
+<label>Existing System Age (Years): <input type="number" step="1" id="existingSystemAge" value="0"></label>
+<button id="showExistingSystemDebugTable" class="debug-button">Show Debug Table</button>
+<div id="existing-system-error" class="error-message"></div>
+<div id="existingSystemDebugTableContainer" style="display:none;"></div>
+</section>
+
+<section>
+<section>
+    <h2>3. New System</h2>
+    <label>Additional Solar Panel Size (kW): <input type="number" step="0.1" id="newSolarKW" value="4"></label>
+    <label>Cost of Additional Solar ($): <input type="number" step="0.01" id="costSolar" value="2500"></label>
+    <label>Additional Battery Size (kWh): <input type="number" step="0.1" id="newBattery" value="24"></label>
+    <label>Additional Battery Inverter (kW): <input type="number" step="0.1" id="newBatteryInverter" value="8"></label>
+    <label>Cost of Additional Battery ($): <input type="number" step="0.01" id="costBattery" value="9500"></label>
+    <label><input type="checkbox" id="replaceExistingSystem"> This is a replacement for the existing system (not an addition)</label>
+    <label><input type="checkbox" id="gridOffPeakCharge" checked> Allow battery charging from grid during off-peak</label>
+    <div class="subsettings">
+        <label>Charge battery from grid to a maximum of (%): <input type="number" id="gridChargeThreshold" min="0" max="100" value="80"></label>
+		    
+		<label>Only charge from grid if battery is below (%):
+        <input type="number" id="socChargeTrigger" min="0" max="100" value="50">
+    </label>
+    </div>
+    <label style="margin-top: 20px;"><input type="checkbox" id="enableBlackoutSizing"> Add Blackout Protection Sizing</label>
+	<p style="font-size: 0.9em; font-style: italic; margin-top: -5px; margin-left: 25px;">
+    <small><em>Remember to click "Calculate Sizing Recommendation" again to see updated results.</em></small>
+	</p>
+    <div id="blackoutSettingsContainer" class="subsettings" style="display:none;">
+        <label>Blackout Duration (Hours): <input type="number" step="1" id="blackoutDuration" value="3"></label>
+        <label>Usage Coverage During Blackout (%): <input type="number" step="5" id="blackoutCoverage" value="85"></label>
+    </div>
+    <div class="subsettings">
+        <label>
+            Energy Self-Sufficiency (%):
+            <input type="number" id="recommendationCoverageTarget" min="10" max="200" value="90">
+        </label>
+    </div>
+    
+    <button id="calculateSizing" class="run-button" style="max-width: 300px;">Calculate Sizing Recommendation</button>
+	<div id="sizing-error-message" class="error-message" style="color: red; font-weight: bold; margin-top: 10px;"></div>
+
+    <section id="sizing-recommendation-section" style="margin-top: 20px; display: none;">
+        <h3>Sizing Recommendations</h3>
+        <div id="recommendationContainer"></div>
+        <div id="newSystemEstimatesTable"></div>
+    </section>
+</section>
+<h2>4. Financial Inputs</h2>
+<label><input type="checkbox" id="enableLoan" checked> Enable Loan Financing</label>
+<div id="loanSettingsContainer" class="subsettings">
+    <label>Loan Amount ($): <input type="number" step="100" id="loanAmount" value="12000"></label>
+    <label>Annual Interest Rate (%): <input type="number" step="0.1" id="loanInterestRate" value="6.5"></label>
+    <label>Loan Term (Years): <input type="number" step="1" id="loanTerm" value="7"></label>
+    <button id="showLoanDebugTable" class="debug-button">Show Debug Table</button>
+    <div id="loanDebugTableContainer" style="display:none;"></div>
+</div>
+
+<label style="margin-top: 20px;"><input type="checkbox" id="enableDiscountRate" checked> Enable Opportunity Cost / NPV</label>
+<div id="discountRateSettingsContainer" class="subsettings">
+    <label>Opportunity Cost / Discount Rate (%): <input type="number" step="0.1" id="discountRate" value="5.0"></label>
+    <button id="showOpportunityCostDebugTable" class="debug-button">Show Opportunity Cost Debug Table</button>
+    <div id="opportunityCostDebugTableContainer" style="display:none;"></div>
+</div>
+</section>
+
+<section>
+<h2>5. Providers & Tariffs</h2>
+<p>Enter all Feed-in Tariffs (FIT) as positive numbers. They will be treated as a credit and subtracted from your bill.</p>
+<label>Annual Tariff Escalation (% per year): <input type="number" step="0.1" id="tariffEscalation" value="2"></label>
+<label>Start of FIT Degradation Year: <input type="number" id="fitDegradationStartYear" value="1"></label>
+<label>Years to Reach Minimum FIT: <input type="number" id="fitDegradationEndYear" value="10"></label>
+<label>FIT Minimum Rate ($/kWh): <input type="number" step="0.001" id="fitMinimumRate" value="-0.03"></label>
+<br>
+<div id="provider-settings-container">
+</div>
+<button id="add-provider-button" class="run-button" style="margin-top: 15px;">Add New Provider</button>
+<div id="provider-selection-error" class="error-message"></div>
+<div>
+<button id="showProvidersDebugTable" class="debug-button">Show Debug Table</button>
+</div>
+<div id="providersDebugTableContainer" style="display:none;"></div>
+</section>
+
+<section>
+<h2>6. Analysis Period</h2>
+<label>Analysis Years (System Lifespan): <input type="number" id="numYears" value="15" placeholder="e.g., 15"></label>
+<label>Solar Degradation (% per year): <input type="number" step="0.1" id="solarDegradation" value="0.5"></label>
+<label>Battery Degradation (% per year): <input type="number" step="0.1" id="batteryDegradation" value="2"></label>
+<button id="showAnalysisPeriodDebugTable" class="debug-button">Show Debug Table</button>
+<div id="analysisPeriodDebugTableContainer" style="display:none;"></div>
+</section>
+
+<section>
+<button id="runAnalysis" class="run-button">Run ROI Analysis</button>
+</section>
+
+<section id="results-section">
+    <h2>7. Results</h2>
+	<div id="run-analysis-error" class="error-message"></div>
+    <div id="export-controls" style="display: none;">
+        <button id="exportPdf" class="export-button">Export to PDF</button>
+        <button id="exportCsv" class="export-button">Export to CSV</button>
+    </div>
+
+    <button id="showRawDataDebug" class="results-debug-button" style="display: none;">Show Raw Data Tables</button>
+    
+    <div id="roiSummary" class="roi-summary"></div>
+    <div id="baseline-note"></div>
+    <div id="results"></div>
+
+    <div id="raw-data-debug-container" style="display:none; margin-top: 30px;">
+        <div id="raw-data-tables-container"></div>
+    </div>
+    
+    <div class="chart-container">
+        <canvas id="savingsChart"></canvas>
+    </div>
+</section>
+</div>
+<script src="js/chart.umd.min.js"></script>
+<script src="js/jspdf.umd.min.js"></script>
+<script src="js/html2canvas.min.js"></script>
+
+<script type="module" src="js/main.js"></script>
+
+</body>
+</html>
