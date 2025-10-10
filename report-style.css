@@ -53,3 +53,7 @@ body {
     margin-bottom: 20px;
     page-break-inside: avoid;
 }
+#pdf-report-generator .report-note-text {
+    font-weight: normal; /* This will override the bold style */
+    font-family: "Times New Roman", Times, serif; /* This sets the note back to a serif font */
+}

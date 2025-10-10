@@ -1,5 +1,5 @@
 // js/export.js
-// Version 1.1.2
+// Version 1.1.4
 
 
 // This module handles all functionality related to exporting analysis results,
@@ -320,34 +320,49 @@ async function generateCsvModeReport(pdf, commonData, config) {
         
         // --- FIX #1: Logic to prevent orphaned chart titles ---
         // This function adds a chart and its title, ensuring they aren't split across a page break.
-        const addChartDirectly = async (chartInstance, title) => {
-            if (!chartInstance) return yPos;
+		const addChartDirectly = async (chartInstance, title, description) => {
+		if (!chartInstance) return yPos;
 
-            // First, measure the height of the title and the chart.
-            reportContainer.innerHTML = `<h4>${title}</h4>`;
-            const titleCanvas = await html2canvas(reportContainer, { scale: 2 });
-            const contentWidth = pdf.internal.pageSize.getWidth() - (60); // 30*2 for margins
-            const titleHeight = titleCanvas.height * contentWidth / titleCanvas.width;
+		// Create a simple HTML element for the title and description.
+		const textElement = document.createElement('div');
+		textElement.innerHTML = `<h4>${title}</h4><p style="font-size: 0.9em; font-style: italic; color: #555;">${description}</p>`;
+		
+    // 2. (THE FIX) Stage the text element by attaching it to the live report container
+    //    BEFORE calling html2canvas on it.
+    reportContainer.innerHTML = '';
+    reportContainer.appendChild(textElement);		
 
-            const imgData = chartInstance.canvas.toDataURL('image/png');
-            const imgProps = pdf.getImageProperties(imgData);
-            const imgHeight = imgProps.height * contentWidth / imgProps.width;
+		// Measure the height of the text and the chart to see if they fit on the current page.
+		const textCanvas = await html2canvas(textElement, { scale: 2 });
+		const contentWidth = pdf.internal.pageSize.getWidth() - (60); // 30*2 for margins
+		const textHeight = textCanvas.height * contentWidth / textCanvas.width;
 
-            // Check if BOTH will fit on the page. If not, create a new page first.
-            if (yPos + titleHeight + imgHeight > pdf.internal.pageSize.getHeight() - 60) {
-                pdf.addPage();
-                yPos = 30;
-                addHeaderFooter(pdf, pdf.internal.getNumberOfPages(), today);
-            }
+		const imgData = chartInstance.canvas.toDataURL('image/png');
+		const imgProps = pdf.getImageProperties(imgData);
+		const imgHeight = imgProps.height * contentWidth / imgProps.width;
 
-            // Now, add both the title and the chart.
-            yPos = await addElementToPdf(pdf, reportContainer, yPos); // Add the title
-            pdf.addImage(imgData, 'PNG', 30, yPos, contentWidth, imgHeight); // Add the chart
-            return yPos + imgHeight + 20;
-        };
+		// If the combined height of the text and chart overflows, create a new page first.
+		if (yPos + textHeight + imgHeight > pdf.internal.pageSize.getHeight() - 60) {
+			pdf.addPage();
+			yPos = 30;
+			addHeaderFooter(pdf, pdf.internal.getNumberOfPages(), today);
+		}
+
+		// Now, add the text element to the temporary container and render it.
+		reportContainer.innerHTML = '';
+		reportContainer.appendChild(textElement);
+		yPos = await addElementToPdf(pdf, reportContainer, yPos);
+		
+		// Finally, add the chart image directly to the PDF below the text.
+		pdf.addImage(imgData, 'PNG', 30, yPos, contentWidth, imgHeight);
+		return yPos + imgHeight + 20;
+	};
         // Add the distribution charts.
-        yPos = await addChartDirectly(state.peakPeriodChart, 'Daily Peak Period Load Distribution');
-        yPos = await addChartDirectly(state.maxHourlyChart, 'Daily Maximum Hourly Load Distribution');
+        const peakDesc = `This chart shows how frequently you have high-demand evenings. It groups the days from your historical data based on the total amount of electricity <b>(in kWh)</b> you consumed during the 'peak' hours (as defined by your first selected provider's tariff, or 3pm-11pm if the tariff does not specify a peak period). This visualization is the primary data used to recommend your ideal <b>battery capacity (kWh)</b>, ensuring it's large enough to store the energy you need for your typical peak periods.`;
+        yPos = await addChartDirectly(state.peakPeriodChart, 'Daily Peak Period Load Distribution', peakDesc);
+
+        const maxHourlyDesc = `This chart shows the peak power you demand from your system. For each day in your history, it finds the single hour where you drew the most power <b>(in kW)</b> from the grid or battery after your solar panels were used first. This reveals your typical peak power needs and is used to recommend the appropriate <b>inverter size (kW)</b>, ensuring it's powerful enough to handle your highest-demand moments.`;
+        yPos = await addChartDirectly(state.maxHourlyChart, 'Daily Maximum Hourly Load Distribution', maxHourlyDesc);
     }
 
     // Appendix D: Provider Simulation Averages

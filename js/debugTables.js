@@ -1,5 +1,5 @@
 // js/debugTables.js
-// Version 1.1.2
+// Version 1.1.4
 // This module contains all functions related to rendering the "Debug Tables".
 // These tables provide transparency into the calculator's inputs, intermediate calculations,
 // and simulation results, aiding in validation and troubleshooting.
@@ -31,7 +31,8 @@
 import { 
 	getNumericInput, 
 	displayError, 
-	clearError 
+	clearError,
+	formatHoursToRanges	
 } from './utils.js';
 import { 
 	generateHourlyConsumptionProfileFromDailyTOU, 
@@ -316,22 +317,22 @@ export function renderNewSystemDebugTable(state, shouldShow = true) {
 }
 
 /**
- * Renders the "Providers Debug Table" which shows household consumption averages
- * and simulated battery performance (grid charging, SOC) for each selected provider.
+ * Renders the "Providers Debug Table" which shows two key pieces of information:
+ * 1. The household's total quarterly consumption averages, broken down by the tariff periods
+ * (Peak, Shoulder, Off-Peak) determined by the analysis.
+ * 2. The simulated battery performance (average grid charging and morning SOC) for each
+ * selected provider, based on their specific tariffs and grid charging rules.
  * @param {object} state - The global application state.
  * @param {boolean} [shouldShow=true] - Whether to display the container after rendering.
  */
 export function renderProvidersDebugTable(state, shouldShow = true) {
+    // Abort if the user hasn't enabled the debug tools.
     if (shouldShow && !document.getElementById("debugToggle")?.checked) return;
     
     const debugContainer = document.getElementById("providersDebugTableContainer");
     let tableHTML = "<h3>Provider & Tariff Inputs</h3>";
-	    tableHTML += `
-      <p class="pdf-export-note" style="font-size: 0.9em; font-style: italic; border: 1px solid #f0ad4e; padding: 10px; border-radius: 5px; background-color: #fcf8e3;">
-        <strong>Important Note:</strong> The daily averages in this table are calculated from <strong>isolated daily simulations</strong> and are for diagnostic purposes. They may differ from the final "System Performance" results, which use a more realistic, <strong>continuous simulation</strong> where the battery's state of charge carries over from one day to the next.
-      </p>
-    `;
-    // This table's calculations require CSV data.
+
+    // This table's calculations are only meaningful in CSV mode.
     const useManual = document.getElementById("manualInputToggle")?.checked;
     if (!useManual && (!state.electricityData || state.electricityData.length === 0)) {
         displayError("This debug table requires uploaded CSV data to calculate seasonal averages.", "provider-selection-error");
@@ -339,37 +340,70 @@ export function renderProvidersDebugTable(state, shouldShow = true) {
     }
     clearError("provider-selection-error");
     
+    // The analysis must be run at least once to generate the config.
     const config = state.analysisConfig;
     if (!config) return;
 
-    // First, display the quarterly consumption averages for the household.
+    // --- Part 1: Render the Household Consumption Quarterly Averages Table ---
 	if (state.quarterlyAverages) {
+        // Retrieve the Time-of-Use hours that were determined during the main analysis.
+        const touHours = state.touHoursForAnalysis || { peak: [], shoulder: [] };
+        
+        // Calculate the off-peak hours by finding all hours not in peak or shoulder.
+        const allHours = new Set(Array.from({ length: 24 }, (_, i) => i));
+        touHours.peak.forEach(h => allHours.delete(h));
+        touHours.shoulder.forEach(h => allHours.delete(h));
+        const offPeakHours = Array.from(allHours);
+
+        // Format the hour arrays into human-readable strings (e.g., "3pm-11pm").
+        const peakStr = formatHoursToRanges(touHours.peak);
+        const shoulderStr = formatHoursToRanges(touHours.shoulder);
+        const offPeakStr = formatHoursToRanges(offPeakHours);
+
+        // Add a note explaining where the tariff periods come from.
+        tableHTML += `
+        <p class="pdf-export-note" style="font-size: 0.9em; font-style: italic; border: 1px solid #f0ad4e; padding: 10px; border-radius: 5px; background-color: #fcf8e3;">
+        <strong>Important Note:</strong> The daily averages in this table are calculated from <strong>isolated daily simulations</strong> and are for diagnostic purposes. They may differ from the final "System Performance" results, which use a more realistic, <strong>continuous simulation</strong> where the battery's state of charge carries over from one day to the next.
+        </p>
+		`;
+		tableHTML += `
+            <p style="font-size: 0.85em; font-style: italic; color: #666; margin-top: 2px;">
+                Note: The periods below are based on the tariff rules of the first provider. If no TOU rules are found, defaults are used.
+            </p>
+        `;
+
+        // Build the table header.
 		tableHTML += `<table><thead><tr><th colspan="2" class="provider-header-cell"><strong>Total Household Consumption Quarterly Averages (Daily)</strong></th></tr></thead><tbody>`;
-		for (const quarter in state.quarterlyAverages) {
+		
+        // Create a row for each period in each quarter, displaying the calculated hours.
+        for (const quarter in state.quarterlyAverages) {
 			const q = state.quarterlyAverages[quarter];
-			tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Peak</td><td>${(q.avgPeak).toFixed(2)} kWh</td></tr>`;
-			tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Shoulder</td><td>${(q.avgShoulder).toFixed(2)} kWh</td></tr>`;
-			tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Off-Peak</td><td>${(q.avgOffPeak).toFixed(2)} kWh</td></tr>`;
+			tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Peak <span class="hour-display">(${peakStr})</span></td><td>${(q.avgPeak).toFixed(2)} kWh</td></tr>`;
+			tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Shoulder <span class="hour-display">(${shoulderStr})</span></td><td>${(q.avgShoulder).toFixed(2)} kWh</td></tr>`;
+			tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Off-Peak <span class="hour-display">(${offPeakStr})</span></td><td>${(q.avgOffPeak).toFixed(2)} kWh</td></tr>`;
 			tableHTML += `<tr><td>${quarter.replace(/_/g, ' ')} Avg Solar</td><td>${(q.avgSolar).toFixed(2)} kWh</td></tr>`;
 		}
 		tableHTML += `</tbody></table>`;
 	}
 
-    // Then, for each provider, show how the battery is expected to behave under their tariff.
+    // --- Part 2: Render the Provider-Specific Simulation Averages ---
     config.selectedProviders.forEach(pKey => {
         const providerConfig = config.providers.find(p => p.id === pKey);
         if (!providerConfig) return;
         tableHTML += `<h4 style="margin-top:20px;">${providerConfig.name}</h4>`;
+
         if (!useManual) {
-            // Configure the full battery system for the simulation.
+            // Assemble the full battery configuration for the simulation.
             const batteryConfig = {
                 capacity: (config.replaceExistingSystem ? 0 : config.existingBattery) + config.newBatteryKWH,
                 inverterKW: (config.replaceExistingSystem ? 0 : config.existingBatteryInverter) + config.newBatteryInverterKW,
                 gridChargeThreshold: config.gridChargeThreshold,
                 socChargeTrigger: config.socChargeTrigger
             };
-            // Run the simulation to get seasonal battery stats.
+            // Run a separate simulation to get diagnostic averages for this provider.
             const seasonalAverages = calculateSeasonalAverages(providerConfig, batteryConfig, state);
+            
+            // Build the results table for this provider.
             tableHTML += `<table><thead><tr><th>Season</th><th>Avg Daily Grid Charge (kWh)</th><th>Avg SOC at 6am (%)</th></tr></thead><tbody>`;
             for (const season in seasonalAverages) {
                 const data = seasonalAverages[season];
@@ -381,8 +415,10 @@ export function renderProvidersDebugTable(state, shouldShow = true) {
         }
     });
 
+    // Finally, inject the generated HTML into the page.
     if (debugContainer) debugContainer.innerHTML = tableHTML;
     
+    // If this function was called by a button click, show the container.
     if (shouldShow) {
         hideAllDebugContainers();
         if (debugContainer) debugContainer.style.display = "block";

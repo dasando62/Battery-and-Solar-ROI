@@ -1,5 +1,5 @@
 // js/analysis.js
-// Version 1.1.2
+// Version 1.1.4
 // This is the core of the ROI calculator. It contains the simulation engine,
 // financial calculation functions (IRR, NPV), and system sizing algorithms.
 
@@ -749,10 +749,16 @@ export function calculateDetailedSizing(correctedElectricityData, solarData, con
 
     // Determine the peak hours from the baseline provider's tariff.
     const baselineProvider = config.providers.find(p => p.id === config.selectedProviders[0]);
-    let peakHours = [];
+    let peakHours;
     if (baselineProvider) {
         const peakRule = (baselineProvider.importRules || []).find(r => r.name.toLowerCase().includes('peak'));
         peakHours = parseRangesToHours(peakRule?.hours || '');
+    }
+	
+	// If, after checking the provider, no peak hours were found, apply a sensible default.
+    if (!peakHours || peakHours.length === 0) {
+        console.log("No 'Peak' rule found in the baseline provider. Applying default peak hours (3pm-11pm) for sizing analysis.");
+        peakHours = parseRangesToHours('3pm-11pm');
     }
 
     const totalSolarKW = config.replaceExistingSystem ? config.newSolarKW : config.existingSolarKW + config.newSolarKW;

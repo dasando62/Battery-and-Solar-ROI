@@ -227,3 +227,10 @@ body.pdf-export-mode #pdf-report-generator {
     width: 1000px; /* Give it a consistent width for rendering */
     margin: 0 auto;
 }
+
+.hour-display {
+    font-weight: normal;
+    font-style: italic;
+    font-size: 0.9em;
+    color: #555;
+}

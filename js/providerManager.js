@@ -1,5 +1,5 @@
 // js/providerManager.js
-//Version 1.1.2
+//Version 1.1.4
 // This module manages all CRUD (Create, Read, Update, Delete) operations
 // for electricity provider configurations. It uses the browser's localStorage
 // for persistence, allowing provider data to be saved between sessions.
@@ -39,6 +39,9 @@ const defaultProviders = [
         id: "Origin",
         name: "Origin Energy",
 		isExpanded: true,
+		notes: '',
+		noteHeight: '',
+		noteWidth: '',
         dailyCharge: 1.1605,
         rebate: 0,
         monthlyFee: 0,
@@ -60,6 +63,9 @@ const defaultProviders = [
         id: "GloBird",
         name: "GloBird",
 		isExpanded: true,
+		notes: '',
+		noteHeight: '',
+		noteWidth: '',
         dailyCharge: 1.364,
         rebate: 1500,
         zeroHeroCredit: -1.00,
@@ -112,6 +118,9 @@ const defaultProviders = [
         id: "Amber",
         name: "Amber",
 		isExpanded: true,
+		notes: '',
+		noteHeight: '',
+		noteWidth: '',
         dailyCharge: 1.091,
         monthlyFee: 25,
         rebate: 1500,
@@ -130,6 +139,9 @@ const defaultProviders = [
         id: "AGL",
         name: "AGL Energy",
 		isExpanded: true,
+		notes: '',
+		noteHeight: '',
+		noteWidth: '',
         dailyCharge: 1.2,
         rebate: 0,
         monthlyFee: 0,
