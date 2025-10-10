@@ -1,5 +1,5 @@
 // js/state.js
-//Version 1.1.2
+//Version 1.1.4
 // This file defines and exports a central, global `state` object.
 // This object acts as a single source of truth for shared application data,
 // making it accessible across different modules without passing it as a function parameter everywhere.
@@ -35,6 +35,8 @@ export const state = {
   solarData: null,
   // Caches the calculated quarterly averages from the CSV data.
   quarterlyAverages: null,
+  // Holds the hour ranges for TOU for the Total Household Consumption Quarterly Averages (Daily) table 
+  touHoursForAnalysis: null, 
   // Holds the instance of the main Chart.js savings chart for exporting.
   savingsChart: null,
   // Holds the instance of the peak period distribution chart for exporting.

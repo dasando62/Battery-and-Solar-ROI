@@ -1,5 +1,5 @@
 // js/dataParser.js 
-// Version 1.1.2
+// Version 1.1.4
 // This module is responsible for handling file uploads and parsing CSV data.
 // It reads electricity usage and solar generation files, processes them into a
 // standardized hourly format, and stores the results in the global state.
@@ -32,6 +32,82 @@ import { state } from './state.js';
 import { displayError, parseDateString } from './utils.js';
 import { toggleExistingSolar } from './uiEvents.js';
 import { generateHourlySolarProfileFromDaily } from './profiles.js';
+
+/**
+ * Parses a NEM12 format CSV file and transforms it into the hourly format
+ * required by the calculator. This version is corrected to only process
+ * relevant grid import (E1) and grid export (B1) data streams.
+ * @param {string} csvText - The raw text content of the NEM12 file.
+ * @returns {Array<object>} An array of day objects in the application's internal format.
+ */
+function parseNEM12(csvText) {
+    const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
+    const dailyData = new Map();
+
+    // Use these variables to track the state as we parse through the file
+    let currentIntervalLength = null;
+    let currentDataType = null; // e.g., 'E1' for consumption, 'B1' for feed-in
+
+    for (const line of lines) {
+        // NEM12 files can be comma or tab-separated. Handle both.
+        const parts = line.includes('\t') ? line.split('\t') : line.split(',');
+
+        // Process a 200 record to understand the data that follows
+        if (parts[0] === '200') {
+            currentDataType = parts[4]; // The 'Suffix' field, e.g., E1, B1
+            currentIntervalLength = parseInt(parts[8], 10);
+            // We only care about grid import (E1) and grid export (B1).
+            // Ignore other streams like gross generation, as that comes from the solar file.
+            if (currentDataType !== 'E1' && currentDataType !== 'B1') {
+                currentIntervalLength = null; // Invalidate to skip subsequent 300 records for this stream
+            }
+        }
+
+        // Process a 300 record, but only if its stream is relevant (E1 or B1)
+        if (parts[0] === '300' && currentIntervalLength) {
+            const dateStr = parts[1]; // YYYYMMDD format
+            if (dateStr.length !== 8) continue;
+            
+            const year = dateStr.substring(0, 4);
+            const month = dateStr.substring(4, 6);
+            const day = dateStr.substring(6, 8);
+            const date = `${year}-${month}-${day}`;
+
+            const intervalsInHour = 60 / currentIntervalLength;
+            const numIntervalsPerDay = 24 * intervalsInHour;
+            const values = parts.slice(2, 2 + numIntervalsPerDay).map(v => parseFloat(v) || 0);
+
+            // Ensure we have a data structure for this date
+            if (!dailyData.has(date)) {
+                dailyData.set(date, {
+                    date: date,
+                    consumption: Array(24).fill(0),
+                    feedIn: Array(24).fill(0)
+                });
+            }
+            const dayRecord = dailyData.get(date);
+
+            // Aggregate interval data into 24 hourly buckets
+            for (let hour = 0; hour < 24; hour++) {
+                const startInterval = hour * intervalsInHour;
+                const endInterval = startInterval + intervalsInHour;
+                const hourSlice = values.slice(startInterval, endInterval);
+                const hourTotal = hourSlice.reduce((sum, val) => sum + val, 0);
+
+                // Assign the hourly total to the correct array based on the stream type
+                if (currentDataType === 'E1') { // E1 = Grid Consumption (Import)
+                    dayRecord.consumption[hour] += hourTotal;
+                } else if (currentDataType === 'B1') { // B1 = Grid Feed-in (Export)
+                    dayRecord.feedIn[hour] += hourTotal;
+                }
+            }
+        }
+    }
+    // Return the data in the application's standard internal format
+    return Array.from(dailyData.values()).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+
 
 /**
  * A generic CSV parser that converts a CSV string into an array of objects.
@@ -80,64 +156,68 @@ function findValueInRow(row, possibleHeaders) {
  */
 export function handleUsageCsv(event) {
     const file = event.target.files[0];
-    if (!file) return;
+    const statusEl = document.getElementById('usageCounts');
+    const fileNameEl = document.getElementById('usageFileName');
+
+    if (!file) {
+        if (fileNameEl) fileNameEl.textContent = 'No file chosen';
+        if (statusEl) statusEl.textContent = '';
+        return;
+    }
+
+    if (fileNameEl) fileNameEl.textContent = file.name;
+    if (statusEl) statusEl.textContent = 'Processing...';
+
     const reader = new FileReader();
     reader.onload = (e) => {
         try {
-            const csvData = parseCSV(e.target.result);
-            // Use a Map to aggregate data by date, which is more efficient than searching an array.
-            const dailyData = new Map();
+            const isNem12 = document.getElementById('formatNem12').checked;
+            let parsedData;
 
-            // Read all advanced CSV parsing options from the UI.
-            const dateTimeHeader = document.getElementById('elecDateTimeHeader').value;
-            const dateFormat = document.getElementById('elecDateFormat').value;
-            const typeHeader = document.getElementById('usageTypeHeader').value;
-            const consumptionHeaders = document.getElementById('consumptionHeader').value.split(',').map(h => h.trim());
-            const importIdentifier = document.getElementById('importIdentifier').value;
-            const exportIdentifier = document.getElementById('exportIdentifier').value;
-
-            for (const row of csvData) {
-                const dateTimeString = row[dateTimeHeader];
-                const dateTime = parseDateString(dateTimeString, dateFormat);
-                if (!dateTime || isNaN(dateTime.getTime())) continue; // Skip rows with invalid dates.
-
-                const date = dateTime.toISOString().split('T')[0]; // Standardize date format to 'YYYY-MM-DD'.
-                const hour = dateTime.getUTCHours();
-                
-                // If this is the first entry for this date, initialize its data structure.
-                if (!dailyData.has(date)) {
-                    dailyData.set(date, {
-                        date: date,
-                        consumption: Array(24).fill(0), // Grid imports
-                        feedIn: Array(24).fill(0)       // Grid exports
-                    });
-                }
-                const day = dailyData.get(date);
-                
-                const valueString = findValueInRow(row, consumptionHeaders);
-                const value = parseFloat(valueString);
-
-                if (!isNaN(value)) {
-                    const type = row[typeHeader];
-                    // Categorize the value as either import or export based on the identifier.
-                    if (type === importIdentifier) {
-                        day.consumption[hour] += value;
-                    } else if (type === exportIdentifier) {
-                        day.feedIn[hour] += value;
+            if (isNem12) {
+                // --- USE THE NEW NEM12 PARSER ---
+                parsedData = parseNEM12(e.target.result);
+            } else {
+                // --- USE THE EXISTING ADVANCED CSV PARSER ---
+                const csvData = parseCSV(e.target.result);
+                const dailyData = new Map();
+                const dateTimeHeader = document.getElementById('elecDateTimeHeader').value;
+                const dateFormat = document.getElementById('elecDateFormat').value;
+                const typeHeader = document.getElementById('usageTypeHeader').value;
+                const consumptionHeaders = document.getElementById('consumptionHeader').value.split(',').map(h => h.trim());
+                const importIdentifier = document.getElementById('importIdentifier').value;
+                const exportIdentifier = document.getElementById('exportIdentifier').value;
+                for (const row of csvData) {
+                    const dateTimeString = row[dateTimeHeader];
+                    const dateTime = parseDateString(dateTimeString, dateFormat);
+                    if (!dateTime || isNaN(dateTime.getTime())) continue;
+                    const date = dateTime.toISOString().split('T')[0];
+                    const hour = dateTime.getUTCHours();
+                    if (!dailyData.has(date)) {
+                        dailyData.set(date, { date: date, consumption: Array(24).fill(0), feedIn: Array(24).fill(0) });
+                    }
+                    const day = dailyData.get(date);
+                    const valueString = findValueInRow(row, consumptionHeaders);
+                    const value = parseFloat(valueString);
+                    if (!isNaN(value)) {
+                        const type = row[typeHeader];
+                        if (type === importIdentifier) { day.consumption[hour] += value; } 
+                        else if (type === exportIdentifier) { day.feedIn[hour] += value; }
                     }
                 }
+                parsedData = Array.from(dailyData.values()).sort((a, b) => a.date.localeCompare(b.date));
             }
 
-            // Convert the Map values to an array, sort by date, and store in the global state.
-            state.electricityData = Array.from(dailyData.values()).sort((a, b) => a.date.localeCompare(b.date));
-            document.getElementById('usageCounts').textContent = `${state.electricityData.length} days of usage data loaded.`;
-            
-            // Update UI elements that depend on usage data being present.
+            state.electricityData = parsedData;
+            if(statusEl) statusEl.textContent = `${state.electricityData.length} days of usage data loaded.`;
             toggleExistingSolar();
 
         } catch (err) {
-            displayError('Failed to process electricity CSV. Please check the file format and advanced options.', 'data-input-error');
+            if(statusEl) statusEl.textContent = 'Failed to process electricity CSV.';
+            displayError('Please check the file format and advanced options.', 'data-input-error');
             console.error(err);
+        } finally {
+            event.target.value = null;
         }
     };
     reader.readAsText(file);
@@ -148,72 +228,99 @@ export function handleUsageCsv(event) {
  * @param {Event} event - The file input change event.
  */
 export function handleSolarCsv(event) {
+    // Get the selected file from the input event.
     const file = event.target.files[0];
-    if (!file) return;
+    // Get the UI elements for displaying status and filename.
+    const statusEl = document.getElementById('solarCounts');
+    const fileNameEl = document.getElementById('solarFileName');
+
+    // If the user cancels the file dialog, reset the UI.
+    if (!file) {
+        if (fileNameEl) fileNameEl.textContent = 'No file chosen';
+        if (statusEl) statusEl.textContent = '';
+        return;
+    }
+
+    // 1. Immediately display the selected filename in the designated span.
+    if (fileNameEl) fileNameEl.textContent = file.name;
+    // 2. Show a "Processing..." message to the user.
+    if (statusEl) statusEl.textContent = 'Processing...';
+
+    // Initialize FileReader to read the file content.
     const reader = new FileReader();
     reader.onload = (e) => {
         try {
+            // Parse the raw CSV text into an array of objects.
             const csvData = parseCSV(e.target.result);
+            // Use a Map to efficiently aggregate data by date.
             const dailyData = new Map();
 
-            // Read solar CSV parsing options from the UI.
+            // Read all advanced CSV parsing options from the UI.
             const dateTimeHeader = document.getElementById('solarDateTimeHeader').value;
             const dateFormat = document.getElementById('solarDateFormat').value;
             const generationHeaders = document.getElementById('solarGenerationHeader').value.split(',').map(h => h.trim());
 
+            // Iterate through each row of the parsed CSV data.
             for (const row of csvData) {
                 const dateTimeString = row[dateTimeHeader];
                 const dateTime = parseDateString(dateTimeString, dateFormat);
+                // Skip rows with invalid or unparsable dates.
                 if (!dateTime || isNaN(dateTime.getTime())) continue;
-                
+
+                // Standardize date and get the hour for aggregation.
                 const date = dateTime.toISOString().split('T')[0];
                 const hour = dateTime.getUTCHours();
 
+                // If this is the first entry for a date, initialize its data structure.
                 if (!dailyData.has(date)) {
-                    dailyData.set(date, {
-                        date: date,
-                        hourly: Array(24).fill(0),
-                        rowCount: 0 // Counter to detect daily total entries vs. hourly entries.
-                    });
+                    dailyData.set(date, { date: date, hourly: Array(24).fill(0), rowCount: 0 });
                 }
                 const day = dailyData.get(date);
-                
+
+                // Find and parse the energy value, checking multiple possible headers.
                 const valueString = findValueInRow(row, generationHeaders);
                 const value = parseFloat(valueString);
-
+                
+                // Add the value to the hourly array for that day.
                 if (!isNaN(value)) {
                     day.hourly[hour] += value;
-                    day.rowCount++; // Increment counter for each valid value found for a day.
+                    day.rowCount++;
                 }
             }
-            
-            // --- Post-processing step: Distribute daily totals ---
-            // Some solar monitoring systems export a single daily total at midnight.
-            // This logic detects that pattern and distributes the total across a realistic solar curve.
+
+            // Post-processing step: Check for and distribute daily total entries.
+            // Some systems export a single daily total at midnight instead of hourly data.
             for (const day of dailyData.values()) {
-                // If a day has only one data row and all the energy is at midnight...
                 const totalForDay = day.hourly.reduce((a,b) => a + b, 0);
-				// Condition: exactly one row for the day, and all energy is in the first hour (00:00).
+                // If a day has only one data row and all the energy is at midnight...
                 if (day.rowCount === 1 && day.hourly[0] === totalForDay && totalForDay > 0) {
                     const month = parseInt(day.date.split('-')[1], 10);
                     const season = [12,1,2].includes(month) ? 'Q1_Summer' : [3,4,5].includes(month) ? 'Q2_Autumn' : [6,7,8].includes(month) ? 'Q3_Winter' : 'Q4_Spring';
-                    
-                    // ...replace the hourly data with a realistic solar curve.
+                    // ...replace the hourly data with a realistic solar curve for that season.
                     day.hourly = generateHourlySolarProfileFromDaily(totalForDay, season);
                 }
-            }			
-
-            // Store the processed and sorted data in the global state.
+            }
+            // Convert the Map to an array, sort by date, and store in the global state.
             state.solarData = Array.from(dailyData.values()).sort((a, b) => a.date.localeCompare(b.date));
-            document.getElementById('solarCounts').textContent = `${state.solarData.length} days of solar data loaded.`;
+            
+            // 3. Update the status message with the successful result.
+            if(statusEl) statusEl.textContent = `${state.solarData.length} days of solar data loaded.`;
 
         } catch (err) {
-            displayError('Failed to process solar CSV. Please check the file format and advanced options.', 'data-input-error');
+            // If an error occurs, update the status and log the error.
+            if(statusEl) statusEl.textContent = 'Failed to process solar CSV.';
+            displayError('Please check the file format and advanced options.', 'data-input-error');
             console.error(err);
+        } finally {
+            // 4. Reset the hidden input's value. This is crucial to allow
+            // the user to re-upload the same file again, triggering the 'change' event.
+            event.target.value = null;
         }
     };
+    // Start reading the file as text.
     reader.readAsText(file);
-}
+} 
+ 
 
 /**
  * Calculates average daily consumption and solar generation for each quarter/season

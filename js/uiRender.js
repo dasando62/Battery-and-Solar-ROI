@@ -1,5 +1,5 @@
 // js/uiRender.js
-// Version 1.1.2
+// Version 1.1.4
 // This module is responsible for all UI rendering that occurs AFTER a calculation
 // or analysis is complete. This includes displaying financial results tables,
 // rendering charts, and showing system sizing recommendations.
@@ -29,6 +29,7 @@
  */
 
 import { state } from './state.js';
+import { formatHoursToRanges } from './utils.js';
 
 /**
  * Renders or updates the two distribution histogram charts in the sizing recommendation section.
@@ -106,90 +107,113 @@ export function drawDistributionCharts(distributions, state) {
 }
 
 /**
- * A helper function to build the HTML for the raw data tables shown in the results section.
- * These tables summarize the year 1 performance, broken down by season.
- * @param {object} data - The raw seasonal data to display.
+ * A helper function that builds the HTML for a single raw data table. It dynamically
+ * adjusts its columns based on whether the provider has a flat-rate import tariff
+ * and/or a tiered export tariff.
+ * @param {object} data - The raw seasonal data for a single simulation.
+ * @param {boolean} [isFlatRate=false] - A flag indicating a flat-rate import tariff.
+ * @param {boolean} [hasTieredExport=false] - A flag indicating a tiered export tariff.
  * @returns {string} The complete HTML string for the table.
  */
-function buildRawDataTable(data) {
-    let tableHTML = `<table class="raw-data-table">
-        <thead>
-            <tr>
-                <th>Period</th>
-                <th>Days</th>
-                <th>Peak (kWh)</th>
-                <th>Shoulder (kWh)</th>
-                <th>Off-Peak (kWh)</th>
-                <th>Grid Charge (kWh)</th>
-                <th>Export Tier 1 (kWh)</th>
-                <th>Export Tier 2 (kWh)</th>
-            </tr>
-        </thead>
-        <tbody>`;
+function buildRawDataTable(data, isFlatRate = false, hasTieredExport = false) {
+    let tableHTML = `<table class="raw-data-table"><thead><tr>`;
     
-    // Aggregate totals for the annual summary row.
-    let totalDays = 0, totalPeakKWh = 0, totalShoulderKWh = 0, totalOffPeakKWh = 0;
-    let totalGridChargeKWh = 0, totalTier1ExportKWh = 0, totalTier2ExportKWh = 0;
-
-    // Create a row for each season.
+    // --- Dynamically Build Headers ---
+    tableHTML += `<th>Period</th><th>Days</th>`;
+    if (isFlatRate) {
+        tableHTML += `<th>Grid Import (kWh)</th>`;
+    } else {
+        tableHTML += `<th>Peak (kWh)</th><th>Shoulder (kWh)</th><th>Off-Peak (kWh)</th>`;
+    }
+    tableHTML += `<th>Grid Charge (kWh)</th>`;
+    if (hasTieredExport) {
+        tableHTML += `<th>Export Tier 1 (kWh)</th><th>Export Tier 2 (kWh)</th>`;
+    } else {
+        tableHTML += `<th>Grid Export (kWh)</th>`;
+    }
+    tableHTML += `</tr></thead><tbody>`;
+    
+    // --- Dynamically Build Body Rows ---
+    // Initialize totals for the summary row.
+    let totals = { days: 0, peak: 0, shoulder: 0, offPeak: 0, gridCharge: 0, tier1: 0, tier2: 0 };
+    
     for (const seasonName in data) {
         const seasonData = data[seasonName];
         if (seasonData && seasonData.days > 0) {
-            totalDays += seasonData.days || 0;
-            totalPeakKWh += seasonData.peakKWh || 0;
-            totalShoulderKWh += seasonData.shoulderKWh || 0;
-            totalOffPeakKWh += seasonData.offPeakKWh || 0;
-            totalGridChargeKWh += seasonData.gridChargeKWh || 0;
-            totalTier1ExportKWh += seasonData.tier1ExportKWh || 0;
-            totalTier2ExportKWh += seasonData.tier2ExportKWh || 0;
-
-            tableHTML += `
-                <tr>
-                    <td>${seasonName}</td>
-                    <td>${seasonData.days}</td>
-                    <td>${(seasonData.peakKWh || 0).toFixed(2)}</td>
-                    <td>${(seasonData.shoulderKWh || 0).toFixed(2)}</td>
-                    <td>${(seasonData.offPeakKWh || 0).toFixed(2)}</td>
-                    <td>${(seasonData.gridChargeKWh || 0).toFixed(2)}</td>
-                    <td>${(seasonData.tier1ExportKWh || 0).toFixed(2)}</td>
-                    <td>${(seasonData.tier2ExportKWh || 0).toFixed(2)}</td>
-                </tr>`;
+            // Aggregate totals for the annual summary.
+            totals.days += seasonData.days || 0;
+            totals.peak += seasonData.peakKWh || 0;
+            totals.shoulder += seasonData.shoulderKWh || 0;
+            totals.offPeak += seasonData.offPeakKWh || 0;
+            totals.gridCharge += seasonData.gridChargeKWh || 0;
+            totals.tier1 += seasonData.tier1ExportKWh || 0;
+            totals.tier2 += seasonData.tier2ExportKWh || 0;
+            
+            // Build the table row for the season.
+            tableHTML += `<tr><td>${seasonName}</td><td>${seasonData.days}</td>`;
+            if (isFlatRate) {
+                const totalImport = (seasonData.peakKWh || 0) + (seasonData.shoulderKWh || 0) + (seasonData.offPeakKWh || 0);
+                tableHTML += `<td>${totalImport.toFixed(2)}</td>`;
+            } else {
+                tableHTML += `<td>${(seasonData.peakKWh || 0).toFixed(2)}</td><td>${(seasonData.shoulderKWh || 0).toFixed(2)}</td><td>${(seasonData.offPeakKWh || 0).toFixed(2)}</td>`;
+            }
+            tableHTML += `<td>${(seasonData.gridChargeKWh || 0).toFixed(2)}</td>`;
+            if (hasTieredExport) {
+                tableHTML += `<td>${(seasonData.tier1ExportKWh || 0).toFixed(2)}</td><td>${(seasonData.tier2ExportKWh || 0).toFixed(2)}</td>`;
+            } else {
+                const totalExport = (seasonData.tier1ExportKWh || 0) + (seasonData.tier2ExportKWh || 0);
+                tableHTML += `<td>${totalExport.toFixed(2)}</td>`;
+            }
+            tableHTML += `</tr>`;
         }
     }
 
-    // Add the final "Annual Total" row.
-    tableHTML += `
-        <tr class="total-row">
-            <td><strong>Annual Total</strong></td>
-            <td><strong>${totalDays}</strong></td>
-            <td><strong>${totalPeakKWh.toFixed(2)}</strong></td>
-            <td><strong>${totalShoulderKWh.toFixed(2)}</strong></td>
-            <td><strong>${totalOffPeakKWh.toFixed(2)}</strong></td>
-            <td><strong>${totalGridChargeKWh.toFixed(2)}</strong></td>
-            <td><strong>${totalTier1ExportKWh.toFixed(2)}</strong></td>
-            <td><strong>${totalTier2ExportKWh.toFixed(2)}</strong></td>
-        </tr>`;
+    // --- Dynamically Build Total Row ---
+    tableHTML += `<tr class="total-row"><td><strong>Annual Total</strong></td><td><strong>${totals.days}</strong></td>`;
+    if (isFlatRate) {
+        const totalImport = totals.peak + totals.shoulder + totals.offPeak;
+        tableHTML += `<td><strong>${totalImport.toFixed(2)}</strong></td>`;
+    } else {
+        tableHTML += `<td><strong>${totals.peak.toFixed(2)}</strong></td><td><strong>${totals.shoulder.toFixed(2)}</strong></td><td><strong>${totals.offPeak.toFixed(2)}</strong></td>`;
+    }
+    tableHTML += `<td><strong>${totals.gridCharge.toFixed(2)}</strong></td>`;
+    if (hasTieredExport) {
+        tableHTML += `<td><strong>${totals.tier1.toFixed(2)}</strong></td><td><strong>${totals.tier2.toFixed(2)}</strong></td>`;
+    } else {
+        const totalExport = totals.tier1 + totals.tier2;
+        tableHTML += `<td><strong>${totalExport.toFixed(2)}</strong></td>`;
+    }
+    tableHTML += `</tr></tbody></table>`;
 
-    tableHTML += `</tbody></table>`;
     return tableHTML;
 }
 
 /**
- * Renders the results of the system sizing calculation into the UI.
+ * Renders the results of the system sizing calculation into the UI. It builds a
+ * user-friendly HTML summary of the different sizing recommendations (Heuristic,
+ * Detailed, and Blackout protection) and adds the canvas elements for the
+ * distribution charts.
  * @param {object} sizingResults - The complete sizing results object from the analysis module.
- * @param {object} state - The global application state.
+ * @param {object} state - The global application state, used to access config and TOU hours.
  */
 export function renderSizingResults(sizingResults, state) {
+    // Get the container where the recommendations will be displayed.
     const recommendationContainer = document.getElementById('recommendationContainer');
     if (!recommendationContainer) return;
 
+    // Destructure the results object for easier access.
     const { heuristic, detailed, blackout } = sizingResults;
+    // Get the analysis configuration to access user inputs (e.g., for blackout text).
+    const config = state.analysisConfig;
     let recommendationHTML = `<div class="recommendation-section">`;
 
-    // Display the simple heuristic-based recommendation.
+    // --- Block 1: Build the Heuristic Sizing Recommendation ---
     if (heuristic) {
         recommendationHTML += `
-            <h4>Heuristic Sizing (based on ${heuristic.coverageTarget}% annual coverage)</h4>
+            <h4>Heuristic Sizing</h4>
+            
+            <p style="font-size:0.9em; font-style:italic; margin-top:-5px;">This is a general recommendation based on the <strong>Energy Self-Sufficiency</strong> target you set. It aims to size a system that would generate that percentage of your total annual energy consumption.</p>
+
             <p>
                 <strong>Recommended Solar: ${heuristic.solar.toFixed(1)} kW</strong><br>
                 <strong>Recommended Battery: ${heuristic.battery.toFixed(1)} kWh</strong><br>
@@ -197,13 +221,18 @@ export function renderSizingResults(sizingResults, state) {
             </p>`;
     }
 
-    // Display the more advanced, data-driven recommendation.
+    // --- Block 2: Build the Detailed Sizing Recommendation ---
     if (detailed) {
+        // Get the peak hours used for the analysis from the global state and format them for display.
+        const peakHoursString = formatHoursToRanges(state.touHoursForAnalysis?.peak || []);
         recommendationHTML += `<hr>
-            <h4>Detailed Sizing (based on 90th percentile of daily load)</h4>
+            <h4>Detailed Sizing</h4>
+
+            <p style="font-size:0.9em; font-style:italic; margin-top:-5px;">This is an advanced recommendation that analyzes your day-to-day historical usage. It sizes the battery and inverter to handle your typical <strong>high-usage days</strong>, not just your overall average.</p>
+
             <p>
                 <strong>Recommended Battery Capacity: ${detailed.recommendedBatteryKWh} kWh</strong><br>
-                <small><em>This would have fully covered peak period needs on ${detailed.batteryCoverageDays} of ${detailed.totalDays} days.</em></small>
+                <small><em>This recommendation is based on your total consumption during the Peak Period (currently <strong>${peakHoursString}</strong>) and would have covered your needs on ${detailed.batteryCoverageDays} of ${detailed.totalDays} analyzed days.</em></small>
             </p>
             <p>
                 <strong>Recommended Inverter Power: ${detailed.recommendedInverterKW.toFixed(1)} kW</strong><br>
@@ -211,13 +240,17 @@ export function renderSizingResults(sizingResults, state) {
             </p>`;
     }
 
-    // Display the blackout protection sizing add-on, if calculated.
-    if (blackout) {
+    // --- Block 3: Build the Blackout Protection Sizing ---
+    if (blackout && config) {
+        // Get the user's specific blackout settings to make the text dynamic.
+        const duration = config.blackoutDuration;
+        const coverage = config.blackoutCoverage * 100;
         recommendationHTML += `<hr>
             <h4>Blackout Protection Sizing</h4>
             <p>
-                A reserve of <strong>${blackout.requiredReserve.toFixed(2)} kWh</strong> is needed for your specified blackout scenario.
+                A reserve of <strong>${blackout.requiredReserve.toFixed(2)} kWh</strong> is needed to cover you for a <strong>${duration}-hour</strong> blackout, catering for <strong>${coverage}%</strong> of your maximum historical consumption during such a period.
             </p>
+            
             <p>
                 <strong>Total Recommended Practical Size (Savings + Blackout):</strong><br>
                 ${detailed.recommendedBatteryKWh} kWh + ${blackout.requiredReserve.toFixed(2)} kWh = ${blackout.totalCalculatedSize.toFixed(2)} kWh.
@@ -225,15 +258,25 @@ export function renderSizingResults(sizingResults, state) {
             </p>`;
     }
     
+    // Close the main container div.
     recommendationHTML += `</div>`;
+    // Inject the complete HTML string into the recommendation container on the page.
     recommendationContainer.innerHTML = recommendationHTML;
 
-    // Add the canvas elements for the histograms to the DOM.
+    // Finally, add the canvas elements to the DOM, preparing them for the charts to be drawn.
     const newSystemEstimatesTable = document.getElementById("newSystemEstimatesTable");
     if (newSystemEstimatesTable) {
         newSystemEstimatesTable.innerHTML = `
-            <details class="collapsible-histogram" open><summary>📊 Daily Peak Period Load Distribution</summary><canvas id="peakPeriodHistogram"></canvas></details>
-            <details class="collapsible-histogram" open><summary>📊 Daily Maximum Hourly Load Distribution</summary><canvas id="maxHourlyHistogram"></canvas></details>`;
+            <details class="collapsible-histogram" open><summary>📊 Daily Peak Period Load Distribution</summary>
+				<p style="font-size: 0.9em; font-style: italic; margin: 5px 10px; color: #555;">
+				This chart shows how frequently you have high-demand evenings. It groups the days from your historical data based on the total amount of electricity <b>(in kWh)</b> you consumed during the 'peak' hours (as defined by your first selected provider's tariff, or 3pm-11pm if the tariff does not specify a peak period). This visualization is the primary data used to recommend your ideal <b>battery capacity (kWh)</b>, ensuring it's large enough to store the energy you need for your typical peak periods.
+                </p>
+			<canvas id="peakPeriodHistogram"></canvas></details>
+            <details class="collapsible-histogram" open><summary>📊 Daily Maximum Hourly Load Distribution</summary>
+				<p style="font-size: 0.9em; font-style: italic; margin: 5px 10px; color: #555;">
+				This chart shows the peak power you demand from your system. For each day in your history, it finds the single hour where you drew the most power <b>(in kW)</b> from the grid or battery after your solar panels were used first. This reveals your typical peak power needs and is used to recommend the appropriate <b>inverter size (kW)</b>, ensuring it's powerful enough to handle your highest-demand moments.
+                </p>
+			<canvas id="maxHourlyHistogram"></canvas></details>`;
     }
 }
 
@@ -360,9 +403,12 @@ function renderCharts(financials, config) {
 }
 
 /**
- * Renders the raw data tables for Year 1 performance (baseline vs. system).
- * @param {object} rawData - The raw simulation output data.
- * @param {object} config - The configuration object.
+ * Renders the raw data tables for Year 1 performance, creating a separate table
+ * for the baseline and for each selected provider's simulation. It intelligently
+ * determines if a provider has a flat-rate import or a tiered export tariff and
+ * instructs the table-building function to render the appropriate layout.
+ * @param {object} rawData - The raw simulation output data from the analysis.
+ * @param {object} config - The configuration object used for the analysis.
  */
 function renderRawDataTables(rawData, config) {
     const container = document.getElementById('raw-data-tables-container');
@@ -370,27 +416,38 @@ function renderRawDataTables(rawData, config) {
 
     let tablesHTML = '';
 
-    // Render the baseline performance table.
+    // Check the baseline provider's tariff type for both import and export.
     const baselineProviderDetails = config.providers.find(p => p.id === config.selectedProviders[0]);
     if (rawData.baseline?.year1 && baselineProviderDetails) {
+        // Check if there are NO 'tou' import rules.
+        const isBaselineFlatRate = !(baselineProviderDetails.importRules || []).some(r => r.type === 'tou');
+        // Check if there ARE 'tiered' export rules.
+        const baselineHasTieredExport = (baselineProviderDetails.exportRules || []).some(r => r.type === 'tiered');
+        
         tablesHTML += `<h3>Baseline Performance (Year 1)</h3>`;
-        tablesHTML += buildRawDataTable(rawData.baseline.year1);
+        // Pass both flags to the table builder.
+        tablesHTML += buildRawDataTable(rawData.baseline.year1, isBaselineFlatRate, baselineHasTieredExport);
     }
     
-    // Render a performance table for each provider's simulation.
+    // Repeat the checks for each simulated provider.
     Object.keys(rawData.system).forEach(providerId => {
         const providerDetails = config.providers.find(p => p.id === providerId);
         if (!providerDetails) return;
 
         const providerSystemData = rawData.system[providerId];
         if (providerSystemData?.year1) {
+            const isProviderFlatRate = !(providerDetails.importRules || []).some(r => r.type === 'tou');
+            const providerHasTieredExport = (providerDetails.exportRules || []).some(r => r.type === 'tiered');
+            
             tablesHTML += `<h3>${providerDetails.name} - System Performance (Year 1)</h3>`;
-            tablesHTML += buildRawDataTable(providerSystemData.year1);
+            // Pass both flags to the table builder.
+            tablesHTML += buildRawDataTable(providerSystemData.year1, isProviderFlatRate, providerHasTieredExport);
         }
     });
 
     container.innerHTML = tablesHTML;
 }
+
 
 /**
  * The main entry point for rendering all results after an analysis is complete.

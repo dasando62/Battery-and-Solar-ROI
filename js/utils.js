@@ -1,5 +1,5 @@
 // js/utils.js
-// Version 1.1.2
+// Version 1.1.4
 // This file is a collection of small, reusable utility functions used throughout the application.
 // It helps to keep other modules clean and focused on their primary tasks.
 
@@ -256,4 +256,44 @@ export function parseDateString(dateString, format) {
         return date;
     }
     return null;
+}
+
+/**
+ * Converts a 24-hour number into a 12-hour am/pm format string.
+ * @param {number} hour - The hour of the day (0-24).
+ * @returns {string} The formatted time string (e.g., "12am", "3pm").
+ */
+function formatTime(hour) {
+    if (hour === 0 || hour === 24) return '12am';
+    if (hour === 12) return '12pm';
+    if (hour < 12) return `${hour}am`;
+    return `${hour - 12}pm`;
+}
+
+/**
+ * Converts a sorted array of hours into a compact, human-readable range string.
+ * e.g., [7, 8, 9, 15, 16] becomes "7am-10am, 3pm-5pm".
+ * @param {number[]} hours - A sorted array of hours (0-23).
+ * @returns {string} The formatted range string.
+ */
+export function formatHoursToRanges(hours) {
+    if (!hours || hours.length === 0) return 'N/A';
+    
+    const sortedHours = [...hours].sort((a, b) => a - b);
+    const ranges = [];
+    let startOfRange = sortedHours[0];
+    
+    for (let i = 1; i <= sortedHours.length; i++) {
+        // If the next hour is not consecutive or we are at the end of the array
+        if (i === sortedHours.length || sortedHours[i] !== sortedHours[i - 1] + 1) {
+            // The end of a range is the start of the next hour
+            const endOfRange = sortedHours[i - 1] + 1;
+            ranges.push(`${formatTime(startOfRange)}-${formatTime(endOfRange)}`);
+            
+            if (i < sortedHours.length) {
+                startOfRange = sortedHours[i];
+            }
+        }
+    }
+    return ranges.join(', ');
 }

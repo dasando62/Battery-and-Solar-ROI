@@ -1,5 +1,5 @@
 // js/uiDynamic.js
-//Version 1.1.2
+//Version 1.1.4
 // This module is responsible for dynamically generating the HTML for the
 // provider settings section. It reads the provider data from the manager
 // and builds the complex UI with all its nested rules and conditions.
@@ -166,6 +166,14 @@ export function renderProviderSettings() {
             </summary>
             <div class="subsettings">
                 <label>Provider Name: <input type="text" class="provider-input" data-field="name" value="${sanitize(provider.name || '')}"></label>
+                <label>Notes:
+					<textarea class="provider-input" data-field="notes" rows="3" style="height: ${provider.noteHeight || 'auto'}; width: ${provider.noteWidth || 'auto'}" placeholder="e.g., Plan name, quote date, specific conditions...">${sanitize(provider.notes || '')}</textarea>
+                </label>
+
+                <p style="font-size: 0.85em; font-style: italic; color: #666; margin-top: 2px; margin-bottom: 10px;">
+                    Note: Changes are saved temporarily to the browser. To make them permanent, use the main <strong>"Save Current Settings"</strong> button to download an updated file.
+                </p>
+				
                 <label>Daily Charge ($): <input type="number" step="0.001" class="provider-input" data-field="dailyCharge" value="${provider.dailyCharge ?? ''}"></label>
                 <label>Rebate ($): <input type="number" step="0.01" class="provider-input" data-field="rebate" value="${provider.rebate ?? 0}"></label>
                 <label>Monthly Fee ($): <input type="number" step="0.01" class="provider-input" data-field="monthlyFee" value="${provider.monthlyFee ?? 0}"></label>
