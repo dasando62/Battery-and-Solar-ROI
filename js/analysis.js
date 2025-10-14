@@ -1,5 +1,5 @@
 // js/analysis.js
-// Version 1.1.6
+// Version 1.1.7
 // This is the core of the ROI calculator. It contains the simulation engine,
 // financial calculation functions (IRR, NPV), and system sizing algorithms.
 
