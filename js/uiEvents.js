@@ -1,5 +1,5 @@
 // js/uiEvents.js 
-// Version 1.1.6
+// Version 1.1.7
 // This module serves as the central hub for handling all user interactions.
 // It attaches event listeners to UI elements and calls the appropriate business logic
 // from other modules in response to user actions (e.g., clicks, changes).
@@ -155,18 +155,22 @@ export function toggleExistingSolar() {
  */
 export function wireStaticEvents() {
     document.getElementById('noExistingSolar')?.addEventListener('change', toggleExistingSolar);
-    // Toggle between CSV and Manual input sections
+    // Toggles visibility between the CSV and Manual input sections.
     document.getElementById('manualInputToggle')?.addEventListener('change', (e) => {
-        document.getElementById('csvInputSection').style.display = e.target.checked ? 'none' : 'block';
-        document.getElementById('manualInputSection').style.display = e.target.checked ? 'block' : 'none';
-    });
-    // Toggle visibility of all debug-related buttons and containers
-    document.getElementById('debugToggle')?.addEventListener('change', (e) => {
-        const display = e.target.checked ? 'inline-block' : 'none';
-        document.querySelectorAll('.debug-button').forEach(button => button.style.display = display);
-        if (!e.target.checked) { hideAllDebugContainers(); clearError(); }
-    });
+        // Determine if manual mode is now active based on the checkbox state.
+        const isManualMode = e.target.checked;
 
+        // --- Hide or Show the CSV-related sections ---
+        // If in manual mode, hide them ('none'). Otherwise, show them ('block').
+        const csvDisplay = isManualMode ? 'none' : 'block';
+        document.getElementById('csvInputSection').style.display = csvDisplay;
+        document.getElementById('advanced-usage-options').style.display = csvDisplay;
+        document.getElementById('advanced-solar-options').style.display = csvDisplay;
+
+        // --- Show or Hide the Manual Input section ---
+        // This has the opposite logic.
+        document.getElementById('manualInputSection').style.display = isManualMode ? 'block' : 'none';
+    });
     // File input listeners
     document.getElementById("usageCsv")?.addEventListener("change", handleUsageCsv);
     document.getElementById("solarCsv")?.addEventListener("change", handleSolarCsv);
