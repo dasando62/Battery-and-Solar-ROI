@@ -1,5 +1,5 @@
 // js/uiEvents.js 
-// Version 1.1.1
+// Version 1.1.6
 // This module serves as the central hub for handling all user interactions.
 // It attaches event listeners to UI elements and calls the appropriate business logic
 // from other modules in response to user actions (e.g., clicks, changes).
@@ -223,6 +223,26 @@ export function wireStaticEvents() {
     };
     formatNem12Radio?.addEventListener('change', toggleAdvancedOptions);
     formatAdvancedRadio?.addEventListener('change', toggleAdvancedOptions);
+	
+	// --- THE HYBRID INVERTER CHECKBOX LOGIC ---
+    const hybridCheckbox = document.getElementById('isHybridInverter');
+    const existingBatteryInverterInput = document.getElementById('existingBatteryInverter');
+
+    const handleHybridToggle = () => {
+        if (!hybridCheckbox || !existingBatteryInverterInput) return;
+        
+        if (hybridCheckbox.checked) {
+            existingBatteryInverterInput.disabled = true;
+            existingBatteryInverterInput.value = '0'; // Zero out the value for clarity
+        } else {
+            existingBatteryInverterInput.disabled = false;
+        }
+    };
+
+    hybridCheckbox?.addEventListener('change', handleHybridToggle);
+    // Call it once on page load to set the initial state
+    handleHybridToggle();
+    // --- END OF HYBRID INVERTER CHECKBOX LOGIC ---
 }
 
 /**

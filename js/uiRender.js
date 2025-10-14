@@ -1,5 +1,5 @@
 // js/uiRender.js
-// Version 1.1.4
+// Version 1.1.6
 // This module is responsible for all UI rendering that occurs AFTER a calculation
 // or analysis is complete. This includes displaying financial results tables,
 // rendering charts, and showing system sizing recommendations.
@@ -269,7 +269,7 @@ export function renderSizingResults(sizingResults, state) {
         newSystemEstimatesTable.innerHTML = `
             <details class="collapsible-histogram" open><summary>📊 Daily Peak Period Load Distribution</summary>
 				<p style="font-size: 0.9em; font-style: italic; margin: 5px 10px; color: #555;">
-				This chart shows how frequently you have high-demand evenings. It groups the days from your historical data based on the total amount of electricity <b>(in kWh)</b> you consumed during the 'peak' hours (as defined by your first selected provider's tariff, or 3pm-11pm if the tariff does not specify a peak period). This visualization is the primary data used to recommend your ideal <b>battery capacity (kWh)</b>, ensuring it's large enough to store the energy you need for your typical peak periods.
+				This chart shows how frequently you have high-demand evenings. It groups the days from your historical data based on the total amount of electricity <b>(in kWh)</b> you consumed during the 'peak' hours (as defined by your first selected provider's tariff, or 3pm-11pm if the tariff does not specify a peak period). This visualisation is the primary data used to recommend your ideal <b>battery capacity (kWh)</b>, ensuring it's large enough to store the energy you need for your typical peak periods.
                 </p>
 			<canvas id="peakPeriodHistogram"></canvas></details>
             <details class="collapsible-histogram" open><summary>📊 Daily Maximum Hourly Load Distribution</summary>

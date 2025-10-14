@@ -1,5 +1,5 @@
 // js/config.js
-//Version 1.1.4
+//Version 1.1.6
 // This module is responsible for gathering all user-configurable settings from the UI
 // and assembling them into a single configuration object used by the analysis engine.
 
@@ -54,6 +54,8 @@ export function gatherConfigFromUI() {
         
         // --- System Sizing ---
         existingSolarKW: getNumericInput("existingSolarKW"),
+		existingSolarInverterKW: getNumericInput("existingSolarInverter"),
+		isHybridInverter: document.getElementById("isHybridInverter")?.checked,
         existingBattery: getNumericInput("existingBattery"),
         existingBatteryInverter: getNumericInput("existingBatteryInverter"),
         existingSystemAge: getNumericInput("existingSystemAge", 0), // Age for degradation calculation
@@ -61,6 +63,7 @@ export function gatherConfigFromUI() {
         replaceExistingSystem: document.getElementById("replaceExistingSystem")?.checked,
         newBatteryKWH: getNumericInput("newBattery"),
         newBatteryInverterKW: getNumericInput("newBatteryInverter"),
+		isAcCoupled: document.getElementById("isAcCoupled")?.checked, 
         costSolar: getNumericInput("costSolar"),
         costBattery: getNumericInput("costBattery"),
 		
