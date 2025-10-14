@@ -1,5 +1,5 @@
 // js/analysis.js
-// Version 1.1.4
+// Version 1.1.6
 // This is the core of the ROI calculator. It contains the simulation engine,
 // financial calculation functions (IRR, NPV), and system sizing algorithms.
 
@@ -231,65 +231,70 @@ export function simulateDay(hourlyConsumption, hourlySolar, provider, batteryCon
     };
     let currentSOC = initialSOC;
     let gridChargeCost = 0;
-    let socAt6am = 0; // For debug tracking.
+    let socAt6am = 0;
 
-    if (!batteryConfig) { // --- No-battery baseline simulation ---
+    if (!batteryConfig) { // No-battery baseline simulation
         for (let h = 0; h < 24; h++) {
             const consumption = hourlyConsumption[h] || 0;
             const solar = hourlySolar[h] || 0;
-            const net = consumption - solar; // Net energy needed from grid or exported.
+            const net = consumption - solar;
             if (net > 0) {
                 results.hourlyImports[h] = net;
             } else {
                 results.hourlyExports[h] = -net;
             }
         }
-    } else { // --- Battery simulation logic ---
+    } else { // Battery simulation logic
         for (let h = 0; h < 24; h++) {
-            if (h === 6) socAt6am = currentSOC; // Record SOC at 6am.
+            if (h === 6) socAt6am = currentSOC;
             const consumption = hourlyConsumption[h] || 0;
-            const solar = hourlySolar[h] || 0;
+            let solar = hourlySolar[h] || 0;
 
-            // 1. Direct self-consumption: Solar power used directly by the house.
-            const selfConsumption = Math.min(consumption, solar);
-            let net = consumption - selfConsumption; // Remaining consumption to be met.
-            const excessSolar = solar - selfConsumption; // Solar power left over.
-
-            // 2. Charge battery with excess solar.
-            let chargeAmount = 0;
-            if (excessSolar > 0 && currentSOC < batteryConfig.capacity) {
-                chargeAmount = Math.min(excessSolar, batteryConfig.inverterKW, batteryConfig.capacity - currentSOC);
-                currentSOC += chargeAmount;
-            }
-            // Any solar left after charging is exported to the grid.
-            results.hourlyExports[h] = excessSolar - chargeAmount;
-
-            // 3. Discharge battery to meet remaining consumption.
-            if (net > 0 && currentSOC > 0) {
-                const dischargeAmount = Math.min(net, batteryConfig.inverterKW, currentSOC);
-                currentSOC -= dischargeAmount;
-                net -= dischargeAmount;
-            }
-
-            // 4. Any remaining consumption is imported from the grid.
-            results.hourlyImports[h] = net;
+            // 1. Prioritize self-consumption and battery charging from solar.
+            const solarToConsumption = Math.min(consumption, solar);
+            let remainingConsumption = consumption - solarToConsumption;
+            let excessSolar = solar - solarToConsumption;
             
-            // 5. Grid Charging Logic (during specified off-peak hours).
+            let solarToBattery = 0;
+            if (excessSolar > 0 && currentSOC < batteryConfig.capacity) {
+                solarToBattery = Math.min(excessSolar, batteryConfig.capacity - currentSOC);
+                currentSOC += solarToBattery;
+                excessSolar -= solarToBattery;
+            }
+
+            // 2. Determine the total available power from the inverter(s) for this hour.
+            const inverterLimit = batteryConfig.inverterKW;
+            
+            // 3. Determine how much power the battery can discharge.
+            // This is limited by remaining consumption, the battery's state of charge, AND the inverter's remaining capacity.
+            const inverterHeadroomForBattery = inverterLimit - solarToConsumption;
+            const batteryDischargeLimit = Math.max(0, inverterHeadroomForBattery);
+            const batteryToConsumption = Math.min(remainingConsumption, currentSOC, batteryDischargeLimit);
+            
+            currentSOC -= batteryToConsumption;
+            remainingConsumption -= batteryToConsumption;
+
+            // 4. Any remaining consumption must be imported from the grid.
+            results.hourlyImports[h] = remainingConsumption;
+
+            // 5. Any remaining solar is exported, respecting the inverter's export limit.
+            const inverterHeadroomForExport = inverterLimit - solarToConsumption;
+            const maxSolarExport = Math.max(0, inverterHeadroomForExport);
+            results.hourlyExports[h] = Math.min(excessSolar, maxSolarExport);
+            
+            // 6. Grid Charging Logic.
             if (provider.gridChargeEnabled && h >= provider.gridChargeStart && h < provider.gridChargeEnd) {
                 const chargeThresholdSOC = batteryConfig.capacity * (batteryConfig.gridChargeThreshold / 100);
                 const chargeTriggerSOC = batteryConfig.capacity * (batteryConfig.socChargeTrigger / 100);
 
-                // Only charge if SOC is below the trigger level.
                 if (currentSOC < chargeTriggerSOC) {
                     const chargeNeeded = chargeThresholdSOC - currentSOC;
                     if (chargeNeeded > 0) {
                         const gridChargeAmount = Math.min(chargeNeeded, batteryConfig.inverterKW, batteryConfig.capacity - currentSOC);
                         results.gridChargeKWh += gridChargeAmount;
                         currentSOC += gridChargeAmount;
-                        // Grid charging counts as an import.
                         results.hourlyImports[h] += gridChargeAmount;
                         
-                        // Calculate the cost of this grid charge based on the tariff for the current hour.
                         const touRule = (provider.importRules || []).find(r => r.type === 'tou' && parseRangesToHours(r.hours).includes(h));
                         const flatRule = (provider.importRules || []).find(r => r.type === 'flat');
                         const rateForHour = (touRule || flatRule)?.rate || 0;
@@ -300,7 +305,7 @@ export function simulateDay(hourlyConsumption, hourlySolar, provider, batteryCon
         }
     }
 
-    // --- Categorize hourly imports into TOU periods (Peak, Shoulder, Off-Peak) ---
+    // Categorize TOU and Tiered usage 
     const peakRule = (provider.importRules || []).find(r => r.name.toLowerCase().includes('peak'));
     const shoulderRule = (provider.importRules || []).find(r => r.name.toLowerCase().includes('shoulder'));
     const peakHours = parseRangesToHours(peakRule?.hours || '');
@@ -317,7 +322,6 @@ export function simulateDay(hourlyConsumption, hourlySolar, provider, batteryCon
         }
     }
 
-    // --- Categorize daily exports into tiered rates if applicable ---
     const dailyTotalExport = results.hourlyExports.reduce((a, b) => a + b, 0);
     const firstExportRule = (provider.exportRules || [])[0];
     if (provider.exportRules && firstExportRule && firstExportRule.type === 'tiered') {
@@ -527,10 +531,32 @@ function calculateSystemYear(providerData, config, year, simulationData, electri
             if (!existingHourlySolar_historical) return; // Skip days with no matching solar data.
             daysProcessed++;
 
-            const batteryConfig = { capacity: totalDegradedBatteryCapacity, inverterKW: config.newBatteryInverterKW, gridChargeThreshold: config.gridChargeThreshold, socChargeTrigger: config.socChargeTrigger };
-            
+			let totalInverterPower;
+			// If adding an AC-coupled battery to an existing system, the power is the SUM of the inverters.
+			if (config.isAcCoupled && !config.replaceExistingSystem) {
+				totalInverterPower = config.newBatteryInverterKW + config.existingSolarInverterKW;
+			} else {
+				// In all other cases (hybrid systems, replacements), the limit is the single most powerful inverter.
+				totalInverterPower = Math.max(config.newBatteryInverterKW, config.existingSolarInverterKW);
+			}
+
+			const batteryConfig = { 
+				capacity: totalDegradedBatteryCapacity, 
+				inverterKW: totalInverterPower, // Use the correctly calculated total power
+				gridChargeThreshold: config.gridChargeThreshold, 
+				socChargeTrigger: config.socChargeTrigger
+			};
+						
             // Apply degradation to historical solar data.
-            const degradedExistingSolar = existingHourlySolar_historical.map(s => s * Math.pow(1 - config.solarDegradation, year - 1));
+            let degradedExistingSolar = existingHourlySolar_historical.map(s => s * Math.pow(1 - config.solarDegradation, year - 1));
+			            // --- ADDED CLIPPING LOGIC ---
+            // If an existing inverter limit is specified, cap the generation at that limit.
+            if (config.existingSolarInverterKW > 0) {
+                degradedExistingSolar = degradedExistingSolar.map(hourlyGeneration =>
+                    Math.min(hourlyGeneration, config.existingSolarInverterKW)
+                );
+            }
+            // --- END OF CLIPPING LOGIC ---
             // Generate a profile for the new solar panels and apply degradation.
             const newSolarGenerationDaily = config.newSolarKW * config.manualSolarProfile;
             const degradedNewSolarDaily = newSolarGenerationDaily * Math.pow(1 - config.solarDegradation, newSystemCurrentAge);

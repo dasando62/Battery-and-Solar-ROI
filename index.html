@@ -10,54 +10,65 @@
 <body>
 
 <div class="container">
-<h1>Home Battery & Solar ROI Analyzer</h1>
-<div class="version-number">Version V1.1.4</div>
+<h1>Home Battery & Solar ROI Analyser</h1>
+<div class="version-number">Version V1.1.6</div>
 <div id="pdf-report-generator"></div> <section>
 <section>
     <h2>Save/Load Settings</h2>
     <div class="settings-controls">
         <label>Configuration File:</label>
-        <div class="file-upload-wrapper">
+        <div class="file-upload-wrapper" title="Upload of saved json file to configure the analyser">
             <label for="loadSettings" class="file-upload-button">Choose File</label>
             <input type="file" id="loadSettings" accept=".json" style="display: none;">
             <span id="settingsFileName" class="file-status-text">No file chosen</span>
         </div>
         <div id="settingsFileStatus" class="line-count-info"></div>
-        <button id="saveSettings" class="export-button">Save Current Settings</button>
+        <button id="saveSettings" 
+		class="export-button" 
+		title="Save all configuration in a json file except the uploaded csv files and any results. Once saved the json file can be used to configure the analyser including providers and tariffs">
+		Save Current Settings</button>
     </div>
 </section>
 
 <section>
     <h2>1. Data Input</h2>
     
-    <label><input type="checkbox" id="manualInputToggle"> Use manual daily averages instead of CSV upload</label>
-    <label style="margin-top: 15px;"><input type="checkbox" id="debugToggle"> Enable/Disable Debug Tools</label>
+    <label title="Disable the csv import and manually enter average seasonal usage and generation. Note that doing this is not as accurate as the file import analyser and some features will not work such as the battery size recommendations">	
+	<input type="checkbox" id="manualInputToggle"> Use manual daily averages instead of CSV upload</label>
+    <label 
+	style="margin-top: 15px;"
+	title="Unhide the debug buttons so that you can display the additional debug tables. The pdf report will still generate and attach the data to the PDF appendices.">
+	<input type="checkbox" id="debugToggle"> Enable/Disable Debug Tools</label>
 
     <div id="csvInputSection">
         <label style="margin-top: 15px; font-weight: bold;">Energy Usage CSV Format:</label>
         <div style="margin-bottom: 15px;">
-            <div class="checkbox-inline">
+            <div class="checkbox-inline"  title="The Advanced CSV option allows you to upload a custom file of your usage and export data from your retailer. For this to work, you must use the Advanced Usage CSV Options to set the headers and date format to match your file. The minimum required columns are a Date/Time, the usage type (to identify grid imports vs. exports), and the kWh value. You must also ensure the text you specify for the import and export identifiers matches what's in your file.">
                 <input type="radio" id="formatAdvanced" name="fileFormat" value="advanced" checked>
                 <label for="formatAdvanced">Advanced CSV</label>
             </div>
-            <div class="checkbox-inline">
+            <div class="checkbox-inline" title="The NEM12 format is a standardised file format used in the Australian National Electricity Market (NEM) for exchanging interval metering data from smart meters. You can request your historical interval data in the NEM12 format from your Energy Retailer or directly from your local Electricity Distributor. As the format is standard there is no Advanced Configuration required for this format.">
                 <input type="radio" id="formatNem12" name="fileFormat" value="nem12">
                 <label for="formatNem12">NEM12 Format</label>
             </div>
         </div>
         <label>Electricity Usage CSV:</label>
-        <div class="file-upload-wrapper">
+        <div class="file-upload-wrapper" title="Upload the CSV or nem12 file to the analyser. If successfully uploaded the analyser will provide you with the number of days of imported data. Note that for the most accurate analysis 12 to 24 months of data should be included. If you provide less than a full year the analyser will annualise the results to produce a forecast, which may be less accurate as it has to forecast the seasonal patterns.">
             <label for="usageCsv" class="file-upload-button">Choose File</label>
             <input type="file" id="usageCsv" accept=".csv,.CSV" style="display: none;">
             <span id="usageFileName" class="file-status-text">No file chosen</span>
         </div>
         <div id="usageCounts" class="line-count-info"></div>
         
-        <label style="margin-top: 15px;"><input type="checkbox" id="noExistingSolar"> No existing solar system</label>
+		<div style="margin-top: 15px;" title="Check the No existing solar system box if you do not currently have any solar panels. This will configure the analyser to model the installation of a completely new system and will bypass the need for a Solar Generation CSV file.">
+			<label>
+				<input type="checkbox" id="noExistingSolar"> No existing solar system
+			</label>
+		</div>
         
         <div id="solarCsvLabel">
             <label>Solar Generation CSV:</label>
-            <div class="file-upload-wrapper">
+            <div class="file-upload-wrapper" title="Your Solar Generation CSV file must contain a date/time and the kWh of solar generation for each interval. The specific column headers and date/time format for this file can be configured in the Advanced Solar CSV Options. The analyser will detect files that only provide daily totals; in this case, it will automatically distribute the total generation across the day using a realistic, seasonally-adjusted solar curve.">
                 <label for="solarCsv" class="file-upload-button">Choose File</label>
                 <input type="file" id="solarCsv" accept=".csv,.CSV" style="display: none;">
                 <span id="solarFileName" class="file-status-text">No file chosen</span>
@@ -65,7 +76,7 @@
             <div id="solarCounts" class="line-count-info"></div>
         </div>
         
-        <button id="showDataDebugTable" class="debug-button">Show Debug Table</button>
+        <button id="showDataDebugTable" class="debug-button" title="The Data Debug Table shows a sample of the raw hourly data imported from your CSV files, listing up to the first 100 days. Each row represents a single hour. To hide this (or any other) debug table, simply uncheck the Enable/Disable Debug Tools checkbox. To view a different debug table, you can re-check the box and then click the specific Show Debug Table button for the section you wish to inspect.">Show Debug Table</button>
         <div id="dataDebugTableContainer" style="display:none;"></div>
     </div>
 	<div id="data-input-error" class="error-message"></div>
@@ -73,13 +84,15 @@
     <div id="manualInputSection" style="display:none;">
         </div>
 
-    <details class="collapsible-section" id="advanced-usage-options">
+    <details class="collapsible-section" id="advanced-usage-options" title="These options allow you to configure the column headers and date format for your Electricity Usage CSV file. Only the Data (kWh) Header field accepts a comma-separated list of names; all other fields require a single entry.
+
+Important: Any changes you make here are temporary and will be lost if the page is refreshed. To save these settings permanently, you must click the main Save Current Settings button to download an updated configuration file.">
         <summary>Advanced Usage CSV Options</summary>
         <div class="subsettings">
             <p><strong>Important:</strong> These settings only apply when the "Advanced CSV" format is selected above.</p>
             <hr>
             <label>Date/Time Header: <input type="text" id="elecDateTimeHeader" value="From (date/time)"></label>
-            <label>Date Format (e.g., YYYY-MM-DD): <input type="text" id="elecDateFormat" value="YYYY-MM-DD" placeholder="YYYY-MM-DD"></label>
+            <label>Date Format (e.g., YYYY-MM-DD): <input type="text" id="elecDateFormat" value="YYYY-MM-DD" placeholder="YYYY-MM-DD" title="Specify the format of the date portion only. For example, for a timestamp like 2025-10-13T14:30:00, the correct format to enter is YYYY-MM-DD. The analyser will handle the time part automatically."></label>
             <label>Type Header (contains Import/Export text): <input type="text" id="usageTypeHeader" value="Usage Type"></label>
             <label>Identifier for Grid Imports: <input type="text" id="importIdentifier" value="Consumption"></label>
             <label>Identifier for Grid Exports (Feed-in): <input type="text" id="exportIdentifier" value="Feed In"></label>
@@ -87,13 +100,15 @@
         </div>
     </details>
 
-    <details class="collapsible-section">
+    <details class="collapsible-section" title="These options allow you to configure the column headers and date format for your Solar Generation CSV file. Only the Generation(kWh)Header field accepts a comma-separated list of names; all other fields require a single entry.
+
+Important: Any changes you make here are temporary and will be lost if the page is refreshed. To save these settings permanently, you must click the main Save Current Settings button to download an updated configuration file.">
         <summary>Advanced Solar CSV Options</summary>
         <div class="subsettings">
             <p><strong>Important:</strong> Check these settings match the column headers and formats in your Solar CSV file.</p>
             <hr>
             <label>Date/Time Header: <input type="text" id="solarDateTimeHeader" value="Date/Time"></label>
-            <label>Date Format (e.g., DD.MM.YYYY): <input type="text" id="solarDateFormat" value="DD.MM.YYYY" placeholder="DD.MM.YYYY"></label>
+            <label>Date Format (e.g., DD.MM.YYYY): <input type="text" id="solarDateFormat" value="DD.MM.YYYY" placeholder="DD.MM.YYYY" title="Specify the format of the date portion only. For example, for a timestamp like 13.10.2025 3:30pm, the correct format to enter is DD.MM.YYYY. The analyser will handle the time part automatically."></label>
             <label>Generation (kWh) Header: <input type="text" id="solarGenerationHeader" value="Generation,Total Generation (kWh)"></label>
         </div>
     </details>
@@ -102,15 +117,20 @@
 <section>
 
 <section>
-<h2>2. Existing System</h2>
-<label>Existing Solar Panel Size (kW): <input type="number" step="0.1" id="existingSolarKW" value="0"></label>
-<label>Existing Solar Inverter Size (kWh): <input type="number" step="0.1" id="existingSolarInverter" value="0"></label>
-<label>Existing Battery Size (kWh): <input type="number" step="0.1" id="existingBattery" value="0"></label>
-<label>Existing Battery Inverter (kW): <input type="number" step="0.1" id="existingBatteryInverter" value="0"></label>
-<label>Existing System Age (Years): <input type="number" step="1" id="existingSystemAge" value="0"></label>
-<button id="showExistingSystemDebugTable" class="debug-button">Show Debug Table</button>
-<div id="existing-system-error" class="error-message"></div>
-<div id="existingSystemDebugTableContainer" style="display:none;"></div>
+    <h2>2. Existing System</h2>
+    <label title="For a hybrid inverter, enter its total power rating here. For a standard system, enter the rating of the solar-only inverter.">Existing Solar Inverter Size (kW): <input type="number" step="0.1" id="existingSolarInverter" value="0"></label>
+    
+    <div title="Check this if your existing solar and battery system are managed by a single inverter unit. This means the inverter has one shared power limit for both.">
+        <label><input type="checkbox" id="isHybridInverter"> This is a Hybrid Inverter</label>
+    </div>
+    
+    <label title="Only use this field if you have a separate inverter just for your battery (an AC-coupled battery). Leave as 0 for hybrid systems.">Existing Battery Size (kWh): <input type="number" step="0.1" id="existingBattery" value="0"></label>
+    <label title="Only use this field if you have a separate inverter just for your battery (an AC-coupled battery). Leave as 0 for hybrid systems.">Existing Battery Inverter (kW): <input type="number" step="0.1" id="existingBatteryInverter" value="0"></label>
+    
+    <label>Existing System Age (Years): <input type="number" step="1" id="existingSystemAge" value="0"></label>
+    <button id="showExistingSystemDebugTable" class="debug-button">Show Debug Table</button>
+    <div id="existing-system-error" class="error-message"></div>
+    <div id="existingSystemDebugTableContainer" style="display:none;"></div>
 </section>
 
 <section>
@@ -121,6 +141,7 @@
     <label>Additional Battery Size (kWh): <input type="number" step="0.1" id="newBattery" value="24"></label>
     <label>Additional Battery Inverter (kW): <input type="number" step="0.1" id="newBatteryInverter" value="8"></label>
     <label>Cost of Additional Battery ($): <input type="number" step="0.01" id="costBattery" value="9500"></label>
+	<label><input type="checkbox" id="isAcCoupled"> New battery is AC Coupled (e.g., Tesla Powerwall)</label>
     <label><input type="checkbox" id="replaceExistingSystem"> This is a replacement for the existing system (not an addition)</label>
     <label><input type="checkbox" id="gridOffPeakCharge" checked> Allow battery charging from grid during off-peak</label>
     <div class="subsettings">

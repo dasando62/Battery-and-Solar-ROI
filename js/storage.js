@@ -1,5 +1,5 @@
 // js/storage.js
-//Version 1.1.4
+//Version 1.1.6
 // This module handles the saving and loading of the entire application state
 // to and from a JSON configuration file. This allows users to persist their
 // settings and provider configurations.
