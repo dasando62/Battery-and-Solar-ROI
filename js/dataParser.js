@@ -1,11 +1,11 @@
 // js/dataParser.js 
-// Version 1.1.7
+// Version 1.1.9
 // This module is responsible for handling file uploads and parsing CSV data.
 // It reads electricity usage and solar generation files, processes them into a
 // standardized hourly format, and stores the results in the global state.
 
 /*
- * Home Battery & Solar ROI Analyzer
+ * Home Battery & Solar ROI Analyser
  * Copyright (c) 2025 [DaSando62]
  *
  * This software is licensed under the MIT License.

@@ -1,10 +1,10 @@
 // js/config.js
-//Version 1.1.7
+//Version 1.1.9
 // This module is responsible for gathering all user-configurable settings from the UI
 // and assembling them into a single configuration object used by the analysis engine.
 
 /*
- * Home Battery & Solar ROI Analyzer
+ * Home Battery & Solar ROI Analyser
  * Copyright (c) 2025 [DaSando62]
  *
  * This software is licensed under the MIT License.
@@ -48,7 +48,7 @@ export function gatherConfigFromUI() {
     // The main configuration object.
     const config = {
         // --- General Settings ---
-        selectedProviders: selectedProviderIds, // IDs of providers to analyze
+        selectedProviders: selectedProviderIds, // IDs of providers to analyse
         useManual: useManual,
         noExistingSolar: document.getElementById("noExistingSolar")?.checked,
         

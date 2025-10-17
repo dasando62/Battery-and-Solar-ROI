@@ -1,10 +1,10 @@
 // js/analysis.js
-// Version 1.1.7
+// Version 1.1.9
 // This is the core of the ROI calculator. It contains the simulation engine,
 // financial calculation functions (IRR, NPV), and system sizing algorithms.
 
 /*
- * Home Battery & Solar ROI Analyzer
+ * Home Battery & Solar ROI Analyser
  * Copyright (c) 2025 [DaSando62]
  *
  * This software is licensed under the MIT License.
@@ -226,6 +226,7 @@ export function simulateDay(hourlyConsumption, hourlySolar, provider, batteryCon
         peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0,
         tier1ExportKWh: 0, tier2ExportKWh: 0,
         gridChargeKWh: 0,
+		solarChargeKWh: 0,
         hourlyImports: Array(24).fill(0),
         hourlyExports: Array(24).fill(0)
     };
@@ -261,6 +262,8 @@ export function simulateDay(hourlyConsumption, hourlySolar, provider, batteryCon
                 currentSOC += solarToBattery;
                 excessSolar -= solarToBattery;
             }
+			//Track solar charging for debug and Appendix D
+			results.solarChargeKWh += solarToBattery;
 
             // 2. Determine the total available power from the inverter(s) for this hour.
             const inverterLimit = batteryConfig.inverterKW;
@@ -499,6 +502,7 @@ function calculateSystemYear(providerData, config, year, simulationData, electri
                     rawSeason.tier1ExportKWh += dailyBreakdown.tier1ExportKWh * daysInQuarter;
                     rawSeason.tier2ExportKWh += dailyBreakdown.tier2ExportKWh * daysInQuarter;
                     rawSeason.gridChargeKWh += dailyBreakdown.gridChargeKWh * daysInQuarter;
+					rawSeason.solarChargeKWh += dailyBreakdown.solarChargeKWh * daysInQuarter;
                     rawSeason.gridChargeCost += simResults.gridChargeCost * daysInQuarter;
                 }
             }
@@ -563,10 +567,13 @@ function calculateSystemYear(providerData, config, year, simulationData, electri
             const newHourlySolar = generateHourlySolarProfileFromDaily(degradedNewSolarDaily, getSeason(day.date));
             // Combine existing and new solar generation.
             const existingSolarForSim = config.replaceExistingSystem ? Array(24).fill(0) : degradedExistingSolar;
-            const totalHourlySolar = existingSolarForSim.map((s, i) => s + newHourlySolar[i]);
-            
+            let totalHourlySolar = existingSolarForSim.map((s, i) => s + newHourlySolar[i]); //const changed to let for clippingv
+			// Ensure the total combined solar generation never exceeds the total available inverter power.
+			totalHourlySolar = totalHourlySolar.map(hourlyGeneration => Math.min(hourlyGeneration, totalInverterPower));
+
+			// Reconstruct the "true" household consumption before any existing solar was self-consumed.
+			const trueHourlyConsumption = Array(24).fill(0);
             // Reconstruct the "true" household consumption before any existing solar was self-consumed.
-            const trueHourlyConsumption = Array(24).fill(0);
             for (let h = 0; h < 24; h++) {
                 const selfConsumed = Math.max(0, (existingHourlySolar_historical[h] || 0) - (day.feedIn[h] || 0));
                 trueHourlyConsumption[h] = (day.consumption[h] || 0) + selfConsumed;
@@ -589,6 +596,7 @@ function calculateSystemYear(providerData, config, year, simulationData, electri
                     rawSeason.tier1ExportKWh += dailyBreakdown.tier1ExportKWh;
                     rawSeason.tier2ExportKWh += dailyBreakdown.tier2ExportKWh;
                     rawSeason.gridChargeKWh += dailyBreakdown.gridChargeKWh;
+					rawSeason.solarChargeKWh += dailyBreakdown.solarChargeKWh;
                     rawSeason.gridChargeCost += simResults.gridChargeCost;
                 }
             }
@@ -626,8 +634,8 @@ export function runSimulation(config, simulationData, electricityData) {
         finalResults[provider.id] = { annualCosts: [], cumulativeSavingsPerYear: [], roiYear: null, npv: 0 };
         rawData.system[provider.id] = { year1: {} };
         for (const q of ['Summer', 'Autumn', 'Winter', 'Spring']) {
-            rawData.baseline.year1[q] = { days: 0, peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, tier1ExportKWh: 0, tier2ExportKWh: 0, gridChargeKWh: 0, gridChargeCost: 0 };
-            rawData.system[provider.id].year1[q] = { days: 0, peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, tier1ExportKWh: 0, tier2ExportKWh: 0, gridChargeKWh: 0, gridChargeCost: 0 };
+            rawData.baseline.year1[q] = { days: 0, peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, tier1ExportKWh: 0, tier2ExportKWh: 0, gridChargeKWh: 0, solarChargeKWh: 0, gridChargeCost: 0 };
+            rawData.system[provider.id].year1[q] = { days: 0, peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, tier1ExportKWh: 0, tier2ExportKWh: 0, gridChargeKWh: 0, solarChargeKWh: 0, gridChargeCost: 0 };
         }
     });
 
@@ -796,7 +804,7 @@ export function calculateDetailedSizing(correctedElectricityData, solarData, con
     const dailyMaxHourData = [];    // Max kWh needed from battery in a single hour.
     let totalDays = 0;
 
-    // Analyze each day in the dataset.
+    // Analyse each day in the dataset.
     correctedElectricityData.forEach(day => {
         totalDays++;
         let dailyPeakPeriodKWh = 0;

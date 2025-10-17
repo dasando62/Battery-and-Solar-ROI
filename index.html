@@ -1,9 +1,32 @@
 <!DOCTYPE html>
+<!--/*
+ * Home Battery & Solar ROI Analyser
+ * Copyright (c) 2025 [DaSando62]
+ *
+ * This software is licensed under the MIT License.
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */--!>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Home Battery & Solar ROI Analyzer</title>
+<title>Home Battery & Solar ROI Analyser</title>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="report-style.css">
 </head>
@@ -11,7 +34,7 @@
 
 <div class="container">
 <h1>Home Battery & Solar ROI Analyser</h1>
-<div class="version-number">Version V1.1.7</div>
+<div class="version-number">Version <span id="appVersionDisplay"></span></div>
 <div id="pdf-report-generator"></div> <section>
 <section>
     <h2>Save/Load Settings</h2>
@@ -33,7 +56,7 @@
 <section>
     <h2>1. Data Input</h2>
     
-    <label title="Disable the csv import and manually enter average seasonal usage and generation. Note that doing this is not as accurate as the file import analyser and some features will not work such as the battery size recommendations">	
+    <label title="Switch from CSV file uploads to manually entering your average seasonal usage.&#10Note: This method is less accurate than a file upload, and advanced features like the &quot;Detailed Sizing&quot; recommendations will be disabled.">	
 	<input type="checkbox" id="manualInputToggle"> Use manual daily averages instead of CSV upload</label>
     <label 
 	style="margin-top: 15px;"
@@ -60,7 +83,7 @@
         </div>
         <div id="usageCounts" class="line-count-info"></div>
         
-		<div style="margin-top: 15px;" title="Check the No existing solar system box if you do not currently have any solar panels. This will configure the analyser to model the installation of a completely new system and will bypass the need for a Solar Generation CSV file.">
+		<div style="margin-top: 15px;" title="Check the &quot;No existing solar system&quot; box if you do not currently have any solar panels. This will configure the analyser to model the installation of a completely new system and will bypass the need for a &quot;Solar Generation CSV&quot; file.">
 			<label>
 				<input type="checkbox" id="noExistingSolar"> No existing solar system
 			</label>
@@ -80,13 +103,14 @@
         <div id="dataDebugTableContainer" style="display:none;"></div>
     </div>
 	<div id="data-input-error" class="error-message"></div>
-	<section>
-	<div id="manualInputSection" style="display:none;">
+	<section>    
+    <div id="manualInputSection" style="display:none;">
     <p>Enter your estimated average daily values for each season. All values are in kWh.</p>
-    
+    <div title="Enter your location's average daily solar yield (kWh per kW of panel capacity).&#10;If using data from an existing system, this value should reflect its current performance.&#10;The analyser will use this as the starting point and apply future degradation from there.">
     <label><strong>Average Daily Solar Generation per kW of Panels (kWh):</strong>
         <input type="number" step="0.1" id="manualSolarProfile" value="4.0">
     </label>
+	</div>
     <hr>
 
     <details class="collapsible-section" open>
@@ -130,14 +154,12 @@
     </details>
 </div>
 </section>
-    
+
     <div id="manualInputSection" style="display:none;">
         </div>
-
+		
     <details class="collapsible-section" id="advanced-usage-options">
-        <summary title="These options allow you to configure the column headers and date format for your Electricity Usage CSV file. Only the Data (kWh) Header field accepts a comma-separated list of names; all other fields require a single entry.
-
-Important: Any changes you make here are temporary and will be lost if the page is refreshed. To save these settings permanently, you must click the main Save Current Settings button to download an updated configuration file.">Advanced Usage CSV Options</summary>
+        <summary title="These options allow you to configure the column headers and date format for your Electricity Usage CSV file. Only the Data (kWh) Header field accepts a comma-separated list of names; all other fields require a single entry.&#10;Important: Any changes you make here are temporary and will be lost if the page is refreshed. To save these settings permanently, you must click the main Save Current Settings button to download an updated configuration file.">Advanced Usage CSV Options</summary>
         <div class="subsettings">
             <p><strong>Important:</strong> These settings only apply when the "Advanced CSV" format is selected above.</p>
             <hr>
@@ -146,36 +168,36 @@ Important: Any changes you make here are temporary and will be lost if the page 
             <label>Type Header (contains Import/Export text): <input type="text" id="usageTypeHeader" value="Usage Type"></label>
             <label>Identifier for Grid Imports: <input type="text" id="importIdentifier" value="Consumption"></label>
             <label>Identifier for Grid Exports (Feed-in): <input type="text" id="exportIdentifier" value="Feed In"></label>
-            <label>Data (kWh) Header: <input type="text" id="consumptionHeader" value="Usage in kWh,Amount Used"></label>
+            <label>Data (kWh) Header: <input type="text" id="consumptionHeader" value="Usage in kWh,Amount Used" title="Enter the column header for the energy value. You can provide a comma-separated list to check multiple possible names, for example: Usage in kWh,Amount Used."></label>
         </div>
     </details>
 
     <details class="collapsible-section" id="advanced-solar-options">
-        <summary title="These options allow you to configure the column headers and date format for your Solar Generation CSV file. Only the Generation(kWh)Header field accepts a comma-separated list of names; all other fields require a single entry.
-
-Important: Any changes you make here are temporary and will be lost if the page is refreshed. To save these settings permanently, you must click the main Save Current Settings button to download an updated configuration file.">Advanced Solar CSV Options</summary>
+        <summary title="These options allow you to configure the column headers and date format for your Solar Generation CSV file. Only the Generation(kWh)Header field accepts a comma-separated list of names; all other fields require a single entry.&#10;Important: Any changes you make here are temporary and will be lost if the page is refreshed. To save these settings permanently, you must click the main Save Current Settings button to download an updated configuration file.">Advanced Solar CSV Options</summary>
         <div class="subsettings">
             <p><strong>Important:</strong> Check these settings match the column headers and formats in your Solar CSV file.</p>
             <hr>
             <label>Date/Time Header: <input type="text" id="solarDateTimeHeader" value="Date/Time"></label>
             <label>Date Format (e.g., DD.MM.YYYY): <input type="text" id="solarDateFormat" value="DD.MM.YYYY" placeholder="DD.MM.YYYY" title="Specify the format of the date portion only. For example, for a timestamp like 13.10.2025 3:30pm, the correct format to enter is DD.MM.YYYY. The analyser will handle the time part automatically."></label>
-            <label>Generation (kWh) Header: <input type="text" id="solarGenerationHeader" value="Generation,Total Generation (kWh)"></label>
-        </div>
+            <label>Generation (kWh) Header: <input type="text" id="solarGenerationHeader" value="Generation,Total Generation (kWh)" title="Enter the column header for the energy value. You can provide a comma-separated list to check multiple possible names, for example: Generation,Total Generation (kWh)."></label>
+		</div>	
     </details>
 </section>
 
 <section>
     <h2>2. Existing System</h2>
-    <label title="For a hybrid inverter, enter its total power rating here. For a standard system, enter the rating of the solar-only inverter.">Existing Solar Inverter Size (kW): <input type="number" step="0.1" id="existingSolarInverter" value="0"></label>
+	<label title="Add any existing solar panels in this field, they will be degraded by the &quot;Solar Degradation (% per year):&quot; for the &quot;Existing System Age (Years):&quot;.">Existing Solar Panel Size (kW): <input type="number" step="0.1" id="existingSolarKW" value="0"></label>
+    <label title="For a hybrid inverter, enter its total power rating here. For a standard system, enter the rating of the solar-only inverter.">
+	Existing Solar Inverter Size (kW): <input type="number" step="0.1" id="existingSolarInverter" value="0"></label>
     
     <div title="Check this if your existing solar and battery system are managed by a single inverter unit. This means the inverter has one shared power limit for both.">
         <label><input type="checkbox" id="isHybridInverter"> This is a Hybrid Inverter</label>
     </div>
     
-    <label title="Only use this field if you have a separate inverter just for your battery (an AC-coupled battery). Leave as 0 for hybrid systems.">Existing Battery Size (kWh): <input type="number" step="0.1" id="existingBattery" value="0"></label>
+    <label title="Add an existing battery in this field, it will will be degraded by the &quot;Battery Degradation (% per year):&quot; for the &quot;Existing System Age (Years):&quot;.">Existing Battery Size (kWh): <input type="number" step="0.1" id="existingBattery" value="0"></label>
     <label title="Only use this field if you have a separate inverter just for your battery (an AC-coupled battery). Leave as 0 for hybrid systems.">Existing Battery Inverter (kW): <input type="number" step="0.1" id="existingBatteryInverter" value="0"></label>
     
-    <label>Existing System Age (Years): <input type="number" step="1" id="existingSystemAge" value="0"></label>
+    <label title="Enter the current age of your existing solar and battery system in years. The analyser will use this to calculate its current, degraded performance for the analysis.&#10;Note: In Manual Mode, the value you provide for Average Daily Solar Generation is treated as the current, already-degraded performance. In this scenario only future degradation will be applied to the solar panels during the simulation.">Existing System Age (Years): <input type="number" step="1" id="existingSystemAge" value="0" ></label>
     <button id="showExistingSystemDebugTable" class="debug-button">Show Debug Table</button>
     <div id="existing-system-error" class="error-message"></div>
     <div id="existingSystemDebugTableContainer" style="display:none;"></div>
@@ -202,30 +224,30 @@ Important: Any changes you make here are temporary and will be lost if the page 
         <label><input type="checkbox" id="replaceExistingSystem"> This is a replacement for the existing system (not an addition)</label>
     </div>
     
-    <div title="Allow the battery to charge from the grid during cheap, off-peak hours to ensure it's full before the evening peak, even on cloudy days.">
+    
+	<div title="Allow the battery to charge from the grid to ensure when there may not be enough solar generation it has enough charge for peak periods.&#10;Note: The specific charging times are configured in the Grid Charge Options section for each provider.">
         <label><input type="checkbox" id="gridOffPeakCharge" checked> Allow battery charging from grid during off-peak</label>
     </div>
     
-    <div class="subsettings">
-        <label title="Sets a limit on grid charging to leave space in the battery for any solar that may be generated in the morning.">Charge battery from grid to a maximum of (%): <input type="number" id="gridChargeThreshold" min="0" max="100" value="80"></label>
+    <div id="gridChargeSettingsContainer" class="subsettings" style="display:none;">
+        <label title="Set the maximum charge level (as a percentage) for grid charging. To optimize your savings, this should be set to leave enough space in the battery to capture any excess solar energy generated during the day.">Charge battery from grid to a maximum of (%): <input type="number" id="gridChargeThreshold" min="0" max="100" value="80"></label>
 		    
-		<label title="To prevent unnecessary grid charging on days with good solar, the battery will only charge from the grid if its charge level falls below this percentage.">Only charge from grid if battery is below (%):
+		<label title="The battery will only charge from the grid if its charge level falls below this percentage to prevent unnecessary grid charging on days with good solar.">Only charge from grid if battery is below (%):
         <input type="number" id="socChargeTrigger" min="0" max="100" value="50">
     </label>
     </div>
 
-    <div title="This feature will increase the recommended battery size to include a reserve capacity, helping you keep the lights on during a power outage.">
+    <div title="Increase the recommended battery size to include a reserve capacity for backup during a power outage.">
         <label style="margin-top: 20px;"><input type="checkbox" id="enableBlackoutSizing"> Add Blackout Protection Sizing</label>
     </div>
-	<p style="font-size: 0.9em; font-style: italic; margin-top: -5px; margin-left: 25px;">
+	<p style="font-size: 0.9em; font-style: italic; margin-left: 25px;">
     <small><em>Remember to click "Calculate Sizing Recommendation" again to see updated results.</em></small>
 	</p>
     <div id="blackoutSettingsContainer" class="subsettings" style="display:none;">
         <label title="The length of the potential power outage you want to be prepared for.">Blackout Duration (Hours): <input type="number" step="1" id="blackoutDuration" value="3"></label>
         <label title="The percentage of your home's 'worst-case' historical energy usage you want to be able to cover during the blackout period.">Usage Coverage During Blackout (%): <input type="number" step="5" id="blackoutCoverage" value="85"></label>
     </div>
-
-    <div class="subsettings" title="This percentage is used for the 'Heuristic Sizing' recommendation. It calculates the system size needed for your solar panels to generate this percentage of your total annual electricity consumption.">
+    <div class="subsettings"  title="This percentage is used for the 'Simple Sizing' recommendation. It calculates the system size needed for your solar panels to generate this percentage of your total annual electricity consumption.">
         <label>
             Energy Self-Sufficiency (%):
             <input type="number" id="recommendationCoverageTarget" min="10" max="200" value="90">
@@ -243,7 +265,7 @@ Important: Any changes you make here are temporary and will be lost if the page 
 </section>
 
 <h2>4. Financial Inputs</h2>
-<label><input type="checkbox" id="enableLoan" checked> Enable Loan Financing</label>
+<label title="Enable this option to include the cost of a loan in the financial analysis. For each year of the loan term, the annual loan repayment amount will be subtracted from your yearly savings, giving you a more accurate net cash flow and payback period."><input type="checkbox" id="enableLoan" checked > Enable Loan Financing</label>
 <div id="loanSettingsContainer" class="subsettings">
     <label>Loan Amount ($): <input type="number" step="100" id="loanAmount" value="12000"></label>
     <label>Annual Interest Rate (%): <input type="number" step="0.1" id="loanInterestRate" value="6.5"></label>
@@ -252,10 +274,8 @@ Important: Any changes you make here are temporary and will be lost if the page 
     <div id="loanDebugTableContainer" style="display:none;"></div>
 </div>
 
-<div title="Calculate the Net Present Value (NPV) and Internal Rate of Return (IRR). 
-o	Net Present Value (NPV) in the calculator determines the total profitability of the solar and battery system in today's dollars by considering your specified.
-o	The Internal Rate of Return (IRR) is calculated to represent the effective annualized rate of return on your investment in the solar and battery system." >
-<label style="margin-top: 20px;"><input type="checkbox" id="enableDiscountRate" checked "Opportunity Cost / Discount Rate"> Enable Opportunity Cost / NPV</label>
+<div title="Calculate the Net Present Value (NPV) and Internal Rate of Return (IRR).&#10;Net Present Value (NPV) in the calculator determines the total profitability of the solar and battery system in today's dollars by considering your specified discount rate.&#10;The Internal Rate of Return (IRR) is calculated to represent the effective annualized rate of return on your investment in the solar and battery system.">
+<label style="margin-top: 20px;"><input type="checkbox" id="enableDiscountRate" checked> Enable Opportunity Cost / Discount Rate</label>
 </div>
 <div id="discountRateSettingsContainer" class="subsettings" title="Enter the annual rate of return you could get from another investment, like stocks or a high-interest savings account. This is used to calculate the Net Present Value (NPV) of your battery and solar system.">
     <label>Opportunity Cost / Discount Rate (%): <input type="number" step="0.1" id="discountRate" value="5.0"></label>
@@ -267,16 +287,17 @@ o	The Internal Rate of Return (IRR) is calculated to represent the effective ann
 <section>
 <h2>5. Providers & Tariffs</h2>
 <p>Enter all Feed-in Tariffs (FIT) as positive numbers. They will be treated as a credit and subtracted from your bill.</p>
-<label>Annual Tariff Escalation (% per year): <input type="number" step="0.1" id="tariffEscalation" value="2" title="This is an estimate of the per annum increase in tariffs (import and daily charges)" ></label>
-<label>Start of FIT Degradation Year: <input type="number" id="fitDegradationStartYear" value="1" title="Used to specify the year that Feed In Tariff will start to decrease."></label>
-<label>Years to Reach Minimum FIT: <input type="number" id="fitDegradationEndYear" value="10" title="The number of years that the Feed In Tariff will take to reach the minimum FIT."></label>
-<label>FIT Minimum Rate ($/kWh): <input type="number" step="0.001" id="fitMinimumRate" value="0.00" title="This is the expected Feed In Tariff at the end of the Years to Reach Minimum FIT."></label>
+<label title="This is an estimate of the per annum increase in tariffs (import and daily charges)">Annual Tariff Escalation (% per year): <input type="number" step="0.1" id="tariffEscalation" value="2" ></label>
+<label title="Used to specify the year that Feed In Tariff will start to decrease.">Start of FIT Degradation Year: <input type="number" id="fitDegradationStartYear" value="1" ></label>
+<label title="The number of years that the Feed In Tariff will take to reach the minimum FIT.">Years to Reach Minimum FIT: <input type="number" id="fitDegradationEndYear" value="5" ></label>
+<label title="This is the expected Feed In Tariff at the end of the Years to Reach Minimum FIT.">FIT Minimum Rate ($/kWh): <input type="number" step="0.001" id="fitMinimumRate" value="0.00" ></label>
 <br>
+<label>&#10&#10Note: The first Provider is used for the Baseline calculations.</label>
 <div id="provider-settings-container">
 </div>
 <button id="add-provider-button" class="run-button" style="margin-top: 15px;">Add New Provider</button>
 <div id="provider-selection-error" class="error-message"></div>
-<div title="This debug output will onky be displayed after the analysis is run. The tables show an estimate of the quarterly daily average consumption and generation as well as the Average Daily Grid Charge and SOC at 6am. These tables will also be included in Appendix D of the PDF Report."> 
+<div title="The tables show an estimate of the &quot;Quarterly Daily Average Consumption and Generation&quot; as well as the &quot;Average Daily Grid Charge&quot; and &quot;State of Charge (SOC)at 6am&quot;. These tables will also be included in Appendix D of the PDF Report.">
 <button id="showProvidersDebugTable" class="debug-button">Show Debug Table</button>
 </div>
 <div id="providersDebugTableContainer" style="display:none;"></div>
@@ -285,9 +306,9 @@ o	The Internal Rate of Return (IRR) is calculated to represent the effective ann
 <section>
 <h2>6. Analysis Period</h2>
 <label>Analysis Years (System Lifespan): <input type="number" id="numYears" value="15" placeholder="e.g., 15"></label>
-<label>Solar Degradation (% per year): <input type="number" step="0.1" id="solarDegradation" value="0.5" title="Enter the annual percentage that your solar panels' power output will decrease (degrade). This rate is applied to both your new panels and your existing panels. For example, if your existing system is 5 years old, its power output will be reduced by 5 years' worth of degradation from the start of the analysis."></label>
-<label>Battery Degradation (% per year): <input type="number" step="0.1" id="batteryDegradation" value="2" title="Enter the annual percentage that your battery's storage capacity (kWh) will decrease (degrade). The calculator applies this to both new and existing batteries. For example, if your existing system is 5 years old, its capacity will be reduced by 5 years' worth of degradation from the start of the analysis."></label>
-<button id="showAnalysisPeriodDebugTable" class="debug-button"  title="Displays a debug table showing the degradation of the batteries and solar panels each year">Show Debug Table</button>
+<label title="Enter the annual percentage that your solar panels' power output will decrease (degrade). This rate is applied to both your new panels and your existing panels. For example, if your existing system is 5 years old, its power output will be reduced by 5 years' worth of degradation from the start of the analysis.">Solar Degradation (% per year): <input type="number" step="0.1" id="solarDegradation" value="0.5"></label>
+<label title="Enter the annual percentage that your battery's storage capacity (kWh) will decrease (degrade). The calculator applies this to both new and existing batteries. For example, if your existing system is 5 years old, its capacity will be reduced by 5 years' worth of degradation from the start of the analysis.">Battery Degradation (% per year): <input type="number" step="0.1" id="batteryDegradation" value="2" ></label>
+<button id="showAnalysisPeriodDebugTable" class="debug-button" title="Displays a debug table showing the degradation of the batteries and solar panels each year">Show Debug Table</button>
 <div id="analysisPeriodDebugTableContainer" style="display:none;"></div>
 </section>
 

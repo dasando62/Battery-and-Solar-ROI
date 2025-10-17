@@ -1,11 +1,11 @@
 // js/storage.js
-//Version 1.1.7
+//Version 1.1.9
 // This module handles the saving and loading of the entire application state
 // to and from a JSON configuration file. This allows users to persist their
 // settings and provider configurations.
 
 /*
- * Home Battery & Solar ROI Analyzer
+ * Home Battery & Solar ROI Analyser
  * Copyright (c) 2025 [DaSando62]
  *
  * This software is licensed under the MIT License.
@@ -81,6 +81,8 @@ function applyAllInputs(inputs) {
 function saveStateToFile() {
     // Construct the state object to be saved.
     const appState = {
+		// Version for the settings file structure itself. 
+        // Increment only if making breaking changes to the saved format that would affect loading old files.
         version: "1.0.2", // Version of the settings file format.
         savedAt: new Date().toISOString(),
         providers: getProviders(), // Get all current provider configurations.
@@ -91,7 +93,7 @@ function saveStateToFile() {
     // Convert the state object to a nicely formatted JSON string.
     const jsonString = JSON.stringify(appState, null, 2);
     // Use the utility function to trigger a download of the JSON file.
-    downloadBlob('roi-analyzer-settings.json', jsonString, 'application/json');
+    downloadBlob('roi-analyser-settings.json', jsonString, 'application/json');
 }
 
 /**

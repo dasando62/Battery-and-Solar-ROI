@@ -1,10 +1,10 @@
 // js/main.js
-//Version 1.1.7
+//Version 1.1.9
 // This is the main entry point for the application. It initializes the application state,
 // sets up default data, and wires up all the necessary event listeners once the DOM is fully loaded.
 
 /*
- * Home Battery & Solar ROI Analyzer
+ * Home Battery & Solar ROI Analyser
  * Copyright (c) 2025 [DaSando62]
  *
  * This software is licensed under the MIT License.
@@ -37,6 +37,8 @@ import { renderProviderSettings } from './uiDynamic.js';
  * Main execution block that runs after the HTML document has been completely loaded and parsed.
  */
 document.addEventListener('DOMContentLoaded', () => {
+  // Set the version number in the UI from the global state.
+  document.getElementById('appVersionDisplay').textContent = state.appVersion;
   // 1. Load the default provider configurations into localStorage if this is the first time the app is run.
   initializeDefaultProviders();
   // 2. Render the provider settings UI from the data stored in localStorage.

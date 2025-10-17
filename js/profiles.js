@@ -1,10 +1,10 @@
 // js/profiles.js
-//Version 1.1.7
+//Version 1.1.9
 // This module provides functions to generate 24-hour energy profiles (consumption and solar)
 // from single daily total values, based on typical patterns.
 
 /*
- * Home Battery & Solar ROI Analyzer
+ * Home Battery & Solar ROI Analyser
  * Copyright (c) 2025 [DaSando62]
  *
  * This software is licensed under the MIT License.

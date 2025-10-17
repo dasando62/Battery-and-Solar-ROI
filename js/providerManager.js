@@ -1,11 +1,11 @@
 // js/providerManager.js
-//Version 1.1.7
+//Version 1.1.9
 // This module manages all CRUD (Create, Read, Update, Delete) operations
 // for electricity provider configurations. It uses the browser's localStorage
 // for persistence, allowing provider data to be saved between sessions.
 
 /*
- * Home Battery & Solar ROI Analyzer
+ * Home Battery & Solar ROI Analyser
  * Copyright (c) 2025 [DaSando62]
  *
  * This software is licensed under the MIT License.
@@ -29,8 +29,8 @@
  */
 
 // --- Constants for localStorage keys ---
-const PROVIDERS_KEY = 'roiAnalyzer_providers';
-const DEFAULTS_LOADED_KEY = 'roiAnalyzer_defaults_loaded';
+const PROVIDERS_KEY = 'roiAnalyser_providers';
+const DEFAULTS_LOADED_KEY = 'roiAnalyser_defaults_loaded';
 
 // A hardcoded array of default provider configurations.
 // This is used to populate the application with initial data on first use.
@@ -68,7 +68,6 @@ const defaultProviders = [
 		noteWidth: '',
         dailyCharge: 1.364,
         rebate: 1500,
-        zeroHeroCredit: -1.00,
         monthlyFee: 0,
         importRules: [
             { type: 'tou', name: 'Peak Import', rate: 0.528, hours: '3pm-11pm' },
