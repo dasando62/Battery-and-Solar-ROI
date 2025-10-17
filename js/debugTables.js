@@ -1,11 +1,11 @@
 // js/debugTables.js
-// Version 1.1.7
+// Version 1.1.9
 // This module contains all functions related to rendering the "Debug Tables".
 // These tables provide transparency into the calculator's inputs, intermediate calculations,
 // and simulation results, aiding in validation and troubleshooting.
 
 /*
- * Home Battery & Solar ROI Analyzer
+ * Home Battery & Solar ROI Analyser
  * Copyright (c) 2025 [DaSando62]
  *
  * This software is licensed under the MIT License.
@@ -28,11 +28,15 @@
  * SOFTWARE.
  */
 
+import { gatherConfigFromUI } from './config.js';
 import { 
 	getNumericInput, 
 	displayError, 
 	clearError,
-	formatHoursToRanges	
+	formatHoursToRanges,
+	determineTouHours,
+	getSimulationData,
+	getSeason
 } from './utils.js';
 import { 
 	generateHourlyConsumptionProfileFromDailyTOU, 
@@ -58,13 +62,13 @@ export function hideAllDebugContainers() {
  * @param {object} state - The global application state containing electricity and solar data.
  * @returns {object} An object with calculated averages for each season.
  */
-function calculateSeasonalAverages(provider, batteryConfig, state) {
+function calculateSeasonalAverages(provider, batteryConfig, config, state) {
     // Initialize data structure to hold results.
     const seasonalData = {
-        Summer: { totalGridCharge: 0, totalSocAt6am: 0, days: 0 },
-        Autumn: { totalGridCharge: 0, totalSocAt6am: 0, days: 0 },
-        Winter: { totalGridCharge: 0, totalSocAt6am: 0, days: 0 },
-        Spring: { totalGridCharge: 0, totalSocAt6am: 0, days: 0 },
+        Summer: { totalGridCharge: 0, totalSolarCharge: 0, totalSocAt6am: 0, days: 0 },
+        Autumn: { totalGridCharge: 0, totalSolarCharge: 0, totalSocAt6am: 0, days: 0 },
+        Winter: { totalGridCharge: 0, totalSolarCharge: 0, totalSocAt6am: 0, days: 0 },
+        Spring: { totalGridCharge: 0, totalSolarCharge: 0, totalSocAt6am: 0, days: 0 },
     };
 
     if (!state.electricityData || state.electricityData.length === 0) {
@@ -76,31 +80,36 @@ function calculateSeasonalAverages(provider, batteryConfig, state) {
     const solarDataMap = new Map((state.solarData || []).map(d => [d.date, d.hourly]));
 
     state.electricityData.forEach(day => {
-        const month = parseInt(day.date.split('-')[1], 10);
-        let season;
-        if ([12, 1, 2].includes(month)) season = 'Summer';
-        else if ([3, 4, 5].includes(month)) season = 'Autumn';
-        else if ([6, 7, 8].includes(month)) season = 'Winter';
-        else season = 'Spring';
+        const seasonName = getSeason(day.date);
+        const seasonForProfile = { 'Summer': 'Q1_Summer', 'Autumn': 'Q2_Autumn', 'Winter': 'Q3_Winter', 'Spring': 'Q4_Spring' }[seasonName];
 
-        const hourlySolar = solarDataMap.get(day.date) || Array(24).fill(0);
+        // Get existing solar (which is all zeros if "No existing solar" is checked).
+        const existingHourlySolar = solarDataMap.get(day.date) || Array(24).fill(0);
+
+        // Generate the profile for the NEW solar panels from the UI configuration.
+        const newSolarGenerationDaily = config.newSolarKW * config.manualSolarProfile;
+        const newHourlySolar = generateHourlySolarProfileFromDaily(newSolarGenerationDaily, seasonForProfile);
         
-        // Reconstruct true household consumption (grid import + self-consumed solar).
+        // Combine them to get the total solar for the simulation.
+        const totalHourlySolar = existingHourlySolar.map((s, i) => s + newHourlySolar[i]);
+
+        // Reconstruct true household consumption using only the original, existing solar data.
         const trueHourlyConsumption = Array(24).fill(0);
         for (let h = 0; h < 24; h++) {
-            const selfConsumed = Math.max(0, (hourlySolar[h] || 0) - (day.feedIn[h] || 0));
+            const selfConsumed = Math.max(0, (existingHourlySolar[h] || 0) - (day.feedIn[h] || 0));
             trueHourlyConsumption[h] = (day.consumption[h] || 0) + selfConsumed;
         }
 
-        // Run the simulation for the day.
-        const simResults = simulateDay(trueHourlyConsumption, hourlySolar, provider, batteryConfig, currentSOC);
+        // Run the simulation for the day using the TOTAL solar profile.
+        const simResults = simulateDay(trueHourlyConsumption, totalHourlySolar, provider, batteryConfig, currentSOC);
         currentSOC = simResults.finalSOC; // Update SOC for the next day.
 
         // Aggregate results for the correct season.
-        if (seasonalData[season]) {
-            seasonalData[season].totalGridCharge += simResults.dailyBreakdown.gridChargeKWh;
-            seasonalData[season].totalSocAt6am += simResults.socAt6am;
-            seasonalData[season].days++;
+        if (seasonalData[seasonName]) {
+            seasonalData[seasonName].totalGridCharge += simResults.dailyBreakdown.gridChargeKWh;
+            seasonalData[seasonName].totalSolarCharge += simResults.dailyBreakdown.solarChargeKWh;
+            seasonalData[seasonName].totalSocAt6am += simResults.socAt6am;
+            seasonalData[seasonName].days++;
         }
     });
 
@@ -108,6 +117,7 @@ function calculateSeasonalAverages(provider, batteryConfig, state) {
     for (const season in seasonalData) {
         const data = seasonalData[season];
         data.avgGridCharge = data.days > 0 ? data.totalGridCharge / data.days : 0;
+        data.avgSolarCharge = data.days > 0 ? data.totalSolarCharge / data.days : 0;
         const avgSocKWh = data.days > 0 ? data.totalSocAt6am / data.days : 0;
         data.avgSocPercent = batteryConfig.capacity > 0 ? (avgSocKWh / batteryConfig.capacity) * 100 : 0;
     }
@@ -229,7 +239,7 @@ export function renderExistingSystemDebugTable(state, shouldShow = true) {
     tableHTML += `<tr><td>Existing Battery Size (kWh)</td><td>${document.getElementById("existingBattery")?.value || ''}</td></tr>`;
     tableHTML += `<tr><td>Existing Battery Inverter (kW)</td><td>${document.getElementById("existingBatteryInverter")?.value || ''}</td></tr>`;
     tableHTML += `<tr><td colspan="2"><strong>Baseline Data Analysis (from CSV)</strong></td></tr>`;
-    tableHTML += `<tr><td>Total Days Analyzed</td><td>${totalDays} days</td></tr>`;
+    tableHTML += `<tr><td>Total Days Analysed</td><td>${totalDays} days</td></tr>`;
     tableHTML += `<tr><td>Total Consumption (Grid Imports + Self-Consumed Solar)</td><td>${totalConsumption.toFixed(2)} kWh</td></tr>`;
     tableHTML += `<tr><td>Total Solar Generation</td><td>${totalSolarGeneration.toFixed(2)} kWh</td></tr>`;
     tableHTML += `<tr><td>Total Self-Consumed Solar (Generation - Exports)</td><td>${totalSelfConsumed.toFixed(2)} kWh</td></tr>`;
@@ -340,9 +350,20 @@ export function renderProvidersDebugTable(state, shouldShow = true) {
     }
     clearError("provider-selection-error");
     
-    // The analysis must be run at least once to generate the config.
-    const config = state.analysisConfig;
-    if (!config) return;
+    // Gather the current UI settings directly, instead of waiting for the main analysis.
+    const config = gatherConfigFromUI();
+    if (config.selectedProviders.length === 0) {
+        displayError("Please select at least one provider.", "provider-selection-error");
+        return;
+    }
+
+    // Determine the TOU hours and calculate quarterly averages on the fly.
+    const touHours = determineTouHours(config);
+    state.touHoursForAnalysis = touHours; // Save for consistent display
+    if (!useManual) {
+        state.quarterlyAverages = null; // Clear cache to recalculate
+        getSimulationData(touHours, state.electricityData);
+    }
 
     // --- Part 1: Render the Household Consumption Quarterly Averages Table ---
 	if (state.quarterlyAverages) {
@@ -401,13 +422,13 @@ export function renderProvidersDebugTable(state, shouldShow = true) {
                 socChargeTrigger: config.socChargeTrigger
             };
             // Run a separate simulation to get diagnostic averages for this provider.
-            const seasonalAverages = calculateSeasonalAverages(providerConfig, batteryConfig, state);
+            const seasonalAverages = calculateSeasonalAverages(providerConfig, batteryConfig, config, state);
             
             // Build the results table for this provider.
-            tableHTML += `<table><thead><tr><th>Season</th><th>Avg Daily Grid Charge (kWh)</th><th>Avg SOC at 6am (%)</th></tr></thead><tbody>`;
+            tableHTML += `<table><thead><tr><th>Season</th><th>Avg Daily Solar Charge (kWh)</th><th>Avg Daily Grid Charge (kWh)</th><th>Avg SOC at 6am (%)</th></tr></thead><tbody>`;
             for (const season in seasonalAverages) {
                 const data = seasonalAverages[season];
-                tableHTML += `<tr><td>${season}</td><td>${data.avgGridCharge.toFixed(2)}</td><td>${data.avgSocPercent.toFixed(1)}%</td></tr>`;
+                tableHTML += `<tr><td>${season}</td><td>${data.avgSolarCharge.toFixed(2)}</td><td>${data.avgGridCharge.toFixed(2)}</td><td>${data.avgSocPercent.toFixed(1)}%</td></tr>`;
             }
             tableHTML += `</tbody></table>`;
         } else {

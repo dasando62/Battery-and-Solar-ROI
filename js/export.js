@@ -1,12 +1,12 @@
 // js/export.js
-// Version 1.1.7
+// Version 1.1.9
 
 
 // This module handles all functionality related to exporting analysis results,
 // including generating detailed PDF reports and simple CSV files.
 
 /*
- * Home Battery & Solar ROI Analyzer
+ * Home Battery & Solar ROI Analyser
  * Copyright (c) 2025 [DaSando62]
  *
  * This software is licensed under the MIT License.
@@ -71,7 +71,7 @@ function addHeaderFooter(pdf, pageNum, today) {
     pdf.text('Home Solar & Battery ROI Analysis', pdfMargin, pdfMargin - 10);
     pdf.text(`Page ${pageNum}`, pageWidth - pdfMargin, pdfMargin - 10, { align: 'right' });
     // Add footer text
-    pdf.text(`Generated on ${today} by ROI Analyzer v1.5.1`, pdfMargin, pageHeight - (pdfMargin - 15));
+	pdf.text(`Generated on ${today} by ROI Analyser v${state.appVersion}`, pdfMargin, pageHeight - (pdfMargin - 15));
 }
 
 /**
@@ -224,7 +224,7 @@ async function generateCsvModeReport(pdf, commonData, config) {
     const totalSelfConsumed = totalSolarGeneration - totalGridExports;
     const totalConsumption = totalSelfConsumed + totalGridImports;
     const baselineAnalysisHtml = `<h4 style="margin-top:20px;">Baseline Data Analysis (from CSV)</h4><table class="summary-table"><tbody>
-        <tr><td>Total Days Analyzed</td><td>${totalDays} days</td></tr>
+        <tr><td>Total Days Analysed</td><td>${totalDays} days</td></tr>
         <tr><td>Total Consumption (Grid Imports + Self-Consumed Solar)</td><td>${totalConsumption.toFixed(2)} kWh</td></tr>
         <tr><td>Total Solar Generation</td><td>${totalSolarGeneration.toFixed(2)} kWh</td></tr>
         <tr><td>Total Self-Consumed Solar (Generation - Exports)</td><td>${totalSelfConsumed.toFixed(2)} kWh</td></tr>

@@ -1,11 +1,11 @@
 // js/uiRender.js
-// Version 1.1.7
+// Version 1.1.9
 // This module is responsible for all UI rendering that occurs AFTER a calculation
 // or analysis is complete. This includes displaying financial results tables,
 // rendering charts, and showing system sizing recommendations.
 
 /*
- * Home Battery & Solar ROI Analyzer
+ * Home Battery & Solar ROI Analyser
  * Copyright (c) 2025 [DaSando62]
  *
  * This software is licensed under the MIT License.
@@ -125,7 +125,7 @@ function buildRawDataTable(data, isFlatRate = false, hasTieredExport = false) {
     } else {
         tableHTML += `<th>Peak (kWh)</th><th>Shoulder (kWh)</th><th>Off-Peak (kWh)</th>`;
     }
-    tableHTML += `<th>Grid Charge (kWh)</th>`;
+    tableHTML += `<th>Solar Charge (kWh)</th><th>Grid Charge (kWh)</th>`;
     if (hasTieredExport) {
         tableHTML += `<th>Export Tier 1 (kWh)</th><th>Export Tier 2 (kWh)</th>`;
     } else {
@@ -135,7 +135,7 @@ function buildRawDataTable(data, isFlatRate = false, hasTieredExport = false) {
     
     // --- Dynamically Build Body Rows ---
     // Initialize totals for the summary row.
-    let totals = { days: 0, peak: 0, shoulder: 0, offPeak: 0, gridCharge: 0, tier1: 0, tier2: 0 };
+    let totals = { days: 0, peak: 0, shoulder: 0, offPeak: 0, gridCharge: 0, solarCharge: 0, tier1: 0, tier2: 0 };
     
     for (const seasonName in data) {
         const seasonData = data[seasonName];
@@ -146,6 +146,7 @@ function buildRawDataTable(data, isFlatRate = false, hasTieredExport = false) {
             totals.shoulder += seasonData.shoulderKWh || 0;
             totals.offPeak += seasonData.offPeakKWh || 0;
             totals.gridCharge += seasonData.gridChargeKWh || 0;
+			totals.solarCharge += seasonData.solarChargeKWh || 0;
             totals.tier1 += seasonData.tier1ExportKWh || 0;
             totals.tier2 += seasonData.tier2ExportKWh || 0;
             
@@ -157,7 +158,8 @@ function buildRawDataTable(data, isFlatRate = false, hasTieredExport = false) {
             } else {
                 tableHTML += `<td>${(seasonData.peakKWh || 0).toFixed(2)}</td><td>${(seasonData.shoulderKWh || 0).toFixed(2)}</td><td>${(seasonData.offPeakKWh || 0).toFixed(2)}</td>`;
             }
-            tableHTML += `<td>${(seasonData.gridChargeKWh || 0).toFixed(2)}</td>`;
+            tableHTML += `<td>${(seasonData.solarChargeKWh || 0).toFixed(2)}</td>`;
+			tableHTML += `<td>${(seasonData.gridChargeKWh || 0).toFixed(2)}</td>`;
             if (hasTieredExport) {
                 tableHTML += `<td>${(seasonData.tier1ExportKWh || 0).toFixed(2)}</td><td>${(seasonData.tier2ExportKWh || 0).toFixed(2)}</td>`;
             } else {
@@ -176,6 +178,7 @@ function buildRawDataTable(data, isFlatRate = false, hasTieredExport = false) {
     } else {
         tableHTML += `<td><strong>${totals.peak.toFixed(2)}</strong></td><td><strong>${totals.shoulder.toFixed(2)}</strong></td><td><strong>${totals.offPeak.toFixed(2)}</strong></td>`;
     }
+	tableHTML += `<td><strong>${totals.solarCharge.toFixed(2)}</strong></td>`;
     tableHTML += `<td><strong>${totals.gridCharge.toFixed(2)}</strong></td>`;
     if (hasTieredExport) {
         tableHTML += `<td><strong>${totals.tier1.toFixed(2)}</strong></td><td><strong>${totals.tier2.toFixed(2)}</strong></td>`;
@@ -196,21 +199,26 @@ function buildRawDataTable(data, isFlatRate = false, hasTieredExport = false) {
  * @param {object} sizingResults - The complete sizing results object from the analysis module.
  * @param {object} state - The global application state, used to access config and TOU hours.
  */
-export function renderSizingResults(sizingResults, state) {
+export function renderSizingResults(sizingResults, state, config) {
     // Get the container where the recommendations will be displayed.
     const recommendationContainer = document.getElementById('recommendationContainer');
     if (!recommendationContainer) return;
+	
+	if (!sizingResults) {
+        recommendationContainer.innerHTML = '<p class="error-message">Could not generate sizing recommendations.</p>';
+        estimatesContainer.innerHTML = ''; // Clear the estimates area too
+        return;
+    }
 
-    // Destructure the results object for easier access.
-    const { heuristic, detailed, blackout } = sizingResults;
-    // Get the analysis configuration to access user inputs (e.g., for blackout text).
-    const config = state.analysisConfig;
-    let recommendationHTML = `<div class="recommendation-section">`;
+	// Destructure the results object for easier access.
+	const { heuristic, detailed, blackout } = sizingResults;
+	// Get the analysis configuration to access user inputs (e.g., for blackout text).
+	let recommendationHTML = `<div class="recommendation-section">`;
 
     // --- Block 1: Build the Heuristic Sizing Recommendation ---
     if (heuristic) {
         recommendationHTML += `
-            <h4>Heuristic Sizing</h4>
+            <h4>Simple Sizing</h4>
             
             <p style="font-size:0.9em; font-style:italic; margin-top:-5px;">This is a general recommendation based on the <strong>Energy Self-Sufficiency</strong> target you set. It aims to size a system that would generate that percentage of your total annual energy consumption.</p>
 
@@ -228,11 +236,11 @@ export function renderSizingResults(sizingResults, state) {
         recommendationHTML += `<hr>
             <h4>Detailed Sizing</h4>
 
-            <p style="font-size:0.9em; font-style:italic; margin-top:-5px;">This is an advanced recommendation that analyzes your day-to-day historical usage. It sizes the battery and inverter to handle your typical <strong>high-usage days</strong>, not just your overall average.</p>
+            <p style="font-size:0.9em; font-style:italic; margin-top:-5px;">This is an advanced recommendation that analyses your day-to-day historical usage. It sizes the battery and inverter to handle your typical <strong>high-usage days</strong>, not just your overall average. The &quot;Simple Sizing Recommended Inverter&quot; should be used for the inverter recommendation.</p>
 
             <p>
                 <strong>Recommended Battery Capacity: ${detailed.recommendedBatteryKWh} kWh</strong><br>
-                <small><em>This recommendation is based on your total consumption during the Peak Period (currently <strong>${peakHoursString}</strong>) and would have covered your needs on ${detailed.batteryCoverageDays} of ${detailed.totalDays} analyzed days.</em></small>
+                <small><em>This recommendation is based on your total consumption during the Peak Period (currently <strong>${peakHoursString}</strong>) and would have covered your needs on ${detailed.batteryCoverageDays} of ${detailed.totalDays} analysed days.</em></small>
             </p>
             <p>
                 <strong>Recommended Inverter Power: ${detailed.recommendedInverterKW.toFixed(1)} kW</strong><br>

@@ -1,11 +1,11 @@
 // js/tariffComponents.js
-// Version 1.1.7
+// Version 1.1.9
 // This module contains the core "rules engines" for calculating daily electricity costs and credits.
 // It provides a generic, data-driven way to handle various complex tariff structures,
 // making the system extensible to new types of rules in the future.
 
 /*
- * Home Battery & Solar ROI Analyzer
+ * Home Battery & Solar ROI Analyser
  * Copyright (c) 2025 [DaSando62]
  *
  * This software is licensed under the MIT License.

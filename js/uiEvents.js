@@ -1,14 +1,38 @@
 // js/uiEvents.js 
-// Version 1.1.7
+// Version 1.1.9
 // This module serves as the central hub for handling all user interactions.
 // It attaches event listeners to UI elements and calls the appropriate business logic
 // from other modules in response to user actions (e.g., clicks, changes).
 
+/*
+ * Home Battery & Solar ROI Analyser
+ * Copyright (c) 2025 [DaSando62]
+ *
+ * This software is licensed under the MIT License.
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 import { state } from './state.js';
 import { gatherConfigFromUI } from './config.js';
-import { calculateDetailedSizing, runSimulation } from './analysis.js';
+import { calculateDetailedSizing, runSimulation, calculateSizingRecommendations } from './analysis.js';
 import { renderResults, renderSizingResults, drawDistributionCharts } from './uiRender.js';
-import { getNumericInput, getSimulationData, displayError, clearError, parseRangesToHours } from './utils.js';
+import { getNumericInput, getSimulationData, displayError, clearError, parseRangesToHours, determineTouHours } from './utils.js';
 import { handleUsageCsv, handleSolarCsv } from './dataParser.js';
 import { wireSaveLoadEvents } from './storage.js';
 import { hideAllDebugContainers, renderDebugDataTable, renderExistingSystemDebugTable, renderProvidersDebugTable, renderAnalysisPeriodDebugTable, renderLoanDebugTable, renderOpportunityCostDebugTable } from './debugTables.js';
@@ -127,11 +151,12 @@ export function toggleExistingSolar() {
     const solarCounts = document.getElementById('solarCounts');
     const existingSolarKWInput = document.getElementById('existingSolarKW');
     const existingSolarInverterInput = document.getElementById('existingSolarInverter');
+    const advancedSolarOptions = document.getElementById('advanced-solar-options'); // <-- ADD THIS
     const isDisabled = noSolarCheckbox.checked;
 
     if (solarCsvLabel) solarCsvLabel.style.display = isDisabled ? 'none' : 'block';
+    if (advancedSolarOptions) advancedSolarOptions.style.display = isDisabled ? 'none' : 'block'; // <-- AND ADD THIS
     if (existingSolarKWInput) existingSolarKWInput.disabled = isDisabled;
-    if (existingSolarInverterInput) existingSolarInverterInput.disabled = isDisabled;
     
     // If no solar, clear inputs and generate a "zero solar" dataset for the simulation
     if (isDisabled) {
@@ -155,22 +180,32 @@ export function toggleExistingSolar() {
  */
 export function wireStaticEvents() {
     document.getElementById('noExistingSolar')?.addEventListener('change', toggleExistingSolar);
-    // Toggles visibility between the CSV and Manual input sections.
+    // Toggle between CSV and Manual input sections
     document.getElementById('manualInputToggle')?.addEventListener('change', (e) => {
-        // Determine if manual mode is now active based on the checkbox state.
-        const isManualMode = e.target.checked;
-
-        // --- Hide or Show the CSV-related sections ---
-        // If in manual mode, hide them ('none'). Otherwise, show them ('block').
-        const csvDisplay = isManualMode ? 'none' : 'block';
-        document.getElementById('csvInputSection').style.display = csvDisplay;
-        document.getElementById('advanced-usage-options').style.display = csvDisplay;
-        document.getElementById('advanced-solar-options').style.display = csvDisplay;
-
-        // --- Show or Hide the Manual Input section ---
-        // This has the opposite logic.
-        document.getElementById('manualInputSection').style.display = isManualMode ? 'block' : 'none';
+        document.getElementById('csvInputSection').style.display = e.target.checked ? 'none' : 'block';
+        document.getElementById('manualInputSection').style.display = e.target.checked ? 'block' : 'none';
     });
+    // Toggle visibility of all debug-related buttons and containers
+    document.getElementById('debugToggle')?.addEventListener('change', (e) => {
+        const display = e.target.checked ? 'inline-block' : 'none';
+        document.querySelectorAll('.debug-button').forEach(button => button.style.display = display);
+        if (!e.target.checked) { hideAllDebugContainers(); clearError(); }
+    });
+	
+	// Listener for the grid off-peak charging toggle
+	const gridChargeToggle = document.getElementById('gridOffPeakCharge');
+	const gridChargeSettings = document.getElementById('gridChargeSettingsContainer');
+
+	const handleGridChargeToggle = () => {
+		if (gridChargeSettings) {
+			gridChargeSettings.style.display = gridChargeToggle.checked ? 'block' : 'none';
+		}
+	};
+
+	gridChargeToggle?.addEventListener('change', handleGridChargeToggle);
+	// Call it once on page load to set the initial state
+	handleGridChargeToggle();
+
     // File input listeners
     document.getElementById("usageCsv")?.addEventListener("change", handleUsageCsv);
     document.getElementById("solarCsv")?.addEventListener("change", handleSolarCsv);
@@ -387,76 +422,72 @@ export function wireDynamicProviderEvents() {
 function handleCalculateSizing() {
     try {
         clearError();
-        // FIX 1: Clear the quarterly averages cache at the start of every run.
-        state.quarterlyAverages = null; 
-
         const config = gatherConfigFromUI();
         const recommendationSection = document.getElementById('sizing-recommendation-section');
-        if (recommendationSection) recommendationSection.style.display = 'none';
-
-        // Validation checks
-        if (config.useManual || !Array.isArray(state.electricityData) || state.electricityData.length === 0) {
-            displayError("Detailed sizing requires an electricity CSV file to be uploaded.", "sizing-error-message");
-            return;
-        }
-        if (!config.noExistingSolar && (!Array.isArray(state.solarData) || state.solarData.length === 0)) {
-            displayError("Detailed sizing requires a solar CSV file. If you don't have one, check the 'No existing solar system' box.", "sizing-error-message");
-            return;
-        }
-
         const recommendationContainer = document.getElementById('recommendationContainer');
+        
         if (recommendationContainer) recommendationContainer.innerHTML = '<p>Calculating...</p>';
         if (recommendationSection) recommendationSection.style.display = 'block';
-        
+
         // Use a timeout to allow the UI to update with "Calculating..." before the main work begins.
         setTimeout(() => {
-            let correctedElectricityData = JSON.parse(JSON.stringify(state.electricityData));
-            
-            const baselineProviderId = config.selectedProviders[0];
-            if (!baselineProviderId) {
-                displayError("Please select at least one provider to use as a baseline.", "sizing-error-message");
-                return;
-            }
-            const baselineProvider = config.providers.find(p => p.id === baselineProviderId);
-            if (!baselineProvider) {
-                displayError("Could not find details for the selected baseline provider.", "sizing-error-message");
-                return;
-            }
+            if (config.useManual) {
+                // --- MANUAL MODE LOGIC ---
+                // Gather the daily averages directly from the manual input fields.
+                const simulationData = {
+                    'Q1_Summer': { avgPeak: getNumericInput("summerDailyPeak"), avgShoulder: getNumericInput("summerDailyShoulder"), avgOffPeak: getNumericInput("summerDailyOffPeak") },
+                    'Q2_Autumn': { avgPeak: getNumericInput("autumnDailyPeak"), avgShoulder: getNumericInput("autumnDailyShoulder"), avgOffPeak: getNumericInput("autumnDailyOffPeak") },
+                    'Q3_Winter': { avgPeak: getNumericInput("winterDailyPeak"), avgShoulder: getNumericInput("winterDailyShoulder"), avgOffPeak: getNumericInput("winterDailyOffPeak") },
+                    'Q4_Spring': { avgPeak: getNumericInput("springDailyPeak"), avgShoulder: getNumericInput("springDailyShoulder"), avgOffPeak: getNumericInput("springDailyOffPeak") },
+                };
+                
+                // Run only the simple (heuristic) sizing calculation.
+                const heuristicRecs = calculateSizingRecommendations(config.recommendationCoverageTarget, simulationData);
 
-            // Determine the Time-of-Use hours from the baseline provider's tariff rules.
-            const peakRule = (baselineProvider.importRules || []).find(r => r.name.toLowerCase().includes('peak'));
-            const shoulderRule = (baselineProvider.importRules || []).find(r => r.name.toLowerCase().includes('shoulder'));
-            let touHours = {
-                peak: parseRangesToHours(peakRule?.hours || ''),
-                shoulder: parseRangesToHours(shoulderRule?.hours || ''),
-            };
+                // Create a simplified results object.
+                const sizingResults = {
+                    heuristic: heuristicRecs,
+                    detailed: null, // Detailed results are not available in manual mode
+                    blackout: null  // Blackout results are not available in manual mode
+                };
 
-            // FIX 2: If no TOU rules are found, apply a full set of sensible defaults.
-            if (touHours.peak.length === 0 && touHours.shoulder.length === 0) {
-                touHours.peak = parseRangesToHours('3pm-11pm');
-                touHours.shoulder = parseRangesToHours('7am-3pm');
-            }
+                renderSizingResults(sizingResults, state, config);
+                
+                // Clear the area where the detailed charts would normally appear.
+                const newSystemEstimatesTable = document.getElementById("newSystemEstimatesTable");
+                if (newSystemEstimatesTable) {
+                    newSystemEstimatesTable.innerHTML = '<p><em>Detailed sizing charts and blackout protection require CSV data.</em></p>';
+                }
 
-            // Save the determined hours to the global state for the debug table to use.
-            state.touHoursForAnalysis = touHours;
-            
-            // Get or calculate the seasonal data needed for the simulation.
-            const simulationData = config.useManual 
-                ? config.manualData 
-                : getSimulationData(touHours, correctedElectricityData);
-            if (!simulationData) {
-                displayError("Could not get seasonal data. Please check CSV or manual inputs.", "sizing-error-message");
-                return;
-            }
-            // Run the detailed sizing calculation and render the results.
-            const sizingResults = calculateDetailedSizing(correctedElectricityData, state.solarData, config, simulationData);
-            if (sizingResults) {
-                renderSizingResults(sizingResults, state);
-                setTimeout(() => {
-                    drawDistributionCharts(sizingResults.distributions, state);
-                }, 0);
             } else {
-                displayError("Sizing calculation failed. Please check the data files.", "sizing-error-message");
+                // --- CSV MODE LOGIC (the original logic with corrected validation) ---
+                if (!Array.isArray(state.electricityData) || state.electricityData.length === 0) {
+                    displayError("Detailed sizing requires an electricity CSV file to be uploaded.", "sizing-error-message");
+                    return;
+                }
+                if (!config.noExistingSolar && (!Array.isArray(state.solarData) || state.solarData.length === 0)) {
+                    displayError("Detailed sizing requires a solar CSV file. If you don't have one, check the 'No existing solar system' box.", "sizing-error-message");
+                    return;
+                }
+                
+                // Continue with the detailed sizing as before.
+                let correctedElectricityData = JSON.parse(JSON.stringify(state.electricityData));
+                const touHours = determineTouHours(config);
+                state.touHoursForAnalysis = touHours;
+                const simulationData = getSimulationData(touHours, correctedElectricityData);
+                if (!simulationData) {
+                    displayError("Could not get seasonal data. Please check CSV or manual inputs.", "sizing-error-message");
+                    return;
+                }
+                const sizingResults = calculateDetailedSizing(correctedElectricityData, state.solarData, config, simulationData);
+                if (sizingResults) {
+                    renderSizingResults(sizingResults, state, config);
+                    setTimeout(() => {
+                        drawDistributionCharts(sizingResults.distributions, state);
+                    }, 0);
+                } else {
+                    displayError("Sizing calculation failed. Please check the data files.", "sizing-error-message");
+                }
             }
         }, 10);
     } catch (error) {
@@ -500,22 +531,9 @@ function handleRunAnalysis() {
                     displayError("Could not find details for the selected baseline provider.", "provider-selection-error");
                     return;
                 }
-
-                // Determine the Time-of-Use hours from the baseline provider's tariff rules.
-                const peakRule = (baselineProvider.importRules || []).find(r => r.name.toLowerCase().includes('peak'));
-                const shoulderRule = (baselineProvider.importRules || []).find(r => r.name.toLowerCase().includes('shoulder'));
-                let touHours = {
-                    peak: parseRangesToHours(peakRule?.hours || ''),
-                    shoulder: parseRangesToHours(shoulderRule?.hours || ''),
-                };
-
-                // FIX 2: If no TOU rules are found, apply a full set of sensible defaults.
-                if (touHours.peak.length === 0 && touHours.shoulder.length === 0) {
-                    console.log("No TOU rules found for provider. Applying default Peak (3pm-11pm) and Shoulder (7am-3pm) periods for analysis.");
-                    touHours.peak = parseRangesToHours('3pm-11pm');
-                    touHours.shoulder = parseRangesToHours('7am-3pm');
-                }
-                
+				
+				// Determine the Time-of-Use hours using the new centralized function.
+				const touHours = determineTouHours(config);
                 // Save the determined hours to the global state for the debug table to use.
                 state.touHoursForAnalysis = touHours;
 

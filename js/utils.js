@@ -1,10 +1,10 @@
 // js/utils.js
-// Version 1.1.7
+// Version 1.1.9
 // This file is a collection of small, reusable utility functions used throughout the application.
 // It helps to keep other modules clean and focused on their primary tasks.
 
 /*
- * Home Battery & Solar ROI Analyzer
+ * Home Battery & Solar ROI Analyser
  * Copyright (c) 2025 [DaSando62]
  *
  * This software is licensed under the MIT License.
@@ -29,6 +29,41 @@
 
 import { state } from './state.js';
 import { calculateQuarterlyAverages } from './dataParser.js';
+
+/**
+ * Determines the Time-of-Use hours from the baseline provider's tariff rules.
+ * Applies sensible defaults if no specific TOU rules are found.
+ * @param {object} config - The main analysis configuration object.
+ * @returns {{peak: number[], shoulder: number[]}} An object with arrays of peak and shoulder hours.
+ */
+export function determineTouHours(config) {
+    const baselineProvider = config.providers.find(p => p.id === config.selectedProviders[0]);
+
+    // If no provider is found, return the default hours immediately.
+    if (!baselineProvider) {
+        return {
+            peak: parseRangesToHours('3pm-11pm'),
+            shoulder: parseRangesToHours('7am-3pm')
+        };
+    }
+
+    const peakRule = (baselineProvider.importRules || []).find(r => r.name.toLowerCase().includes('peak'));
+    const shoulderRule = (baselineProvider.importRules || []).find(r => r.name.toLowerCase().includes('shoulder'));
+
+    let touHours = {
+        peak: parseRangesToHours(peakRule?.hours || ''),
+        shoulder: parseRangesToHours(shoulderRule?.hours || ''),
+    };
+
+    // If no specific TOU rules are found on the provider, apply the defaults.
+    if (touHours.peak.length === 0 && touHours.shoulder.length === 0) {
+        console.log("No TOU rules found for provider. Applying default Peak (3pm-11pm) and Shoulder (7am-3pm) periods.");
+        touHours.peak = parseRangesToHours('3pm-11pm');
+        touHours.shoulder = parseRangesToHours('7am-3pm');
+    }
+
+    return touHours;
+}
 
 /**
  * Determines the season for a given date string.

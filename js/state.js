@@ -1,11 +1,11 @@
 // js/state.js
-//Version 1.1.7
+//Version 1.1.9 ***update in state array as well***
 // This file defines and exports a central, global `state` object.
 // This object acts as a single source of truth for shared application data,
 // making it accessible across different modules without passing it as a function parameter everywhere.
 
 /*
- * Home Battery & Solar ROI Analyzer
+ * Home Battery & Solar ROI Analyser
  * Copyright (c) 2025 [DaSando62]
  *
  * This software is licensed under the MIT License.
@@ -29,6 +29,8 @@
  */
 
 export const state = {
+  // Holds the current code version for pdf report and web page.
+  appVersion: "1.1.9",
   // Holds the parsed hourly electricity usage data from the CSV file.
   electricityData: null,
   // Holds the parsed hourly solar generation data from the CSV file.
