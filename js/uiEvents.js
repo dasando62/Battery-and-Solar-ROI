@@ -1,5 +1,5 @@
 // js/uiEvents.js 
-// Version 1.1.9
+// Version 1.2.3
 // This module serves as the central hub for handling all user interactions.
 // It attaches event listeners to UI elements and calls the appropriate business logic
 // from other modules in response to user actions (e.g., clicks, changes).
@@ -38,6 +38,9 @@ import { wireSaveLoadEvents } from './storage.js';
 import { hideAllDebugContainers, renderDebugDataTable, renderExistingSystemDebugTable, renderProvidersDebugTable, renderAnalysisPeriodDebugTable, renderLoanDebugTable, renderOpportunityCostDebugTable } from './debugTables.js';
 import { saveProvider, deleteProvider, getProviders, saveAllProviders } from './providerManager.js';
 import { renderProviderSettings } from './uiDynamic.js';
+
+// a variable to cache the satet of the solar data
+let solarDataCache = null;
 
 /**
  * Checks which debug tables are currently visible and re-renders them.
@@ -146,32 +149,48 @@ function saveProviderFromDOM(providerId) {
 export function toggleExistingSolar() {
     const noSolarCheckbox = document.getElementById('noExistingSolar');
     if (!noSolarCheckbox) return;
+    
     const solarCsvLabel = document.getElementById('solarCsvLabel');
     const solarCsvInput = document.getElementById('solarCsv');
     const solarCounts = document.getElementById('solarCounts');
     const existingSolarKWInput = document.getElementById('existingSolarKW');
     const existingSolarInverterInput = document.getElementById('existingSolarInverter');
-    const advancedSolarOptions = document.getElementById('advanced-solar-options'); // <-- ADD THIS
+    const advancedSolarOptions = document.getElementById('advanced-solar-options');
     const isDisabled = noSolarCheckbox.checked;
 
     if (solarCsvLabel) solarCsvLabel.style.display = isDisabled ? 'none' : 'block';
-    if (advancedSolarOptions) advancedSolarOptions.style.display = isDisabled ? 'none' : 'block'; // <-- AND ADD THIS
+    if (advancedSolarOptions) advancedSolarOptions.style.display = isDisabled ? 'none' : 'block';
     if (existingSolarKWInput) existingSolarKWInput.disabled = isDisabled;
-    
-    // If no solar, clear inputs and generate a "zero solar" dataset for the simulation
+
+    // --- FIX: Logic when CHECKING the box ---
     if (isDisabled) {
+        // Only cache the data if it exists and hasn't been cached already
+        if (state.solarData && solarDataCache === null) {
+            solarDataCache = state.solarData; 
+        }
+
+        // Clear UI and generate zero-solar data
         if (solarCsvInput) solarCsvInput.value = null;
         if (solarCounts) solarCounts.textContent = '';
         if (existingSolarKWInput) existingSolarKWInput.value = '0';
         if (existingSolarInverterInput) existingSolarInverterInput.value = '0';
+
         if (state.electricityData && state.electricityData.length > 0) {
             state.solarData = state.electricityData.map(day => ({ date: day.date, hourly: Array(24).fill(0) }));
             if (solarCounts) solarCounts.textContent = `${state.solarData.length} days of zero-solar data generated.`;
         } else {
             state.solarData = null;
         }
-    } else {
-        if (solarCounts) solarCounts.textContent = '';
+    // --- FIX: Logic when UNCHECKING the box ---
+    } else { 
+        // Restore the original data from the cache
+        state.solarData = solarDataCache;
+        solarDataCache = null; // Clear the cache
+
+        // Update the UI to reflect the restored data
+        if (solarCounts) {
+            solarCounts.textContent = state.solarData ? `${state.solarData.length} days of solar data loaded.` : '';
+        }
     }
 }
 
@@ -335,8 +354,8 @@ export function wireDynamicProviderEvents() {
             saveProviderFromDOM(providerId);
             const statusEl = document.getElementById(`save-status-${providerId.toLowerCase()}`);
             if (statusEl) {
-                statusEl.textContent = "Saved!";
-                setTimeout(() => { statusEl.textContent = ""; }, 2000);
+                statusEl.textContent = "Applied! Use main 'Save Settings' button to make permanent.";
+                setTimeout(() => { statusEl.textContent = ""; }, 3000);
             }
         }
 

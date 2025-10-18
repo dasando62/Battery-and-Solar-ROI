@@ -1,5 +1,5 @@
 // js/uiDynamic.js
-//Version 1.1.9
+//Version 1.2.3
 // This module is responsible for dynamically generating the HTML for the
 // provider settings section. It reads the provider data from the manager
 // and builds the complex UI with all its nested rules and conditions.
@@ -30,6 +30,7 @@
 
 import { getProviders } from './providerManager.js';
 import { sanitize } from './utils.js';
+import { TARIFF_RULE_TYPES, SPECIAL_CONDITIONS } from './constants.js'
 
 /**
  * Renders the HTML for a single "special condition" rule row.
@@ -40,7 +41,7 @@ import { sanitize } from './utils.js';
  */
 function renderConditionRow(condition, providerId, index) {
     // Conditionally show the 'hours' input only if the metric requires it.
-    const hoursInput = (condition.condition.metric === 'import_in_window')
+    const hoursInput = (condition.condition.metric === SPECIAL_CONDITIONS.METRIC.IMPORT_IN_WINDOW)
         ? `<input type="text" class="provider-input" data-field="condition.hours" placeholder="e.g., 5pm-7pm" value="${condition.condition.hours || ''}">`
         : '';
 
@@ -55,24 +56,24 @@ function renderConditionRow(condition, providerId, index) {
                 
                 <span class="rule-label">IF</span>
                 <select class="provider-input" data-field="condition.metric">
-                    <option value="peak_import" ${condition.condition.metric === 'peak_import' ? 'selected' : ''}>Peak Import is</option>
-                    <option value="net_grid_usage" ${condition.condition.metric === 'net_grid_usage' ? 'selected' : ''}>Net Grid Usage is</option>
-                    <option value="import_in_window" ${condition.condition.metric === 'import_in_window' ? 'selected' : ''}>Import during</option>
+            <option value="${SPECIAL_CONDITIONS.METRIC.PEAK_IMPORT}" ${condition.condition.metric === SPECIAL_CONDITIONS.METRIC.PEAK_IMPORT ? 'selected' : ''}>Peak Import is</option>
+            <option value="${SPECIAL_CONDITIONS.METRIC.NET_GRID_USAGE}" ${condition.condition.metric === SPECIAL_CONDITIONS.METRIC.NET_GRID_USAGE ? 'selected' : ''}>Net Grid Usage is</option>
+            <option value="${SPECIAL_CONDITIONS.METRIC.IMPORT_IN_WINDOW}" ${condition.condition.metric === SPECIAL_CONDITIONS.METRIC.IMPORT_IN_WINDOW ? 'selected' : ''}>Import during</option>
                 </select>
                 ${hoursInput}
                 <select class="provider-input" data-field="condition.operator">
                     <option value="less_than_or_equal_to" ${condition.condition.operator === 'less_than_or_equal_to' ? 'selected' : ''}>&lt;=</option>
-                    <option value="less_than" ${condition.condition.operator === 'less_than' ? 'selected' : ''}>&lt;</option>
-                    <option value="greater_than" ${condition.condition.operator === 'greater_than' ? 'selected' : ''}>&gt;</option>
-                    <option value="greater_than_or_equal_to" ${condition.condition.operator === 'greater_than_or_equal_to' ? 'selected' : ''}>&gt;=</option>
-                </select>
-                <input type="number" step="0.01" class="provider-input" data-field="condition.value" placeholder="Value (kWh)" value="${condition.condition.value ?? 0}">
-                
-                <span class="rule-label">THEN</span>
-                <select class="provider-input" data-field="action.type">
-                    <option value="flat_credit" ${condition.action.type === 'flat_credit' ? 'selected' : ''}>Apply Credit</option>
-                    <option value="flat_charge" ${condition.action.type === 'flat_charge' ? 'selected' : ''}>Apply Charge</option>
-                </select>
+            <option value="${SPECIAL_CONDITIONS.OPERATOR.LESS_THAN_OR_EQUAL}" ${condition.condition.operator === SPECIAL_CONDITIONS.OPERATOR.LESS_THAN_OR_EQUAL ? 'selected' : ''}>&lt;=</option>
+            <option value="${SPECIAL_CONDITIONS.OPERATOR.LESS_THAN}" ${condition.condition.operator === SPECIAL_CONDITIONS.OPERATOR.LESS_THAN ? 'selected' : ''}>&lt;</option>
+                <option value="${SPECIAL_CONDITIONS.OPERATOR.GREATER_THAN_OR_EQUAL}" ${condition.condition.operator === SPECIAL_CONDITIONS.OPERATOR.GREATER_THAN_OR_EQUAL ? 'selected' : ''}>&gt;=</option>
+            </select>
+            <input type="number" step="0.01" class="provider-input" data-field="condition.value" placeholder="Value (kWh)" value="${condition.condition.value ?? 0}">
+            
+            <span class="rule-label">THEN</span>
+            <select class="provider-input" data-field="action.type">
+                <option value="${SPECIAL_CONDITIONS.ACTION.FLAT_CREDIT}" ${condition.action.type === SPECIAL_CONDITIONS.ACTION.FLAT_CREDIT ? 'selected' : ''}>Apply Credit</option>
+                <option value="${SPECIAL_CONDITIONS.ACTION.FLAT_CHARGE}" ${condition.action.type === SPECIAL_CONDITIONS.ACTION.FLAT_CHARGE ? 'selected' : ''}>Apply Charge</option>
+            </select>
                 <span class="rule-label">$</span>
                 <input type="number" step="0.01" class="provider-input" data-field="action.value" placeholder="Amount" value="${condition.action.value ?? 0}">
 
@@ -91,17 +92,17 @@ function renderConditionRow(condition, providerId, index) {
  */
 function renderRuleRow(rule, providerId, ruleType, index) {
     // Conditionally show/hide the 'hours' or 'limit' input based on the rule type.
-    const touStyle = rule.type === 'tou' ? '' : 'style="display:none;"';
-    const tieredStyle = rule.type === 'tiered' ? '' : 'style="display:none;"';
+    const touStyle = rule.type === TARIFF_RULE_TYPES.TIME_OF_USE ? '' : 'style="display:none;"';
+    const tieredStyle = rule.type === TARIFF_RULE_TYPES.TIERED ? '' : 'style="display:none;"';
 
     // Returns a template literal with all the inputs for a tariff rule.
     return `
         <div class="rule-row" data-index="${index}">
             <div class="rule-row-content">
                 <select class="provider-input" data-field="type">
-                    <option value="tou" ${rule.type === 'tou' ? 'selected' : ''}>Time of Use</option>
-                    <option value="tiered" ${rule.type === 'tiered' ? 'selected' : ''}>Tiered</option>
-                    <option value="flat" ${rule.type === 'flat' ? 'selected' : ''}>Flat Rate</option>
+					<option value="${TARIFF_RULE_TYPES.TIME_OF_USE}" ${rule.type === TARIFF_RULE_TYPES.TIME_OF_USE ? 'selected' : ''}>Time of Use</option>
+					<option value="${TARIFF_RULE_TYPES.TIERED}" ${rule.type === TARIFF_RULE_TYPES.TIERED ? 'selected' : ''}>Tiered</option>
+					<option value="${TARIFF_RULE_TYPES.FLAT}" ${rule.type === TARIFF_RULE_TYPES.FLAT ? 'selected' : ''}>Flat Rate</option>
                 </select>
                 <input type="text" class="provider-input" data-field="name" placeholder="Rule Name" value="${rule.name || ''}">
                 <label class="rule-label">$</label>
@@ -193,7 +194,7 @@ export function renderProviderSettings() {
                 </details>
                 <hr>
                 <button class="delete-provider-button" data-id="${provider.id}">Delete Provider</button>
-                <button class="save-provider-button" data-id="${provider.id}">Save Changes</button>
+                <button class="save-provider-button" data-id="${provider.id}">Apply Changes</button>
                 <span id="save-status-${provider.id.toLowerCase()}" class="save-status-message"></span>
             </div>
         </details>`;

@@ -1,5 +1,5 @@
 // js/tariffComponents.js
-// Version 1.1.9
+// Version 1.2.3
 // This module contains the core "rules engines" for calculating daily electricity costs and credits.
 // It provides a generic, data-driven way to handle various complex tariff structures,
 // making the system extensible to new types of rules in the future.
@@ -29,6 +29,7 @@
  */
 
 import { escalate, parseRangesToHours } from './utils.js';
+import { TARIFF_RULE_TYPES } from './constants.js';
 
 /**
  * A generic "rules engine" to calculate the total import cost for a day.
@@ -56,7 +57,7 @@ function calculateImportCost(importRules, dailyBreakdown, escalationConfig) {
         const escalatedRate = escalate(rule.rate || 0, escalationRate, year);
 
         switch (rule.type) {
-            case 'tou': // Time of Use rule: Applies to specific hours of the day.
+            case TARIFF_RULE_TYPES.TIME_OF_USE: // Time of Use rule: Applies to specific hours of the day.
                 const ruleHours = parseRangesToHours(rule.hours || '');
                 for (const h of ruleHours) {
                     if (remainingHourlyImports[h] > 0) {
@@ -67,7 +68,7 @@ function calculateImportCost(importRules, dailyBreakdown, escalationConfig) {
                 }
                 break;
 
-            case 'tiered': // Tiered rule: Applies to a block of the total daily import.
+            case TARIFF_RULE_TYPES.TIERED: // Tiered rule: Applies to a block of the total daily import.
                 const amountInTier = Math.min(remainingTotalImport, rule.limit || Infinity);
                 totalCost += amountInTier * escalatedRate;
                 remainingTotalImport -= amountInTier;
@@ -75,7 +76,7 @@ function calculateImportCost(importRules, dailyBreakdown, escalationConfig) {
                 // It doesn't deplete specific hours, which is accurate for most tiered billing.
                 break;
 
-            case 'flat': // Flat rate rule: Applies to all remaining unprocessed import.
+            case TARIFF_RULE_TYPES.FLAT: // Flat rate rule: Applies to all remaining unprocessed import.
                 totalCost += remainingTotalImport * escalatedRate;
                 remainingTotalImport = 0;
                 break;

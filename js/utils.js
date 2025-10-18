@@ -1,5 +1,5 @@
 // js/utils.js
-// Version 1.1.9
+// Version 1.2.3
 // This file is a collection of small, reusable utility functions used throughout the application.
 // It helps to keep other modules clean and focused on their primary tasks.
 
@@ -29,6 +29,7 @@
 
 import { state } from './state.js';
 import { calculateQuarterlyAverages } from './dataParser.js';
+import { DEFAULT_TOU_HOURS } from './constants.js';
 
 /**
  * Determines the Time-of-Use hours from the baseline provider's tariff rules.
@@ -42,8 +43,8 @@ export function determineTouHours(config) {
     // If no provider is found, return the default hours immediately.
     if (!baselineProvider) {
         return {
-            peak: parseRangesToHours('3pm-11pm'),
-            shoulder: parseRangesToHours('7am-3pm')
+            peak: parseRangesToHours(DEFAULT_TOU_HOURS.PEAK),
+            shoulder: parseRangesToHours(DEFAULT_TOU_HOURS.SHOULDER)
         };
     }
 
@@ -58,8 +59,8 @@ export function determineTouHours(config) {
     // If no specific TOU rules are found on the provider, apply the defaults.
     if (touHours.peak.length === 0 && touHours.shoulder.length === 0) {
         console.log("No TOU rules found for provider. Applying default Peak (3pm-11pm) and Shoulder (7am-3pm) periods.");
-        touHours.peak = parseRangesToHours('3pm-11pm');
-        touHours.shoulder = parseRangesToHours('7am-3pm');
+        touHours.peak = parseRangesToHours(DEFAULT_TOU_HOURS.PEAK);
+        touHours.shoulder = parseRangesToHours(DEFAULT_TOU_HOURS.SHOULDER);
     }
 
     return touHours;

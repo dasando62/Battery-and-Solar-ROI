@@ -1,5 +1,5 @@
 // js/profiles.js
-//Version 1.1.9
+//Version 1.2.3
 // This module provides functions to generate 24-hour energy profiles (consumption and solar)
 // from single daily total values, based on typical patterns.
 
@@ -28,6 +28,7 @@
  */
 
 import { parseRangesToHours } from './utils.js';
+import { SEASONS } from './constants.js'; 
 
 /**
  * Generates a 24-hour consumption profile from daily total kWh values for each Time of Use (TOU) period.
@@ -89,14 +90,14 @@ export function generateHourlySolarProfileFromDaily(dailyTotal, season = 'Q_Manu
   // Select the appropriate distribution curve based on the season.
   let distribution;
   switch (season) {
-    case 'Q1_Summer':
+    case SEASONS.SUMMER:
       distribution = summerSolarDistribution;
       break;
-    case 'Q3_Winter':
+    case SEASONS.WINTER:
       distribution = winterSolarDistribution;
       break;
-    case 'Q2_Autumn':
-    case 'Q4_Spring':
+    case SEASONS.AUTUMN:
+    case SEASONS.SPRING:
       distribution = shoulderSolarDistribution;
       break;
     default: // Fallback for manual mode or unknown seasons.

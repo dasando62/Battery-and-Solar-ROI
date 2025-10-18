@@ -1,5 +1,5 @@
 // js/debugTables.js
-// Version 1.1.9
+// Version 1.2.3
 // This module contains all functions related to rendering the "Debug Tables".
 // These tables provide transparency into the calculator's inputs, intermediate calculations,
 // and simulation results, aiding in validation and troubleshooting.
@@ -45,6 +45,7 @@ import {
 import { simulateDay, calculateSizingRecommendations, calculateDetailedSizing } from './analysis.js';
 import { state } from './state.js';
 import { renderSizingResults, drawDistributionCharts } from './uiRender.js';
+import { SEASONS } from './constants.js';
 
 /**
  * Hides all debug and results containers to provide a clean slate
@@ -62,64 +63,55 @@ export function hideAllDebugContainers() {
  * @param {object} state - The global application state containing electricity and solar data.
  * @returns {object} An object with calculated averages for each season.
  */
+// In js/debugTables.js
+
 function calculateSeasonalAverages(provider, batteryConfig, config, state) {
-    // Initialize data structure to hold results.
     const seasonalData = {
-        Summer: { totalGridCharge: 0, totalSolarCharge: 0, totalSocAt6am: 0, days: 0 },
-        Autumn: { totalGridCharge: 0, totalSolarCharge: 0, totalSocAt6am: 0, days: 0 },
-        Winter: { totalGridCharge: 0, totalSolarCharge: 0, totalSocAt6am: 0, days: 0 },
-        Spring: { totalGridCharge: 0, totalSolarCharge: 0, totalSocAt6am: 0, days: 0 },
+        Summer: { avgGridCharge: 0, avgSolarCharge: 0, avgSocPercent: 0 },
+        Autumn: { avgGridCharge: 0, avgSolarCharge: 0, avgSocPercent: 0 },
+        Winter: { avgGridCharge: 0, avgSolarCharge: 0, avgSocPercent: 0 },
+        Spring: { avgGridCharge: 0, avgSolarCharge: 0, avgSocPercent: 0 },
     };
 
-    if (!state.electricityData || state.electricityData.length === 0) {
-        return seasonalData; // Return empty structure if no data.
-    }
+    if (!state.quarterlyAverages) return seasonalData;
 
-    // Simulate day-by-day, carrying over the battery's state of charge.
-    let currentSOC = batteryConfig.capacity * 0.5;
-    const solarDataMap = new Map((state.solarData || []).map(d => [d.date, d.hourly]));
+    // Get the baseline provider's import rules to create a single, consistent consumption profile.
+    const baselineProvider = config.providers[0];
+    if (!baselineProvider) return seasonalData; // Failsafe
 
-    state.electricityData.forEach(day => {
-        const seasonName = getSeason(day.date);
-        const seasonForProfile = { 'Summer': 'Q1_Summer', 'Autumn': 'Q2_Autumn', 'Winter': 'Q3_Winter', 'Spring': 'Q4_Spring' }[seasonName];
+    // Loop through each season and simulate a single "average" day.
+    for (const quarterKey in state.quarterlyAverages) {
+        const seasonName = quarterKey.split('_')[1];
+        const quarterData = state.quarterlyAverages[quarterKey];
 
-        // Get existing solar (which is all zeros if "No existing solar" is checked).
-        const existingHourlySolar = solarDataMap.get(day.date) || Array(24).fill(0);
+        if (!quarterData || !seasonalData[seasonName]) continue;
 
-        // Generate the profile for the NEW solar panels from the UI configuration.
+        // 1. Generate the average hourly consumption profile for this season ONCE, using the baseline provider's rules.
+        const hourlyConsumption = generateHourlyConsumptionProfileFromDailyTOU(
+            quarterData.avgPeak,
+            quarterData.avgShoulder,
+            quarterData.avgOffPeak,
+            baselineProvider.importRules 
+        );
+
+        // 2. Generate the average hourly solar profile for the new system in this season.
         const newSolarGenerationDaily = config.newSolarKW * config.manualSolarProfile;
-        const newHourlySolar = generateHourlySolarProfileFromDaily(newSolarGenerationDaily, seasonForProfile);
-        
-        // Combine them to get the total solar for the simulation.
-        const totalHourlySolar = existingHourlySolar.map((s, i) => s + newHourlySolar[i]);
+        const totalSolarDaily = quarterData.avgSolar + newSolarGenerationDaily;
+        const hourlySolar = generateHourlySolarProfileFromDaily(totalSolarDaily, quarterKey);
 
-        // Reconstruct true household consumption using only the original, existing solar data.
-        const trueHourlyConsumption = Array(24).fill(0);
-        for (let h = 0; h < 24; h++) {
-            const selfConsumed = Math.max(0, (existingHourlySolar[h] || 0) - (day.feedIn[h] || 0));
-            trueHourlyConsumption[h] = (day.consumption[h] || 0) + selfConsumed;
-        }
+        // 3. Run a two-pass simulation for better accuracy.
+        // The first pass "warms up" the battery to find a realistic end-of-day SOC.
+        const warmUpSOC = batteryConfig.capacity * 0.5;
+        const warmUpResults = simulateDay(hourlyConsumption, hourlySolar, provider, batteryConfig, warmUpSOC);
 
-        // Run the simulation for the day using the TOTAL solar profile.
-        const simResults = simulateDay(trueHourlyConsumption, totalHourlySolar, provider, batteryConfig, currentSOC);
-        currentSOC = simResults.finalSOC; // Update SOC for the next day.
+        // The second pass uses the result of the first as its starting point, mimicking a continuous cycle.
+        const realisticInitialSOC = warmUpResults.finalSOC;
+        const simResults = simulateDay(hourlyConsumption, hourlySolar, provider, batteryConfig, realisticInitialSOC);
 
-        // Aggregate results for the correct season.
-        if (seasonalData[seasonName]) {
-            seasonalData[seasonName].totalGridCharge += simResults.dailyBreakdown.gridChargeKWh;
-            seasonalData[seasonName].totalSolarCharge += simResults.dailyBreakdown.solarChargeKWh;
-            seasonalData[seasonName].totalSocAt6am += simResults.socAt6am;
-            seasonalData[seasonName].days++;
-        }
-    });
-
-    // Calculate the final averages for each season.
-    for (const season in seasonalData) {
-        const data = seasonalData[season];
-        data.avgGridCharge = data.days > 0 ? data.totalGridCharge / data.days : 0;
-        data.avgSolarCharge = data.days > 0 ? data.totalSolarCharge / data.days : 0;
-        const avgSocKWh = data.days > 0 ? data.totalSocAt6am / data.days : 0;
-        data.avgSocPercent = batteryConfig.capacity > 0 ? (avgSocKWh / batteryConfig.capacity) * 100 : 0;
+		// 4. Use the value directly from the simulation results.
+		seasonalData[seasonName].avgGridCharge = simResults.dailyBreakdown.gridChargeKWh;
+		seasonalData[seasonName].avgSolarCharge = simResults.dailyBreakdown.solarChargeKWh;
+		seasonalData[seasonName].avgSocPercent = batteryConfig.capacity > 0 ? (simResults.socAt6am / batteryConfig.capacity) * 100 : 0;
     }
 
     return seasonalData;
@@ -276,10 +268,10 @@ export function renderNewSystemDebugTable(state, shouldShow = true) {
     if (useManual) {
         // In manual mode, only the simpler heuristic sizing is available.
         const simulationData = {
-            'Q1_Summer': { avgPeak: getNumericInput("summerDailyPeak"), avgShoulder: getNumericInput("summerDailyShoulder"), avgOffPeak: getNumericInput("summerDailyOffPeak"), avgSolar: getNumericInput("summerDailySolar") },
-            'Q2_Autumn': { avgPeak: getNumericInput("autumnDailyPeak"), avgShoulder: getNumericInput("autumnDailyShoulder"), avgOffPeak: getNumericInput("autumnDailyOffPeak"), avgSolar: getNumericInput("autumnDailySolar") },
-            'Q3_Winter': { avgPeak: getNumericInput("winterDailyPeak"), avgShoulder: getNumericInput("winterDailyShoulder"), avgOffPeak: getNumericInput("winterDailyOffPeak"), avgSolar: getNumericInput("winterDailySolar") },
-            'Q4_Spring': { avgPeak: getNumericInput("springDailyPeak"), avgShoulder: getNumericInput("springDailyShoulder"), avgOffPeak: getNumericInput("springDailyOffPeak"), avgSolar: getNumericInput("springDailySolar") },
+            [SEASONS.SUMMER]: { avgPeak: getNumericInput("summerDailyPeak"), avgShoulder: getNumericInput("summerDailyShoulder"), avgOffPeak: getNumericInput("summerDailyOffPeak"), avgSolar: getNumericInput("summerDailySolar") },
+            [SEASONS.AUTUMN]: { avgPeak: getNumericInput("autumnDailyPeak"), avgShoulder: getNumericInput("autumnDailyShoulder"), avgOffPeak: getNumericInput("autumnDailyOffPeak"), avgSolar: getNumericInput("autumnDailySolar") },
+            [SEASONS.WINTER]: { avgPeak: getNumericInput("winterDailyPeak"), avgShoulder: getNumericInput("winterDailyShoulder"), avgOffPeak: getNumericInput("winterDailyOffPeak"), avgSolar: getNumericInput("winterDailySolar") },
+            [SEASONS.SPRING]: { avgPeak: getNumericInput("springDailyPeak"), avgShoulder: getNumericInput("springDailyShoulder"), avgOffPeak: getNumericInput("springDailyOffPeak"), avgSolar: getNumericInput("springDailySolar") },
         };
         const heuristicRecs = calculateSizingRecommendations(config.recommendationCoverageTarget, simulationData);
         let recommendationHTML = `<div class="recommendation-section">`;

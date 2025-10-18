@@ -18,7 +18,7 @@ th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
 th { background-color: #f2f2f2; }
 .roi-summary p { font-weight: bold; }
 .roi-summary ul { list-style-type: none; padding-left: 10px; }
-.line-count-info { font-size: 0.8em; color: red; margin-top: 5px; }
+.line-count-info { font-size: 0.8em; color: green; margin-top: 5px; }
 .recommendation-section { margin-top: 25px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9; }
 .recommendation-section h4 { margin-top: 0; }
 .recommendation-section p { margin-bottom: 5px; }
