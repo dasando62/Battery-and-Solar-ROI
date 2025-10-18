@@ -168,6 +168,7 @@
             <label>Type Header (contains Import/Export text): <input type="text" id="usageTypeHeader" value="Usage Type"></label>
             <label>Identifier for Grid Imports: <input type="text" id="importIdentifier" value="Consumption"></label>
             <label>Identifier for Grid Exports (Feed-in): <input type="text" id="exportIdentifier" value="Feed In"></label>
+			<label>Identifier for Controlled Load: <input type="text" id="controlledLoadIdentifier" value="Controlled Load"></label>
             <label>Data (kWh) Header: <input type="text" id="consumptionHeader" value="Usage in kWh,Amount Used" title="Enter the column header for the energy value. You can provide a comma-separated list to check multiple possible names, for example: Usage in kWh,Amount Used."></label>
         </div>
     </details>
@@ -219,6 +220,10 @@
     <div title="Check this box if your new battery has its own built-in inverter and is being added to a home that already has a separate solar inverter (e.g., adding a Tesla Powerwall). This is known as an AC Coupled system.">
         <label><input type="checkbox" id="isAcCoupled"> New battery is AC Coupled (e.g., Tesla Powerwall)</label>
     </div>
+	
+	<div title="Move your controlled load (e.g., hot water system) to the main house circuit to be powered by solar and battery. If unchecked, it will remain on its separate, cheaper tariff.">
+		<label><input type="checkbox" id="moveControlledLoad"> Move Controlled Load to main circuit</label>
+	</div>
     
     <div title="Check this box if the new system will completely replace your old one. If this is checked, the existing system's specifications will be ignored in the analysis.">
         <label><input type="checkbox" id="replaceExistingSystem"> This is a replacement for the existing system (not an addition)</label>

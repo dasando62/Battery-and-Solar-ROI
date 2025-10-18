@@ -1,5 +1,5 @@
 // js/uiRender.js
-// Version 1.2.3
+// Version 1.2.4
 // This module is responsible for all UI rendering that occurs AFTER a calculation
 // or analysis is complete. This includes displaying financial results tables,
 // rendering charts, and showing system sizing recommendations.
@@ -467,6 +467,21 @@ export function renderResults(resultsObject) {
     if (!financials || !config) {
         console.error("Render Results called with invalid data.", resultsObject);
         return;
+    }
+	const resultsSection = document.getElementById('results-section');
+	
+	// First, remove any old warnings
+    const oldWarningDiv = resultsSection.querySelector('.analysis-warnings');
+    if (oldWarningDiv) oldWarningDiv.remove();
+    if (financials.warnings && financials.warnings.length > 0) {
+        let warningHTML = '<div class="analysis-warnings" style="border: 1px solid #f0ad4e; padding: 15px; border-radius: 5px; background-color: #fcf8e3; margin-bottom: 20px;"><h4>Analysis Notes & Warnings</h4><ul>';
+        // Use a Set to only show unique warnings
+        [...new Set(financials.warnings)].forEach(warning => {
+            warningHTML += `<li>⚠️ ${warning}</li>`;
+        });
+        warningHTML += '</ul></div>';
+        // Add the warnings right after the "7. Results" heading
+        resultsSection.querySelector('h2').insertAdjacentHTML('afterend', warningHTML);
     }
     // Call each rendering function in sequence.
     renderFinancialSummary(financials, config);

@@ -1,5 +1,5 @@
 // js/uiDynamic.js
-//Version 1.2.3
+//Version 1.2.4
 // This module is responsible for dynamically generating the HTML for the
 // provider settings section. It reads the provider data from the manager
 // and builds the complex UI with all its nested rules and conditions.
@@ -103,6 +103,7 @@ function renderRuleRow(rule, providerId, ruleType, index) {
 					<option value="${TARIFF_RULE_TYPES.TIME_OF_USE}" ${rule.type === TARIFF_RULE_TYPES.TIME_OF_USE ? 'selected' : ''}>Time of Use</option>
 					<option value="${TARIFF_RULE_TYPES.TIERED}" ${rule.type === TARIFF_RULE_TYPES.TIERED ? 'selected' : ''}>Tiered</option>
 					<option value="${TARIFF_RULE_TYPES.FLAT}" ${rule.type === TARIFF_RULE_TYPES.FLAT ? 'selected' : ''}>Flat Rate</option>
+                    ${ruleType === 'import' ? `<option value="${TARIFF_RULE_TYPES.CONTROLLED_LOAD}" ${rule.type === TARIFF_RULE_TYPES.CONTROLLED_LOAD ? 'selected' : ''}>Controlled Load</option>` : ''}
                 </select>
                 <input type="text" class="provider-input" data-field="name" placeholder="Rule Name" value="${rule.name || ''}">
                 <label class="rule-label">$</label>
