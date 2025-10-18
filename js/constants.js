@@ -1,5 +1,5 @@
 // js/constants.js
-// Version 1.2.3
+// Version 1.2.4
 // This file holds constants that are used in multiple files.
 
 /*
@@ -40,7 +40,8 @@ export const SEASONS = {
 export const TARIFF_RULE_TYPES = {
     TIME_OF_USE: 'tou',
     TIERED: 'tiered',
-    FLAT: 'flat'
+    FLAT: 'flat',
+    CONTROLLED_LOAD: 'controlled_load'
 };
 
 export const SPECIAL_CONDITIONS = {

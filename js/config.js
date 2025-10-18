@@ -1,5 +1,5 @@
 // js/config.js
-//Version 1.2.3
+//Version 1.2.4
 // This module is responsible for gathering all user-configurable settings from the UI
 // and assembling them into a single configuration object used by the analysis engine.
 
@@ -52,6 +52,10 @@ export function gatherConfigFromUI() {
         selectedProviders: selectedProviderIds, // IDs of providers to analyse
         useManual: useManual,
         noExistingSolar: document.getElementById("noExistingSolar")?.checked,
+		
+		// --- Controlled Load Settings --- 
+        moveControlledLoad: document.getElementById("moveControlledLoad")?.checked,
+        controlledLoadIdentifier: document.getElementById('controlledLoadIdentifier')?.value || '',
         
         // --- System Sizing ---
         existingSolarKW: getNumericInput("existingSolarKW"),

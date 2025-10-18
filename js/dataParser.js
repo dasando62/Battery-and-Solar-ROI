@@ -1,5 +1,5 @@
 // js/dataParser.js 
-// Version 1.2.3
+// Version 1.2.4
 // This module is responsible for handling file uploads and parsing CSV data.
 // It reads electricity usage and solar generation files, processes them into a
 // standardized hourly format, and stores the results in the global state.
@@ -59,7 +59,8 @@ function parseNEM12(csvText) {
             currentIntervalLength = parseInt(parts[8], 10);
             // We only care about grid import (E1) and grid export (B1).
             // Ignore other streams like gross generation, as that comes from the solar file.
-            if (currentDataType !== NEM12_SUFFIX.GRID_IMPORT && currentDataType !== NEM12_SUFFIX.GRID_EXPORT) {
+            // Only process Grid Import, Grid Export, or Controlled Load (C*) streams
+            if (currentDataType !== NEM12_SUFFIX.GRID_IMPORT && currentDataType !== NEM12_SUFFIX.GRID_EXPORT && !currentDataType.startsWith('C')) {
                 currentIntervalLength = null; // Invalidate to skip subsequent 300 records for this stream
             }
         }
@@ -80,10 +81,11 @@ function parseNEM12(csvText) {
 
             // Ensure we have a data structure for this date
             if (!dailyData.has(date)) {
-                dailyData.set(date, {
+                dailyData.set(date, { // <-- UPDATE THIS
                     date: date,
                     consumption: Array(24).fill(0),
-                    feedIn: Array(24).fill(0)
+                    feedIn: Array(24).fill(0),
+                    controlledLoad: Array(24).fill(0)
                 });
             }
             const dayRecord = dailyData.get(date);
@@ -98,8 +100,10 @@ function parseNEM12(csvText) {
                 // Assign the hourly total to the correct array based on the stream type
                 if (currentDataType === NEM12_SUFFIX.GRID_IMPORT) { // E1 = Grid Consumption (Import)
                     dayRecord.consumption[hour] += hourTotal;
-                 } else if (currentDataType === NEM12_SUFFIX.GRID_EXPORT) { // B1 = Grid Feed-in (Export)
+                } else if (currentDataType === NEM12_SUFFIX.GRID_EXPORT) { // B1 = Grid Feed-in (Export)
                     dayRecord.feedIn[hour] += hourTotal;
+				} else if (currentDataType.startsWith('C')) { // <-- ADD THIS BLOCK
+                    dayRecord.controlledLoad[hour] += hourTotal;
                 }
             }
         }
@@ -188,6 +192,7 @@ export function handleUsageCsv(event) {
                 const consumptionHeaders = document.getElementById('consumptionHeader').value.split(',').map(h => h.trim());
                 const importIdentifier = document.getElementById('importIdentifier').value;
                 const exportIdentifier = document.getElementById('exportIdentifier').value;
+				const controlledLoadIdentifier = document.getElementById('controlledLoadIdentifier').value;
                 for (const row of csvData) {
                     const dateTimeString = row[dateTimeHeader];
                     const dateTime = parseDateString(dateTimeString, dateFormat);
@@ -195,16 +200,21 @@ export function handleUsageCsv(event) {
                     const date = dateTime.toISOString().split('T')[0];
                     const hour = dateTime.getUTCHours();
                     if (!dailyData.has(date)) {
-                        dailyData.set(date, { date: date, consumption: Array(24).fill(0), feedIn: Array(24).fill(0) });
+                        dailyData.set(date, { date: date, consumption: Array(24).fill(0), feedIn: Array(24).fill(0), controlledLoad: Array(24).fill(0) });
                     }
                     const day = dailyData.get(date);
                     const valueString = findValueInRow(row, consumptionHeaders);
                     const value = parseFloat(valueString);
-                    if (!isNaN(value)) {
-                        const type = row[typeHeader];
-                        if (type === importIdentifier) { day.consumption[hour] += value; } 
-                        else if (type === exportIdentifier) { day.feedIn[hour] += value; }
-                    }
+					if (!isNaN(value)) {
+						const type = row[typeHeader];
+						if (type === importIdentifier) {
+							day.consumption[hour] += value;
+						} else if (type === exportIdentifier) {
+							day.feedIn[hour] += value;
+						} else if (type === controlledLoadIdentifier) {
+							day.controlledLoad[hour] += value;
+						}
+					}
                 }
                 parsedData = Array.from(dailyData.values()).sort((a, b) => a.date.localeCompare(b.date));
             }
