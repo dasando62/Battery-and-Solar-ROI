@@ -1,5 +1,5 @@
 // js/config.js
-//Version 1.1.9
+//Version 1.2.3
 // This module is responsible for gathering all user-configurable settings from the UI
 // and assembling them into a single configuration object used by the analysis engine.
 
@@ -29,6 +29,7 @@
 
 import { getNumericInput } from './utils.js';
 import { getProviders } from './providerManager.js';
+import { SEASONS } from './constants.js';
 
 /**
  * Reads all input fields, checkboxes, and provider settings from the DOM
@@ -88,7 +89,7 @@ export function gatherConfigFromUI() {
         batteryDegradation: getNumericInput("batteryDegradation", 2) / 100, // annual % loss
         fitDegradationStartYear: getNumericInput("fitDegradationStartYear", 1),
         fitDegradationEndYear: getNumericInput("fitDegradationEndYear", 10),
-        fitMinimumRate: getNumericInput("fitMinimumRate", -0.03), // Final floor for FIT rate
+        fitMinimumRate: getNumericInput("fitMinimumRate", -0.00), // Final floor for FIT rate
         
         // --- Battery-specific Settings ---
         gridChargeThreshold: getNumericInput("gridChargeThreshold", 80), // Max SOC to charge to from grid
@@ -105,10 +106,10 @@ export function gatherConfigFromUI() {
     // If in manual mode, gather the seasonal average daily values.
     if (useManual) {
         config.manualData = {
-            'Q1_Summer': { avgPeak: getNumericInput("summerDailyPeak"), avgShoulder: getNumericInput("summerDailyShoulder"), avgOffPeak: getNumericInput("summerDailyOffPeak"), avgSolar: getNumericInput("summerDailySolar") },
-            'Q2_Autumn': { avgPeak: getNumericInput("autumnDailyPeak"), avgShoulder: getNumericInput("autumnDailyShoulder"), avgOffPeak: getNumericInput("autumnDailyOffPeak"), avgSolar: getNumericInput("autumnDailySolar") },
-            'Q3_Winter': { avgPeak: getNumericInput("winterDailyPeak"), avgShoulder: getNumericInput("winterDailyShoulder"), avgOffPeak: getNumericInput("winterDailyOffPeak"), avgSolar: getNumericInput("winterDailySolar") },
-            'Q4_Spring': { avgPeak: getNumericInput("springDailyPeak"), avgShoulder: getNumericInput("springDailyShoulder"), avgOffPeak: getNumericInput("springDailyOffPeak"), avgSolar: getNumericInput("springDailySolar") },
+            [SEASONS.SUMMER]: { avgPeak: getNumericInput("summerDailyPeak"), avgShoulder: getNumericInput("summerDailyShoulder"), avgOffPeak: getNumericInput("summerDailyOffPeak"), avgSolar: getNumericInput("summerDailySolar") },
+            [SEASONS.AUTUMN]: { avgPeak: getNumericInput("autumnDailyPeak"), avgShoulder: getNumericInput("autumnDailyShoulder"), avgOffPeak: getNumericInput("autumnDailyOffPeak"), avgSolar: getNumericInput("autumnDailySolar") },
+            [SEASONS.WINTER]: { avgPeak: getNumericInput("winterDailyPeak"), avgShoulder: getNumericInput("winterDailyShoulder"), avgOffPeak: getNumericInput("winterDailyOffPeak"), avgSolar: getNumericInput("winterDailySolar") },
+            [SEASONS.SPRING]: { avgPeak: getNumericInput("springDailyPeak"), avgShoulder: getNumericInput("springDailyShoulder"), avgOffPeak: getNumericInput("springDailyOffPeak"), avgSolar: getNumericInput("springDailySolar") },
         };
     }
 

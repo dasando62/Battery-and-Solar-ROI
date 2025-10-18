@@ -1,5 +1,5 @@
 // js/analysis.js
-// Version 1.1.9
+// Version 1.2.3
 // This is the core of the ROI calculator. It contains the simulation engine,
 // financial calculation functions (IRR, NPV), and system sizing algorithms.
 
@@ -31,6 +31,93 @@ import { state } from './state.js';
 import { getNumericInput, escalate, parseRangesToHours, getSeason } from './utils.js';
 import { tariffComponents } from './tariffComponents.js';
 import { generateHourlyConsumptionProfileFromDailyTOU, generateHourlySolarProfileFromDaily } from './profiles.js';
+import { SEASONS, SPECIAL_CONDITIONS, DEFAULT_TOU_HOURS } from './constants.js';
+
+/**
+ * Calculates the degraded capacity/size of all system components for a given year.
+ * @param {object} config - The main analysis configuration.
+ * @param {number} year - The current year of the analysis.
+ * @returns {object} An object containing the degraded values for battery and solar.
+ */
+function calculateDegradedComponents(config, year) {
+    const existingSystemCurrentAge = config.existingSystemAge + year - 1;
+    const newSystemCurrentAge = year - 1;
+
+    const degradedExistingBattery = (config.replaceExistingSystem ? 0 : config.existingBattery) * Math.pow(1 - config.batteryDegradation, existingSystemCurrentAge);
+    const degradedNewBattery = config.newBatteryKWH * Math.pow(1 - config.batteryDegradation, newSystemCurrentAge);
+    const totalDegradedBatteryCapacity = degradedExistingBattery + degradedNewBattery;
+
+    const degradedExistingSolarDaily = (config.replaceExistingSystem ? 0 : config.existingSolarKW * config.manualSolarProfile) * Math.pow(1 - config.solarDegradation, existingSystemCurrentAge);
+    const degradedNewSolarDaily = config.newSolarKW * config.manualSolarProfile * Math.pow(1 - config.solarDegradation, newSystemCurrentAge);
+    const totalDegradedSolarDaily = degradedExistingSolarDaily + degradedNewSolarDaily;
+
+    return {
+        batteryCapacity: totalDegradedBatteryCapacity,
+        manualModeSolarGeneration: totalDegradedSolarDaily, // Used only in manual mode
+    };
+}
+
+/**
+ * Reconstructs the true hourly household consumption by adding self-consumed solar back to the grid import data.
+ * @param {object} day - The electricity data object for a single day, containing grid consumption and feed-in.
+ * @param {number[]} historicalSolar - The hourly solar generation from the original system for that day.
+ * @returns {number[]} An array of 24 hourly values representing true household consumption.
+ */
+function reconstructTrueConsumption(day, historicalSolar) {
+    const trueHourlyConsumption = Array(24).fill(0);
+    for (let h = 0; h < 24; h++) {
+        const selfConsumed = Math.max(0, (historicalSolar[h] || 0) - (day.feedIn[h] || 0));
+        trueHourlyConsumption[h] = (day.consumption[h] || 0) + selfConsumed;
+    }
+    return trueHourlyConsumption;
+}
+
+/**
+ * Generates the total hourly solar profile for the proposed new/upgraded system for a given day.
+ * It accounts for degradation of both old and new panels and applies inverter clipping.
+ * @param {object} config - The main analysis configuration.
+ * @param {object} day - The electricity data object for the day (used to get the date/season).
+ * @param {number} year - The current analysis year.
+ * @param {Map} solarDataMap - A Map containing the historical solar data.
+ * @returns {number[]} An array of 24 hourly values for the total solar generation of the new system.
+ */
+function generateTotalSolarProfile(config, day, year, solarDataMap) {
+    const existingHourlySolar_historical = solarDataMap.get(day.date);
+    if (!existingHourlySolar_historical) return Array(24).fill(0);
+
+    const newSystemCurrentAge = year - 1;
+
+    // Degrade the historical generation from the existing panels
+    let degradedExistingSolar = existingHourlySolar_historical.map(s => s * Math.pow(1 - config.solarDegradation, year - 1));
+    if (config.existingSolarInverterKW > 0) {
+        degradedExistingSolar = degradedExistingSolar.map(hourlyGeneration =>
+            Math.min(hourlyGeneration, config.existingSolarInverterKW)
+        );
+    }
+
+    // Generate and degrade the profile for the new panels
+    const newSolarGenerationDaily = config.newSolarKW * config.manualSolarProfile;
+    const degradedNewSolarDaily = newSolarGenerationDaily * Math.pow(1 - config.solarDegradation, newSystemCurrentAge);
+    const newHourlySolar = generateHourlySolarProfileFromDaily(degradedNewSolarDaily, getSeason(day.date));
+
+    const existingSolarForSim = config.replaceExistingSystem ? Array(24).fill(0) : degradedExistingSolar;
+    let totalHourlySolar = existingSolarForSim.map((s, i) => s + newHourlySolar[i]);
+
+    // Determine total inverter power for clipping
+    let totalInverterPower;
+    if (config.replaceExistingSystem) {
+        totalInverterPower = config.newBatteryInverterKW;
+    } else if (config.isAcCoupled) {
+        totalInverterPower = config.newBatteryInverterKW + config.existingSolarInverterKW;
+    } else {
+        totalInverterPower = config.newBatteryInverterKW; // Use the corrected logic from the bug fix
+    }
+
+    // Clip the final combined generation to the total inverter limit
+    totalHourlySolar = totalHourlySolar.map(hourlyGeneration => Math.min(hourlyGeneration, totalInverterPower));
+
+    return totalHourlySolar;
+}
 
 /**
  * Calculates the Internal Rate of Return (IRR) for a series of cash flows
@@ -78,7 +165,12 @@ function calculateAverageSOCAt6am(provider, batteryConfig, simulationData) {
     }
     
     let totalAnnualSocKWhDays = 0;
-    const daysPerQuarter = { 'Q1_Summer': 90, 'Q2_Autumn': 91, 'Q3_Winter': 92, 'Q4_Spring': 92 };
+    const daysPerQuarter = { 
+        [SEASONS.SUMMER]: 90, 
+        [SEASONS.AUTUMN]: 91, 
+        [SEASONS.WINTER]: 92, 
+        [SEASONS.SPRING]: 92 
+    };
 
     // Simulate an average day for each season.
     for (const quarter in simulationData) {
@@ -131,15 +223,15 @@ function applySpecialConditions(dailyCost, dailyBreakdown, conditions, dateStrin
         // Get the value of the metric to be tested.
         let metricValue;
         switch (condition.condition.metric) {
-            case 'peak_import':
+            case SPECIAL_CONDITIONS.METRIC.PEAK_IMPORT:
                 metricValue = dailyBreakdown.peakKWh;
                 break;
-            case 'net_grid_usage':
+            case SPECIAL_CONDITIONS.METRIC.NET_GRID_USAGE:
                 const totalImport = dailyBreakdown.peakKWh + dailyBreakdown.shoulderKWh + dailyBreakdown.offPeakKWh;
                 const totalExport = dailyBreakdown.tier1ExportKWh + dailyBreakdown.tier2ExportKWh;
                 metricValue = totalImport - totalExport;
                 break;
-            case 'import_in_window':
+            case SPECIAL_CONDITIONS.METRIC.IMPORT_IN_WINDOW:
                 const ruleHours = parseRangesToHours(condition.condition.hours || '');
                 metricValue = 0;
                 for (const h of ruleHours) {
@@ -151,17 +243,17 @@ function applySpecialConditions(dailyCost, dailyBreakdown, conditions, dateStrin
         // Check if the condition is met based on the operator.
         let conditionMet = false;
         switch (condition.condition.operator) {
-            case 'less_than': conditionMet = metricValue < condition.condition.value; break;
-            case 'less_than_or_equal_to': conditionMet = metricValue <= condition.condition.value; break;
-            case 'greater_than': conditionMet = metricValue > condition.condition.value; break;
-            case 'greater_than_or_equal_to': conditionMet = metricValue >= condition.condition.value; break;
+            case SPECIAL_CONDITIONS.OPERATOR.LESS_THAN: conditionMet = metricValue < condition.condition.value; break;
+            case SPECIAL_CONDITIONS.OPERATOR.LESS_THAN_OR_EQUAL: conditionMet = metricValue <= condition.condition.value; break;
+            case SPECIAL_CONDITIONS.OPERATOR.GREATER_THAN: conditionMet = metricValue > condition.condition.value; break;
+            case SPECIAL_CONDITIONS.OPERATOR.GREATER_THAN_OR_EQUAL: conditionMet = metricValue >= condition.condition.value; break;
         }
 
         // If the condition is met, apply the specified action (credit or charge).
         if (conditionMet) {
             switch (condition.action.type) {
-                case 'flat_credit': adjustedCost -= condition.action.value; break;
-                case 'flat_charge': adjustedCost += condition.action.value; break;
+                case SPECIAL_CONDITIONS.ACTION.FLAT_CREDIT: adjustedCost -= condition.action.value; break;
+                case SPECIAL_CONDITIONS.ACTION.FLAT_CHARGE: adjustedCost += condition.action.value; break;
             }
         }
     }
@@ -256,12 +348,15 @@ export function simulateDay(hourlyConsumption, hourlySolar, provider, batteryCon
             let remainingConsumption = consumption - solarToConsumption;
             let excessSolar = solar - solarToConsumption;
             
-            let solarToBattery = 0;
-            if (excessSolar > 0 && currentSOC < batteryConfig.capacity) {
-                solarToBattery = Math.min(excessSolar, batteryConfig.capacity - currentSOC);
-                currentSOC += solarToBattery;
-                excessSolar -= solarToBattery;
-            }
+			let solarToBattery = 0;
+			if (excessSolar > 0 && currentSOC < batteryConfig.capacity) {
+				// The amount of solar going to the battery is limited by excess solar,
+				// the remaining space in the battery, AND the inverter's max power rating.
+				solarToBattery = Math.min(excessSolar, batteryConfig.capacity - currentSOC, batteryConfig.inverterKW);
+				
+				currentSOC += solarToBattery;
+				excessSolar -= solarToBattery;
+			}
 			//Track solar charging for debug and Appendix D
 			results.solarChargeKWh += solarToBattery;
 
@@ -461,36 +556,27 @@ function calculateSystemYear(providerData, config, year, simulationData, electri
         degradationEndYear: config.fitDegradationEndYear,
         minimumRate: config.fitMinimumRate,
     };
-    const baselineProvider = config.providers[0]; // Needed for profile generation in manual mode.
+    const baselineProvider = config.providers[0]; // Needed for profile generation.
     let annualCost = 0;
 
+    const degradedComponents = calculateDegradedComponents(config, year);
+
     if (config.useManual) {
-        // --- Manual Mode System Calculation ---
         let totalCostForPeriod = 0;
         const daysInQuarter = 365 / 4;
         for (const q in simulationData) {
             const quarter = simulationData[q];
             const season = q.split('_')[1];
 
-            // Calculate degradation for both new and existing components.
-            const existingSystemCurrentAge = config.existingSystemAge + year - 1;
-            const newSystemCurrentAge = year - 1;
-            const degradedExistingSolarDaily = (config.replaceExistingSystem ? 0 : config.existingSolarKW * config.manualSolarProfile) * Math.pow(1 - config.solarDegradation, existingSystemCurrentAge);
-            const degradedNewSolarDaily = config.newSolarKW * config.manualSolarProfile * Math.pow(1 - config.solarDegradation, newSystemCurrentAge);
-            const totalDegradedSolarDaily = degradedExistingSolarDaily + degradedNewSolarDaily;
-            const degradedExistingBattery = (config.replaceExistingSystem ? 0 : config.existingBattery) * Math.pow(1 - config.batteryDegradation, existingSystemCurrentAge);
-            const degradedNewBattery = config.newBatteryKWH * Math.pow(1 - config.batteryDegradation, newSystemCurrentAge);
-            const totalDegradedBatteryCapacity = degradedExistingBattery + degradedNewBattery;
-            const batteryConfig = { capacity: totalDegradedBatteryCapacity, inverterKW: config.newBatteryInverterKW, gridChargeThreshold: config.gridChargeThreshold, socChargeTrigger: config.socChargeTrigger };
-            
+            const batteryConfig = { capacity: degradedComponents.batteryCapacity, inverterKW: config.newBatteryInverterKW, gridChargeThreshold: config.gridChargeThreshold, socChargeTrigger: config.socChargeTrigger };
             let currentSOC = batteryConfig.capacity * 0.5; // Assume average starting SOC.
-            const trueHourlyConsumption = generateHourlyConsumptionProfileFromDailyTOU(quarter.avgPeak, quarter.avgShoulder, quarter.avgOffPeak, baselineProvider.importRules);
-            const totalHourlySolar = generateHourlySolarProfileFromDaily(totalDegradedSolarDaily, q);
             
-            // Simulate the average day for the quarter.
+            const trueHourlyConsumption = generateHourlyConsumptionProfileFromDailyTOU(quarter.avgPeak, quarter.avgShoulder, quarter.avgOffPeak, baselineProvider.importRules);
+            const totalHourlySolar = generateHourlySolarProfileFromDaily(degradedComponents.manualModeSolarGeneration, q);
+            
             const simResults = simulateDay(trueHourlyConsumption, totalHourlySolar, providerData, batteryConfig, currentSOC);
             const dailyBreakdown = simResults.dailyBreakdown;
-            
+
             // Store raw data for the first year.
             if (year === 1) {
                 const rawSeason = rawData.system[providerData.id].year1[season];
@@ -502,89 +588,42 @@ function calculateSystemYear(providerData, config, year, simulationData, electri
                     rawSeason.tier1ExportKWh += dailyBreakdown.tier1ExportKWh * daysInQuarter;
                     rawSeason.tier2ExportKWh += dailyBreakdown.tier2ExportKWh * daysInQuarter;
                     rawSeason.gridChargeKWh += dailyBreakdown.gridChargeKWh * daysInQuarter;
-					rawSeason.solarChargeKWh += dailyBreakdown.solarChargeKWh * daysInQuarter;
+                    rawSeason.solarChargeKWh += dailyBreakdown.solarChargeKWh * daysInQuarter;
                     rawSeason.gridChargeCost += simResults.gridChargeCost * daysInQuarter;
                 }
             }
             
-            // Calculate daily cost, accounting for tariff escalation and FIT degradation.
             let dailyEnergyCost = simResults.gridChargeCost || 0;
             dailyEnergyCost += importCalculator(providerData.importRules, dailyBreakdown, { rate: config.tariffEscalation, year: year });
             dailyEnergyCost -= exportCalculator(providerData.exportRules, dailyBreakdown, year, fitConfig, getDegradedFitRate);
-            let totalDailyAdjustment = (providerData.dailyCharge || 0) + dailyEnergyCost;
-            totalCostForPeriod += totalDailyAdjustment * daysInQuarter;
+            totalCostForPeriod += ((providerData.dailyCharge || 0) + dailyEnergyCost) * daysInQuarter;
         }
         annualCost = totalCostForPeriod;
     } else { 
-        // --- CSV Mode System Calculation ---
         let totalCostForPeriod = 0;
         let daysProcessed = 0;
         const solarDataMap = new Map(state.solarData.map(d => [d.date, d.hourly]));
-        
-        // Calculate system degradation for the current year.
-        const existingSystemCurrentAge = config.existingSystemAge + year - 1;
-        const newSystemCurrentAge = year - 1;
-        const degradedExistingBattery = (config.replaceExistingSystem ? 0 : config.existingBattery) * Math.pow(1 - config.batteryDegradation, existingSystemCurrentAge);
-        const degradedNewBattery = config.newBatteryKWH * Math.pow(1 - config.batteryDegradation, newSystemCurrentAge);
-        const totalDegradedBatteryCapacity = degradedExistingBattery + degradedNewBattery;
-        
-        let currentSOC = totalDegradedBatteryCapacity * 0.5; // Start with average SOC.
+        let currentSOC = degradedComponents.batteryCapacity * 0.5;
         
         electricityData.forEach(day => {
             const existingHourlySolar_historical = solarDataMap.get(day.date);
-            if (!existingHourlySolar_historical) return; // Skip days with no matching solar data.
+            if (!existingHourlySolar_historical) return;
             daysProcessed++;
 
-			let totalInverterPower;
-			// If adding an AC-coupled battery to an existing system, the power is the SUM of the inverters.
-			if (config.isAcCoupled && !config.replaceExistingSystem) {
-				totalInverterPower = config.newBatteryInverterKW + config.existingSolarInverterKW;
-			} else {
-				// In all other cases (hybrid systems, replacements), the limit is the single most powerful inverter.
-				totalInverterPower = Math.max(config.newBatteryInverterKW, config.existingSolarInverterKW);
-			}
-
-			const batteryConfig = { 
-				capacity: totalDegradedBatteryCapacity, 
-				inverterKW: totalInverterPower, // Use the correctly calculated total power
-				gridChargeThreshold: config.gridChargeThreshold, 
-				socChargeTrigger: config.socChargeTrigger
-			};
-						
-            // Apply degradation to historical solar data.
-            let degradedExistingSolar = existingHourlySolar_historical.map(s => s * Math.pow(1 - config.solarDegradation, year - 1));
-			            // --- ADDED CLIPPING LOGIC ---
-            // If an existing inverter limit is specified, cap the generation at that limit.
-            if (config.existingSolarInverterKW > 0) {
-                degradedExistingSolar = degradedExistingSolar.map(hourlyGeneration =>
-                    Math.min(hourlyGeneration, config.existingSolarInverterKW)
-                );
-            }
-            // --- END OF CLIPPING LOGIC ---
-            // Generate a profile for the new solar panels and apply degradation.
-            const newSolarGenerationDaily = config.newSolarKW * config.manualSolarProfile;
-            const degradedNewSolarDaily = newSolarGenerationDaily * Math.pow(1 - config.solarDegradation, newSystemCurrentAge);
-            const newHourlySolar = generateHourlySolarProfileFromDaily(degradedNewSolarDaily, getSeason(day.date));
-            // Combine existing and new solar generation.
-            const existingSolarForSim = config.replaceExistingSystem ? Array(24).fill(0) : degradedExistingSolar;
-            let totalHourlySolar = existingSolarForSim.map((s, i) => s + newHourlySolar[i]); //const changed to let for clippingv
-			// Ensure the total combined solar generation never exceeds the total available inverter power.
-			totalHourlySolar = totalHourlySolar.map(hourlyGeneration => Math.min(hourlyGeneration, totalInverterPower));
-
-			// Reconstruct the "true" household consumption before any existing solar was self-consumed.
-			const trueHourlyConsumption = Array(24).fill(0);
-            // Reconstruct the "true" household consumption before any existing solar was self-consumed.
-            for (let h = 0; h < 24; h++) {
-                const selfConsumed = Math.max(0, (existingHourlySolar_historical[h] || 0) - (day.feedIn[h] || 0));
-                trueHourlyConsumption[h] = (day.consumption[h] || 0) + selfConsumed;
-            }
+            const batteryConfig = { 
+                capacity: degradedComponents.batteryCapacity, 
+                inverterKW: config.replaceExistingSystem ? config.newBatteryInverterKW : (config.isAcCoupled ? config.newBatteryInverterKW + config.existingSolarInverterKW : config.newBatteryInverterKW),
+                gridChargeThreshold: config.gridChargeThreshold, 
+                socChargeTrigger: config.socChargeTrigger
+            };
             
-            // Simulate the day with the new system.
+            const trueHourlyConsumption = reconstructTrueConsumption(day, existingHourlySolar_historical);
+            const totalHourlySolar = generateTotalSolarProfile(config, day, year, solarDataMap);
+            
             const simResults = simulateDay(trueHourlyConsumption, totalHourlySolar, providerData, batteryConfig, currentSOC);
-            currentSOC = simResults.finalSOC; // Carry over SOC to the next day.
+            currentSOC = simResults.finalSOC;
             const dailyBreakdown = simResults.dailyBreakdown;
             
-            // Store raw data for year 1.
             if (year === 1) {
                 const season = getSeason(day.date);
                 const rawSeason = rawData.system[providerData.id].year1[season];
@@ -596,12 +635,11 @@ function calculateSystemYear(providerData, config, year, simulationData, electri
                     rawSeason.tier1ExportKWh += dailyBreakdown.tier1ExportKWh;
                     rawSeason.tier2ExportKWh += dailyBreakdown.tier2ExportKWh;
                     rawSeason.gridChargeKWh += dailyBreakdown.gridChargeKWh;
-					rawSeason.solarChargeKWh += dailyBreakdown.solarChargeKWh;
+                    rawSeason.solarChargeKWh += dailyBreakdown.solarChargeKWh;
                     rawSeason.gridChargeCost += simResults.gridChargeCost;
                 }
             }
             
-            // Calculate the cost for the day and add to total.
             let dailyEnergyCost = simResults.gridChargeCost || 0;
             dailyEnergyCost += importCalculator(providerData.importRules, dailyBreakdown, { rate: config.tariffEscalation, year: year });
             dailyEnergyCost -= exportCalculator(providerData.exportRules, dailyBreakdown, year, fitConfig, getDegradedFitRate);
@@ -609,7 +647,6 @@ function calculateSystemYear(providerData, config, year, simulationData, electri
             totalDailyAdjustment = applySpecialConditions(totalDailyAdjustment, dailyBreakdown, providerData.specialConditions, day.date);
             totalCostForPeriod += totalDailyAdjustment;
         });
-        // Annualize the cost based on the number of days processed.
         const annualizationFactor = daysProcessed > 0 ? 365 / daysProcessed : 0;
         annualCost = totalCostForPeriod * annualizationFactor;
     }
@@ -716,7 +753,12 @@ export function calculateSizingRecommendations(coverageTarget, simulationData) {
     if (!simulationData || Object.keys(simulationData).length === 0) {
         return { solar: 0, battery: 0, inverter: 0, coverageTarget: coverageTarget };
     }
-    const daysPerQuarter = { 'Q1_Summer': 90, 'Q2_Autumn': 91, 'Q3_Winter': 92, 'Q4_Spring': 92 };
+    const daysPerQuarter = { 
+        [SEASONS.SUMMER]: 90, 
+        [SEASONS.AUTUMN]: 91, 
+        [SEASONS.WINTER]: 92, 
+        [SEASONS.SPRING]: 92 
+    }
     let totalKWh = 0, totalEveningKWh = 0, totalDays = 0;
     
     // Calculate total annual consumption and "evening" consumption from seasonal averages.

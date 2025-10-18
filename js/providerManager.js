@@ -1,5 +1,5 @@
 // js/providerManager.js
-//Version 1.1.9
+//Version 1.2.3
 // This module manages all CRUD (Create, Read, Update, Delete) operations
 // for electricity provider configurations. It uses the browser's localStorage
 // for persistence, allowing provider data to be saved between sessions.
@@ -28,9 +28,15 @@
  * SOFTWARE.
  */
 
+import { 
+    LOCAL_STORAGE_KEYS,
+    TARIFF_RULE_TYPES,
+    SPECIAL_CONDITIONS 
+} from './constants.js'; 
+
 // --- Constants for localStorage keys ---
-const PROVIDERS_KEY = 'roiAnalyser_providers';
-const DEFAULTS_LOADED_KEY = 'roiAnalyser_defaults_loaded';
+const PROVIDERS_KEY = LOCAL_STORAGE_KEYS.PROVIDERS;
+const DEFAULTS_LOADED_KEY = LOCAL_STORAGE_KEYS.DEFAULTS_LOADED;
 
 // A hardcoded array of default provider configurations.
 // This is used to populate the application with initial data on first use.
@@ -46,13 +52,13 @@ const defaultProviders = [
         rebate: 0,
         monthlyFee: 0,
         importRules: [
-            { type: 'tou', name: 'Peak', rate: 0.59653, hours: '7am-10am, 4pm-10pm' },
-            { type: 'tou', name: 'Shoulder', rate: 0.29425, hours: '10am-4pm' },
-            { type: 'tou', name: 'Off-Peak', rate: 0.35233, hours: '10pm-7am' }
+            { type: TARIFF_RULE_TYPES.TIME_OF_USE, name: 'Peak', rate: 0.59653, hours: '7am-10am, 4pm-10pm' },
+            { type: TARIFF_RULE_TYPES.TIME_OF_USE, name: 'Shoulder', rate: 0.29425, hours: '10am-4pm' },
+            { type: TARIFF_RULE_TYPES.TIME_OF_USE, name: 'Off-Peak', rate: 0.35233, hours: '10pm-7am' }
         ],
         exportRules: [
-            { type: 'tiered', name: 'Tier 1', rate: 0.10, limit: 14 },
-            { type: 'flat', name: 'Tier 2', rate: 0.02 }
+            { type: TARIFF_RULE_TYPES.TIERED, name: 'Tier 1', rate: 0.10, limit: 14 },
+            { type: TARIFF_RULE_TYPES.FLAT, name: 'Tier 2', rate: 0.02 }
         ],
 		specialConditions: [], 
         gridChargeEnabled: false,
@@ -70,28 +76,28 @@ const defaultProviders = [
         rebate: 1500,
         monthlyFee: 0,
         importRules: [
-            { type: 'tou', name: 'Peak Import', rate: 0.528, hours: '3pm-11pm' },
-            { type: 'tou', name: 'Shoulder Import', rate: 0.396, hours: '7am-11am, 10pm-12am' },
-            { type: 'tou', name: 'Off-Peak Import', rate: 0.000, hours: '12am-7am, 11am-3pm' }
+            { type: TARIFF_RULE_TYPES.TIME_OF_USE, name: 'Peak Import', rate: 0.528, hours: '3pm-11pm' },
+            { type: TARIFF_RULE_TYPES.TIME_OF_USE, name: 'Shoulder Import', rate: 0.396, hours: '7am-11am, 10pm-12am' },
+            { type: TARIFF_RULE_TYPES.TIME_OF_USE, name: 'Off-Peak Import', rate: 0.000, hours: '12am-7am, 11am-3pm' }
         ],
         exportRules: [
-            { type: 'tiered', name: 'Super Export Bonus', rate: 0.120, limit: 10 },
-            { type: 'tou', name: 'Peak Export', rate: 0.030, hours: '4pm-9pm' },
-            { type: 'tou', name: 'Shoulder Export', rate: 0.003, hours: '9pm-10am, 2pm-4pm' },
-            { type: 'tou', name: 'Solar Sponge', rate: 0.000, hours: '10am-2pm' }
+            { type: TARIFF_RULE_TYPES.TIERED, name: 'Super Export Bonus', rate: 0.120, limit: 10 },
+            { type: TARIFF_RULE_TYPES.TIME_OF_USE, name: 'Peak Export', rate: 0.030, hours: '4pm-9pm' },
+            { type: TARIFF_RULE_TYPES.TIME_OF_USE, name: 'Shoulder Export', rate: 0.003, hours: '9pm-10am, 2pm-4pm' },
+            { type: TARIFF_RULE_TYPES.TIME_OF_USE, name: 'Solar Sponge', rate: 0.000, hours: '10am-2pm' }
         ],
 		specialConditions: [
 			{
 				name: 'ZEROHERO Credit (Daylight Saving)',
-				months: [10, 11, 12, 1, 2, 3], // Applies from October to March
+				months: [10, 11, 12, 1, 2, 3],
 				condition: { 
-					metric: 'import_in_window',      
+					metric: SPECIAL_CONDITIONS.METRIC.IMPORT_IN_WINDOW,      
 					hours: '6pm-8pm',               
-					operator: 'less_than_or_equal_to',
+					operator: SPECIAL_CONDITIONS.OPERATOR.LESS_THAN_OR_EQUAL,
 					value: 0.06                     
 				},
 				action: { 
-					type: 'flat_credit',
+					type: SPECIAL_CONDITIONS.ACTION.FLAT_CREDIT,
 					value: 1.00 
 				}
 			},
@@ -99,16 +105,16 @@ const defaultProviders = [
 				name: 'ZEROHERO Credit (Standard Time)',
 				months: [4, 5, 6, 7, 8, 9], // Applies from April to September
 				condition: { 
-					metric: 'import_in_window',
+					metric: SPECIAL_CONDITIONS.METRIC.IMPORT_IN_WINDOW,
 					hours: '5pm-7pm',
-					operator: 'less_than_or_equal_to',
+					operator: SPECIAL_CONDITIONS.OPERATOR.LESS_THAN_OR_EQUAL,
 					value: 0.06
 				},
 				action: { 
-					type: 'flat_credit',
+					type: SPECIAL_CONDITIONS.ACTION.FLAT_CREDIT,
 					value: 1.00
 				}
-			}], 
+			}],
         gridChargeEnabled: true,
         gridChargeStart: 11,
         gridChargeEnd: 15
@@ -124,10 +130,10 @@ const defaultProviders = [
         monthlyFee: 25,
         rebate: 1500,
         importRules: [
-            { type: 'flat', name: 'Average Import', rate: 0.355 }
+            { type: TARIFF_RULE_TYPES.FLAT, name: 'Average Import', rate: 0.355 }
         ],
         exportRules: [
-            { type: 'flat', name: 'Average Export', rate: 0.007 }
+            { type: TARIFF_RULE_TYPES.FLAT, name: 'Average Export', rate: 0.007 }
         ],
 		specialConditions: [], 
         gridChargeEnabled: false,
@@ -145,12 +151,12 @@ const defaultProviders = [
         rebate: 0,
         monthlyFee: 0,
         importRules: [
-            { type: 'tou', name: 'Peak', rate: 0.5, hours: '3pm-11pm' },
-            { type: 'tou', name: 'Shoulder', rate: 0.3, hours: '7am-11am, 11pm-12am' },
-            { type: 'tou', name: 'Off-Peak', rate: 0.2, hours: '12am-7am, 11am-3pm' }
+            { type: TARIFF_RULE_TYPES.TIME_OF_USE, name: 'Peak', rate: 0.5, hours: '3pm-11pm' },
+            { type: TARIFF_RULE_TYPES.TIME_OF_USE, name: 'Shoulder', rate: 0.3, hours: '7am-11am, 11pm-12am' },
+            { type: TARIFF_RULE_TYPES.TIME_OF_USE, name: 'Off-Peak', rate: 0.2, hours: '12am-7am, 11am-3pm' }
         ],
         exportRules: [
-            { type: 'flat', name: 'Flat Rate', rate: 0.05 }
+            { type: TARIFF_RULE_TYPES.FLAT, rate: 0.05 }
         ],
 		specialConditions: [], 
         gridChargeEnabled: false,

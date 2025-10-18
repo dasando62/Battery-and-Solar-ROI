@@ -1,5 +1,5 @@
 // js/dataParser.js 
-// Version 1.1.9
+// Version 1.2.3
 // This module is responsible for handling file uploads and parsing CSV data.
 // It reads electricity usage and solar generation files, processes them into a
 // standardized hourly format, and stores the results in the global state.
@@ -32,6 +32,7 @@ import { state } from './state.js';
 import { displayError, parseDateString } from './utils.js';
 import { toggleExistingSolar } from './uiEvents.js';
 import { generateHourlySolarProfileFromDaily } from './profiles.js';
+import { SEASONS, NEM12_SUFFIX } from './constants.js';
 
 /**
  * Parses a NEM12 format CSV file and transforms it into the hourly format
@@ -58,7 +59,7 @@ function parseNEM12(csvText) {
             currentIntervalLength = parseInt(parts[8], 10);
             // We only care about grid import (E1) and grid export (B1).
             // Ignore other streams like gross generation, as that comes from the solar file.
-            if (currentDataType !== 'E1' && currentDataType !== 'B1') {
+            if (currentDataType !== NEM12_SUFFIX.GRID_IMPORT && currentDataType !== NEM12_SUFFIX.GRID_EXPORT) {
                 currentIntervalLength = null; // Invalidate to skip subsequent 300 records for this stream
             }
         }
@@ -95,9 +96,9 @@ function parseNEM12(csvText) {
                 const hourTotal = hourSlice.reduce((sum, val) => sum + val, 0);
 
                 // Assign the hourly total to the correct array based on the stream type
-                if (currentDataType === 'E1') { // E1 = Grid Consumption (Import)
+                if (currentDataType === NEM12_SUFFIX.GRID_IMPORT) { // E1 = Grid Consumption (Import)
                     dayRecord.consumption[hour] += hourTotal;
-                } else if (currentDataType === 'B1') { // B1 = Grid Feed-in (Export)
+                 } else if (currentDataType === NEM12_SUFFIX.GRID_EXPORT) { // B1 = Grid Feed-in (Export)
                     dayRecord.feedIn[hour] += hourTotal;
                 }
             }
@@ -295,7 +296,7 @@ export function handleSolarCsv(event) {
                 // If a day has only one data row and all the energy is at midnight...
                 if (day.rowCount === 1 && day.hourly[0] === totalForDay && totalForDay > 0) {
                     const month = parseInt(day.date.split('-')[1], 10);
-                    const season = [12,1,2].includes(month) ? 'Q1_Summer' : [3,4,5].includes(month) ? 'Q2_Autumn' : [6,7,8].includes(month) ? 'Q3_Winter' : 'Q4_Spring';
+                    const season = [12,1,2].includes(month) ? SEASONS.SUMMER : [3,4,5].includes(month) ? SEASONS.AUTUMN : [6,7,8].includes(month) ? SEASONS.WINTER : SEASONS.SPRING;
                     // ...replace the hourly data with a realistic solar curve for that season.
                     day.hourly = generateHourlySolarProfileFromDaily(totalForDay, season);
                 }
@@ -335,31 +336,36 @@ export function calculateQuarterlyAverages(electricityData, solarData, touHours)
     
     // Initialize data structure to aggregate totals.
     const quarterlyData = {
-        Q1_Summer: { days: 0, peak: 0, shoulder: 0, offPeak: 0, solar: 0 },
-        Q2_Autumn: { days: 0, peak: 0, shoulder: 0, offPeak: 0, solar: 0 },
-        Q3_Winter: { days: 0, peak: 0, shoulder: 0, offPeak: 0, solar: 0 },
-        Q4_Spring: { days: 0, peak: 0, shoulder: 0, offPeak: 0, solar: 0 },
+        [SEASONS.SUMMER]: { days: 0, peak: 0, shoulder: 0, offPeak: 0, solar: 0 },
+        [SEASONS.AUTUMN]: { days: 0, peak: 0, shoulder: 0, offPeak: 0, solar: 0 },
+        [SEASONS.WINTER]: { days: 0, peak: 0, shoulder: 0, offPeak: 0, solar: 0 },
+        [SEASONS.SPRING]: { days: 0, peak: 0, shoulder: 0, offPeak: 0, solar: 0 },
     };
-    // Use a Map for efficient lookup of a day's total solar generation.
-    const solarDataMap = new Map(solarData.map(day => [day.date, day.hourly.reduce((a, b) => a + b, 0)]));
+    // Use a Map for efficient lookup of a day's HOURLY solar generation array.
+    const solarDataMap = new Map(solarData.map(day => [day.date, day.hourly]));
 
     electricityData.forEach(day => {
-        // Determine the season for the current day.
         const month = parseInt(day.date.split('-')[1], 10);
         let season;
-        if ([12, 1, 2].includes(month)) season = 'Q1_Summer';
-        else if ([3, 4, 5].includes(month)) season = 'Q2_Autumn';
-        else if ([6, 7, 8].includes(month)) season = 'Q3_Winter';
-        else season = 'Q4_Spring';
+        if ([12, 1, 2].includes(month)) season = SEASONS.SUMMER;
+        else if ([3, 4, 5].includes(month)) season = SEASONS.AUTUMN;
+        else if ([6, 7, 8].includes(month)) season = SEASONS.WINTER;
+        else season = SEASONS.SPRING;
         
         const q = quarterlyData[season];
         q.days++;
-        q.solar += solarDataMap.get(day.date) || 0;
+
+        // Get the hourly solar data for the current day.
+        const hourlySolar = solarDataMap.get(day.date) || Array(24).fill(0);
+        q.solar += hourlySolar.reduce((a, b) => a + b, 0); // Add total solar to the seasonal total.
         
-        // Reconstruct true consumption and categorize it into TOU periods.
+        // Reconstruct true consumption using accurate HOURLY solar data.
         for (let h = 0; h < 24; h++) {
-            // True consumption = Grid Import + Self-Consumed Solar
-            const consumption = day.consumption[h] + Math.max(0, (solarDataMap.get(day.date) || 0) / 24 - day.feedIn[h]);
+            // Self-consumed solar is the portion of hourly generation that did not get exported.
+            const selfConsumedSolar = Math.max(0, hourlySolar[h] - day.feedIn[h]);
+            // True consumption is what was imported from the grid PLUS what was self-consumed.
+            const consumption = day.consumption[h] + selfConsumedSolar;
+            
             if (touHours.peak.includes(h)) q.peak += consumption;
             else if (touHours.shoulder.includes(h)) q.shoulder += consumption;
             else q.offPeak += consumption;
