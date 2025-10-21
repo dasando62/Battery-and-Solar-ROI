@@ -1,5 +1,5 @@
 // js/profiles.js
-//Version 1.2.4
+//Version 1.2.9
 // This module provides functions to generate 24-hour energy profiles (consumption and solar)
 // from single daily total values, based on typical patterns.
 
@@ -109,4 +109,34 @@ export function generateHourlySolarProfileFromDaily(dailyTotal, season = 'Q_Manu
   const distributionTotal = distribution.reduce((a, b) => a + b, 0);
   // Map each percentage in the distribution to an actual kWh value.
   return distribution.map(val => (val / distributionTotal) * dailyTotal);
+}
+
+/**
+ * Generates an hourly load profile for EV charging based on user inputs.
+ * @param {number} dailyKM - The average kilometers driven per day.
+ * @param {number} efficiency - The EV's efficiency in kWh per 100km.
+ * @param {string} chargeWindowStr - A time range string, e.g., "10pm-6am".
+ * @returns {number[]} An array of 24 hourly load values for the EV.
+ */
+export function generateEVChargingProfile(dailyKM, efficiency, chargeWindowStr) {
+    const profile = Array(24).fill(0);
+    if (!dailyKM || dailyKM <= 0 || !efficiency || efficiency <= 0) {
+        return profile;
+    }
+
+    const totalChargeNeededKWh = (dailyKM / 100) * efficiency;
+    const chargeHours = parseRangesToHours(chargeWindowStr);
+
+    if (chargeHours.length === 0) {
+        console.warn("EV charging window is invalid or empty. EV load will not be added.");
+        return profile;
+    }
+
+    const hourlyLoad = totalChargeNeededKWh / chargeHours.length;
+
+    for (const hour of chargeHours) {
+        profile[hour] = hourlyLoad;
+    }
+
+    return profile;
 }

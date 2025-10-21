@@ -1,5 +1,5 @@
 // js/config.js
-//Version 1.2.4
+//Version 1.2.9
 // This module is responsible for gathering all user-configurable settings from the UI
 // and assembling them into a single configuration object used by the analysis engine.
 
@@ -49,21 +49,21 @@ export function gatherConfigFromUI() {
     // The main configuration object.
     const config = {
         // --- General Settings ---
-        selectedProviders: selectedProviderIds, // IDs of providers to analyse
+        selectedProviders: selectedProviderIds,
         useManual: useManual,
         noExistingSolar: document.getElementById("noExistingSolar")?.checked,
-		
-		// --- Controlled Load Settings --- 
+        
+        // --- Controlled Load Settings ---
         moveControlledLoad: document.getElementById("moveControlledLoad")?.checked,
         controlledLoadIdentifier: document.getElementById('controlledLoadIdentifier')?.value || '',
-        
+		
         // --- System Sizing ---
         existingSolarKW: getNumericInput("existingSolarKW"),
 		existingSolarInverterKW: getNumericInput("existingSolarInverter"),
 		isHybridInverter: document.getElementById("isHybridInverter")?.checked,
         existingBattery: getNumericInput("existingBattery"),
         existingBatteryInverter: getNumericInput("existingBatteryInverter"),
-        existingSystemAge: getNumericInput("existingSystemAge", 0), // Age for degradation calculation
+        existingSystemAge: getNumericInput("existingSystemAge", 0),
         newSolarKW: getNumericInput("newSolarKW"),
         replaceExistingSystem: document.getElementById("replaceExistingSystem")?.checked,
         newBatteryKWH: getNumericInput("newBattery"),
@@ -72,36 +72,42 @@ export function gatherConfigFromUI() {
         costSolar: getNumericInput("costSolar"),
         costBattery: getNumericInput("costBattery"),
 		
+        // --- EV Charging Settings ---
+        evChargingEnabled: document.getElementById('enableEVCharging')?.checked,
+		evDailyKM: getNumericInput('evDailyKM', 40),
+        evEfficiency: getNumericInput('evEfficiency', 18.5),
+        minSOCForEV: getNumericInput('minSOCForEV', 50),
+		
         // --- Blackout & Sizing Recommendation Settings ---
         blackoutSizingEnabled: document.getElementById("enableBlackoutSizing")?.checked,
-        blackoutDuration: getNumericInput('blackoutDuration'), // hours
-        blackoutCoverage: getNumericInput('blackoutCoverage') / 100, // as a decimal
+        blackoutDuration: getNumericInput('blackoutDuration'),
+        blackoutCoverage: getNumericInput('blackoutCoverage') / 100,
         recommendationCoverageTarget: getNumericInput('recommendationCoverageTarget', 90),
         
         // --- Financial Settings ---
         loanEnabled: document.getElementById("enableLoan")?.checked,
         discountRateEnabled: document.getElementById("enableDiscountRate")?.checked,
         loanAmount: getNumericInput("loanAmount"),
-        loanInterestRate: getNumericInput("loanInterestRate") / 100, // as a decimal
-        loanTerm: getNumericInput("loanTerm"), // in years
-        discountRate: getNumericInput("discountRate") / 100, // as a decimal for NPV
+        loanInterestRate: getNumericInput("loanInterestRate") / 100,
+        loanTerm: getNumericInput("loanTerm"),
+        discountRate: getNumericInput("discountRate") / 100,
         
         // --- Analysis Period & Degradation ---
         numYears: getNumericInput("numYears", 15),
-        tariffEscalation: getNumericInput("tariffEscalation", 2) / 100, // annual % increase
-        solarDegradation: getNumericInput("solarDegradation", 0.5) / 100, // annual % loss
-        batteryDegradation: getNumericInput("batteryDegradation", 2) / 100, // annual % loss
+        tariffEscalation: getNumericInput("tariffEscalation", 2) / 100,
+        solarDegradation: getNumericInput("solarDegradation", 0.5) / 100,
+        batteryDegradation: getNumericInput("batteryDegradation", 2) / 100,
         fitDegradationStartYear: getNumericInput("fitDegradationStartYear", 1),
         fitDegradationEndYear: getNumericInput("fitDegradationEndYear", 10),
-        fitMinimumRate: getNumericInput("fitMinimumRate", -0.00), // Final floor for FIT rate
+        fitMinimumRate: getNumericInput("fitMinimumRate", -0.00),
         
         // --- Battery-specific Settings ---
-        gridChargeThreshold: getNumericInput("gridChargeThreshold", 80), // Max SOC to charge to from grid
-		socChargeTrigger: getNumericInput("socChargeTrigger", 50),    // SOC level below which grid charging is allowed
+        gridChargeThreshold: getNumericInput("gridChargeThreshold", 80),
+		socChargeTrigger: getNumericInput("socChargeTrigger", 50),
         
         // --- Manual Mode Data ---
-        manualSolarProfile: getNumericInput("manualSolarProfile", 4.0), // kWh generated per kW of panels
-        manualData: null, // This will be populated if useManual is true
+        manualSolarProfile: getNumericInput("manualSolarProfile", 4.0),
+        manualData: null,
 
         // Filter the full list of providers to only include the selected ones.
         providers: allProviders.filter(p => selectedProviderIds.includes(p.id))
@@ -110,10 +116,10 @@ export function gatherConfigFromUI() {
     // If in manual mode, gather the seasonal average daily values.
     if (useManual) {
         config.manualData = {
-            [SEASONS.SUMMER]: { avgPeak: getNumericInput("summerDailyPeak"), avgShoulder: getNumericInput("summerDailyShoulder"), avgOffPeak: getNumericInput("summerDailyOffPeak"), avgSolar: getNumericInput("summerDailySolar") },
-            [SEASONS.AUTUMN]: { avgPeak: getNumericInput("autumnDailyPeak"), avgShoulder: getNumericInput("autumnDailyShoulder"), avgOffPeak: getNumericInput("autumnDailyOffPeak"), avgSolar: getNumericInput("autumnDailySolar") },
-            [SEASONS.WINTER]: { avgPeak: getNumericInput("winterDailyPeak"), avgShoulder: getNumericInput("winterDailyShoulder"), avgOffPeak: getNumericInput("winterDailyOffPeak"), avgSolar: getNumericInput("winterDailySolar") },
-            [SEASONS.SPRING]: { avgPeak: getNumericInput("springDailyPeak"), avgShoulder: getNumericInput("springDailyShoulder"), avgOffPeak: getNumericInput("springDailyOffPeak"), avgSolar: getNumericInput("springDailySolar") },
+            [SEASONS.SUMMER]: { avgPeak: getNumericInput("summerDailyPeak"), avgShoulder: getNumericInput("summerDailyShoulder"), avgOffPeak: getNumericInput("summerDailyOffPeak"), avgSolar: getNumericInput("summerDailySolar"), avgControlledLoad: getNumericInput("summerDailyControlledLoad") },
+            [SEASONS.AUTUMN]: { avgPeak: getNumericInput("autumnDailyPeak"), avgShoulder: getNumericInput("autumnDailyShoulder"), avgOffPeak: getNumericInput("autumnDailyOffPeak"), avgSolar: getNumericInput("autumnDailySolar"), avgControlledLoad: getNumericInput("autumnDailyControlledLoad") },
+            [SEASONS.WINTER]: { avgPeak: getNumericInput("winterDailyPeak"), avgShoulder: getNumericInput("winterDailyShoulder"), avgOffPeak: getNumericInput("winterDailyOffPeak"), avgSolar: getNumericInput("winterDailySolar"), avgControlledLoad: getNumericInput("winterDailyControlledLoad") },
+            [SEASONS.SPRING]: { avgPeak: getNumericInput("springDailyPeak"), avgShoulder: getNumericInput("springDailyShoulder"), avgOffPeak: getNumericInput("springDailyOffPeak"), avgSolar: getNumericInput("springDailySolar"), avgControlledLoad: getNumericInput("springDailyControlledLoad") },
         };
     }
 
@@ -122,9 +128,8 @@ export function gatherConfigFromUI() {
 
     // Calculate the annual loan repayment amount if a loan is enabled and valid.
     if (config.loanEnabled && config.loanAmount > 0 && config.loanInterestRate > 0 && config.loanTerm > 0) {
-        const i = config.loanInterestRate / 12; // monthly interest rate
-        const n = config.loanTerm * 12; // total number of payments
-        // Standard loan amortization formula to find monthly payment.
+        const i = config.loanInterestRate / 12;
+        const n = config.loanTerm * 12;
         const monthlyPayment = (config.loanAmount * i * Math.pow(1 + i, n)) / (Math.pow(1 + i, n) - 1);
         config.annualLoanRepayment = monthlyPayment * 12;
     } else {

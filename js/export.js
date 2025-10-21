@@ -1,5 +1,5 @@
 // js/export.js
-// Version 1.2.4
+// Version 1.2.9
 
 
 // This module handles all functionality related to exporting analysis results,
