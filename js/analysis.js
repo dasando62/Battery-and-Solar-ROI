@@ -1,5 +1,5 @@
 // js/analysis.js
-// Version 1.2.4
+// Version 1.2.9
 // This is the core of the ROI calculator. It contains the simulation engine,
 // financial calculation functions (IRR, NPV), and system sizing algorithms.
 
@@ -30,8 +30,26 @@
 import { state } from './state.js';
 import { getNumericInput, escalate, parseRangesToHours, getSeason } from './utils.js';
 import { tariffComponents } from './tariffComponents.js';
-import { generateHourlyConsumptionProfileFromDailyTOU, generateHourlySolarProfileFromDaily } from './profiles.js';
+import { generateHourlyConsumptionProfileFromDailyTOU, generateHourlySolarProfileFromDaily, generateEVChargingProfile  } from './profiles.js';
 import { SEASONS, SPECIAL_CONDITIONS, DEFAULT_TOU_HOURS, TARIFF_RULE_TYPES } from './constants.js';
+
+
+/**
+ * Generates a typical hourly profile for a controlled load like a hot water system.
+ * This is used for the manual input mode.
+ * @param {number} dailyTotal - The total kWh used by the controlled load per day.
+ * @returns {number[]} An array of 24 hourly load values.
+ */
+function generateHourlyControlledLoadProfile(dailyTotal) {
+    if (dailyTotal <= 0) return Array(24).fill(0);
+    // Assumes a 7-hour heating window from 11pm to 6am.
+    const heatingHours = 7;
+    const hourlyLoad = dailyTotal / heatingHours;
+    const profile = Array(24).fill(0);
+    for (let i = 0; i < 6; i++) profile[i] = hourlyLoad; // Midnight to 6am
+    for (let i = 23; i < 24; i++) profile[i] = hourlyLoad; // 11pm to Midnight
+    return profile;
+}
 
 /**
  * Finds the appropriate rate for the controlled load based on a fallback system.
@@ -251,6 +269,13 @@ function applySpecialConditions(dailyCost, dailyBreakdown, conditions, dateStrin
 
     // Evaluate each condition rule.
     for (const condition of conditions) {
+        // *** FIX: Add a defensive check to ensure the rule object has the necessary nested properties. ***
+        // If a rule is malformed, skip it and continue to the next one.
+        if (!condition.condition || !condition.action) {
+            console.warn("Skipping malformed special condition:", condition);
+            continue;
+        }
+
         // If the rule has a 'months' property, check if it applies today.
         if (condition.months && condition.months.length > 0 && !condition.months.includes(month)) {
             continue; // Skip if rule is not for the current month.
@@ -340,29 +365,30 @@ export function getDegradedFitRate(baseRate, year, config) {
 }
 
 /**
- * Simulates energy flows for a single 24-hour period.
- * This is the core simulation function that models consumption, solar, and battery behavior.
- * @param {number[]} hourlyConsumption - Array of 24 consumption values (kWh).
+ * Simulates energy flows for a single 24-hour period, now including a priority-based EV charging scheduler
+ * and corrected inverter capacity sharing between solar and grid charging.
+ * @param {number[]} hourlyConsumption - Array of 24 household consumption values (kWh).
  * @param {number[]} hourlySolar - Array of 24 solar generation values (kWh).
  * @param {object} provider - The provider tariff configuration.
  * @param {object|null} batteryConfig - The battery configuration. If null, a no-battery baseline is simulated.
- * @param {number} [initialSOC=0] - The initial state of charge of the battery in kWh.
+ * @param {number} initialSOC - The initial state of charge of the battery in kWh.
+ * @param {number} evChargeNeededKWh - The total energy the EV needs for the day.
+ * @param {object} config - The main application configuration.
  * @returns {object} An object containing the daily breakdown of energy flows and the final battery SOC.
  */
-export function simulateDay(hourlyConsumption, hourlySolar, provider, batteryConfig, initialSOC = 0) {
+export function simulateDay(hourlyConsumption, hourlySolar, provider, batteryConfig, initialSOC = 0, evChargeNeededKWh = 0, config = {}) {
     const results = {
         peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0,
         tier1ExportKWh: 0, tier2ExportKWh: 0,
-        gridChargeKWh: 0,
-		solarChargeKWh: 0,
-        hourlyImports: Array(24).fill(0),
-        hourlyExports: Array(24).fill(0)
+        gridChargeKWh: 0, solarChargeKWh: 0, evChargedKWh: 0,
+        hourlyImports: Array(24).fill(0), hourlyExports: Array(24).fill(0)
     };
     let currentSOC = initialSOC;
     let gridChargeCost = 0;
     let socAt6am = 0;
 
-    if (!batteryConfig) { // No-battery baseline simulation
+    if (!batteryConfig) {
+        // --- PATH 1: NO BATTERY (BASELINE SIMULATION) ---
         for (let h = 0; h < 24; h++) {
             const consumption = hourlyConsumption[h] || 0;
             const solar = hourlySolar[h] || 0;
@@ -373,73 +399,109 @@ export function simulateDay(hourlyConsumption, hourlySolar, provider, batteryCon
                 results.hourlyExports[h] = -net;
             }
         }
-    } else { // Battery simulation logic
+    } else {
+        // --- PATH 2: WITH BATTERY (FULL SYSTEM SIMULATION) ---
+        let remainingEVChargeKWh = evChargeNeededKWh;
+
         for (let h = 0; h < 24; h++) {
             if (h === 6) socAt6am = currentSOC;
             const consumption = hourlyConsumption[h] || 0;
             let solar = hourlySolar[h] || 0;
+            const inverterLimit = batteryConfig.inverterKW;
 
-            // 1. Prioritize self-consumption and battery charging from solar.
+            // --- PART A: HANDLE HOUSEHOLD LOAD ---
             const solarToConsumption = Math.min(consumption, solar);
             let remainingConsumption = consumption - solarToConsumption;
             let excessSolar = solar - solarToConsumption;
             
-			let solarToBattery = 0;
-			if (excessSolar > 0 && currentSOC < batteryConfig.capacity) {
-				// The amount of solar going to the battery is limited by excess solar,
-				// the remaining space in the battery, AND the inverter's max power rating.
-				solarToBattery = Math.min(excessSolar, batteryConfig.capacity - currentSOC, batteryConfig.inverterKW);
-				
-				currentSOC += solarToBattery;
-				excessSolar -= solarToBattery;
-			}
-			//Track solar charging for debug and Appendix D
-			results.solarChargeKWh += solarToBattery;
+            let solarToBattery = 0;
+            if (excessSolar > 0 && currentSOC < batteryConfig.capacity) {
+                solarToBattery = Math.min(excessSolar, batteryConfig.capacity - currentSOC, inverterLimit);
+                currentSOC += solarToBattery;
+                excessSolar -= solarToBattery;
+            }
+            results.solarChargeKWh += solarToBattery;
 
-            // 2. Determine the total available power from the inverter(s) for this hour.
-            const inverterLimit = batteryConfig.inverterKW;
-            
-            // 3. Determine how much power the battery can discharge.
-            // This is limited by remaining consumption, the battery's state of charge, AND the inverter's remaining capacity.
             const inverterHeadroomForBattery = inverterLimit - solarToConsumption;
             const batteryDischargeLimit = Math.max(0, inverterHeadroomForBattery);
             const batteryToConsumption = Math.min(remainingConsumption, currentSOC, batteryDischargeLimit);
             
             currentSOC -= batteryToConsumption;
             remainingConsumption -= batteryToConsumption;
-
-            // 4. Any remaining consumption must be imported from the grid.
             results.hourlyImports[h] = remainingConsumption;
+            
+            // --- PART B: HANDLE EV CHARGING ---
+            if (remainingEVChargeKWh > 0 && provider.evRules) {
+                for (const rule of provider.evRules) {
+                    const ruleHours = parseRangesToHours(rule.hours || '');
+                    if (ruleHours.includes(h)) {
+                        let chargeAmount = 0;
+                        const powerFromInverter = solarToConsumption + batteryToConsumption;
+                        const availableInverterPower = Math.max(0, inverterLimit - powerFromInverter);
 
-            // 5. Any remaining solar is exported, respecting the inverter's export limit.
+                        switch (rule.source) {
+                            case 'excess_solar':
+                                chargeAmount = Math.min(remainingEVChargeKWh, excessSolar, availableInverterPower);
+                                if (chargeAmount > 0) { excessSolar -= chargeAmount; }
+                                break;
+                            case 'grid':
+                                chargeAmount = Math.min(remainingEVChargeKWh, availableInverterPower);
+                                if (chargeAmount > 0) { results.hourlyImports[h] += chargeAmount; }
+                                break;
+                            case 'battery':
+                                const minSocThreshold = batteryConfig.capacity * (config.minSOCForEV / 100);
+                                if (currentSOC > minSocThreshold) {
+                                    const availableBatteryDischarge = currentSOC - minSocThreshold;
+                                    chargeAmount = Math.min(remainingEVChargeKWh, availableBatteryDischarge, availableInverterPower);
+                                    if (chargeAmount > 0) { currentSOC -= chargeAmount; }
+                                }
+                                break;
+                        }
+
+                        if (chargeAmount > 0) {
+                            remainingEVChargeKWh -= chargeAmount;
+                            results.evChargedKWh += chargeAmount;
+                            break; 
+                        }
+                    }
+                }
+            }
+
+            // --- PART C: HANDLE FINAL GRID INTERACTIONS ---
             const inverterHeadroomForExport = inverterLimit - solarToConsumption;
             const maxSolarExport = Math.max(0, inverterHeadroomForExport);
             results.hourlyExports[h] = Math.min(excessSolar, maxSolarExport);
             
-            // 6. Grid Charging Logic.
+            // Grid Charging Logic for the BATTERY
             if (provider.gridChargeEnabled && h >= provider.gridChargeStart && h < provider.gridChargeEnd) {
                 const chargeThresholdSOC = batteryConfig.capacity * (batteryConfig.gridChargeThreshold / 100);
                 const chargeTriggerSOC = batteryConfig.capacity * (batteryConfig.socChargeTrigger / 100);
-
                 if (currentSOC < chargeTriggerSOC) {
                     const chargeNeeded = chargeThresholdSOC - currentSOC;
                     if (chargeNeeded > 0) {
-                        const gridChargeAmount = Math.min(chargeNeeded, batteryConfig.inverterKW, batteryConfig.capacity - currentSOC);
-                        results.gridChargeKWh += gridChargeAmount;
-                        currentSOC += gridChargeAmount;
-                        results.hourlyImports[h] += gridChargeAmount;
+                        // --- THE FIX IS HERE ---
+                        // 1. Calculate how much inverter capacity is left after solar has charged the battery.
+                        const inverterHeadroomForGridCharge = Math.max(0, inverterLimit - solarToBattery);
                         
-                        const touRule = (provider.importRules || []).find(r => r.type === 'tou' && parseRangesToHours(r.hours).includes(h));
-                        const flatRule = (provider.importRules || []).find(r => r.type === 'flat');
-                        const rateForHour = (touRule || flatRule)?.rate || 0;
-                        gridChargeCost += gridChargeAmount * rateForHour;
+                        // 2. Use this remaining headroom to cap the grid charge amount.
+                        const gridChargeAmount = Math.min(chargeNeeded, inverterHeadroomForGridCharge, batteryConfig.capacity - currentSOC);
+                        
+                        if (gridChargeAmount > 0) {
+                            results.gridChargeKWh += gridChargeAmount;
+                            currentSOC += gridChargeAmount;
+                            results.hourlyImports[h] += gridChargeAmount;
+                            const touRule = (provider.importRules || []).find(r => r.type === 'tou' && parseRangesToHours(r.hours).includes(h));
+                            const flatRule = (provider.importRules || []).find(r => r.type === 'flat');
+                            const rateForHour = (touRule || flatRule)?.rate || 0;
+                            gridChargeCost += gridChargeAmount * rateForHour;
+                        }
                     }
                 }
             }
-        }
-    }
+        } // End of main 'for' loop for battery simulation
+    } // End of main if/else block
 
-    // Categorize TOU and Tiered usage 
+    // 3. Categorize TOU and Tiered usage (this part is common to both paths)
     const peakRule = (provider.importRules || []).find(r => r.name.toLowerCase().includes('peak'));
     const shoulderRule = (provider.importRules || []).find(r => r.name.toLowerCase().includes('shoulder'));
     const peakHours = parseRangesToHours(peakRule?.hours || '');
@@ -469,150 +531,12 @@ export function simulateDay(hourlyConsumption, hourlySolar, provider, batteryCon
 }
 
 /**
- * Calculates the total annualized electricity cost for the baseline (no new system) scenario.
- * @param {object} config - The main analysis configuration object.
- * @param {object} simulationData - Seasonal average data (for manual mode).
- * @param {Array} electricityData - The parsed electricity usage data (for CSV mode).
- * @param {object} rawData - An object to store raw simulation outputs for debugging.
- * @returns {number} The total estimated annual cost for the baseline.
- */
-function calculateBaseline(config, simulationData, electricityData, rawData, finalResults) {
-    const baselineProvider = config.providers[0]; // Baseline always uses the first selected provider.
-    const importCalculator = tariffComponents.IMPORT_RULES.calculate;
-    const exportCalculator = tariffComponents.EXPORT_RULES.calculate;
-    const fitConfig = {
-        degradationStartYear: config.fitDegradationStartYear,
-        degradationEndYear: config.fitDegradationEndYear,
-        minimumRate: config.fitMinimumRate,
-    };
-
-    let annualizedBaseCost = 0;
-    // Check if any controlled load exists in the dataset to add warnings later.
-    const hasControlledLoadInData = config.useManual ? config.dailyControlledLoadKWh > 0 : electricityData.some(d => d.controlledLoad && d.controlledLoad.reduce((a, b) => a + b, 0) > 0);
-    if (config.useManual) {
-        // --- Manual Mode Baseline Calculation ---
-        let totalCostForPeriod = 0;
-        const daysInQuarter = 365 / 4;
-		const controlledLoadRateInfo = getControlledLoadRate(baselineProvider);
-        for (const q in simulationData) {
-            const quarter = simulationData[q];
-            const season = q.split('_')[1];
-            // Generate hourly profiles from daily averages.
-            const hourlyConsumption = generateHourlyConsumptionProfileFromDailyTOU(quarter.avgPeak, quarter.avgShoulder, quarter.avgOffPeak, baselineProvider.importRules);
-            // Account for degradation of the existing solar system.
-            const degradedExistingSolar = (config.existingSolarKW * config.manualSolarProfile) * Math.pow(1 - config.solarDegradation, config.existingSystemAge);
-            const hourlySolar = generateHourlySolarProfileFromDaily(degradedExistingSolar, q);
-            // Simulate an average day for the quarter.
-            const simResults = simulateDay(hourlyConsumption, hourlySolar, baselineProvider, null, 0);
-            const dailyBreakdown = simResults.dailyBreakdown;
-            
-            // Store raw data for debug table.
-            const rawSeason = rawData.baseline.year1[season];
-            if (rawSeason) {
-                rawSeason.days += daysInQuarter;
-                rawSeason.peakKWh += dailyBreakdown.peakKWh * daysInQuarter;
-                rawSeason.shoulderKWh += dailyBreakdown.shoulderKWh * daysInQuarter;
-                rawSeason.offPeakKWh += dailyBreakdown.offPeakKWh * daysInQuarter;
-                rawSeason.tier1ExportKWh += dailyBreakdown.tier1ExportKWh * daysInQuarter;
-                rawSeason.tier2ExportKWh += dailyBreakdown.tier2ExportKWh * daysInQuarter;
-            }
-            
-            // Calculate daily cost and add to the total for the quarter.
-            let dailyEnergyCost = importCalculator(baselineProvider.importRules, dailyBreakdown, { rate: 0, year: 1 });
-            dailyEnergyCost -= exportCalculator(baselineProvider.exportRules, dailyBreakdown, 1, fitConfig, getDegradedFitRate);
-			
-            // Calculate separate controlled load cost
-            const dailyControlledLoadCost = config.dailyControlledLoadKWh * escalate(controlledLoadRateInfo.rate, config.tariffEscalation, 1);
-            
-            let totalDailyAdjustment = (baselineProvider.dailyCharge || 0) + dailyEnergyCost + dailyControlledLoadCost;
-            totalCostForPeriod += totalDailyAdjustment * daysInQuarter;
-        }
-        annualizedBaseCost = totalCostForPeriod;
-    } else if (electricityData) {
-        // --- CSV Mode Baseline Calculation ---
-        let totalCostForPeriod = 0;
-        let daysProcessed = 0;
-		const controlledLoadRateInfo = getControlledLoadRate(baselineProvider);
-        const peakRule = (baselineProvider.importRules || []).find(r => r.name.toLowerCase().includes('peak'));
-        const shoulderRule = (baselineProvider.importRules || []).find(r => r.name.toLowerCase().includes('shoulder'));
-        const peakHours = parseRangesToHours(peakRule?.hours || '');
-        const shoulderHours = parseRangesToHours(shoulderRule?.hours || '');
-        
-        // Process each day from the CSV data.
-        electricityData.forEach(day => {
-            daysProcessed++;
-            // The baseline breakdown comes directly from the usage CSV.
-            const dailyBreakdown = { peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, hourlyImports: day.consumption, hourlyExports: day.feedIn };
-            for (let h = 0; h < 24; h++) {
-                const gridImport = day.consumption[h] || 0;
-                if (peakHours.includes(h)) { dailyBreakdown.peakKWh += gridImport; }
-                else if (shoulderHours.includes(h)) { dailyBreakdown.shoulderKWh += gridImport; }
-                else { dailyBreakdown.offPeakKWh += gridImport; }
-            }
-            // Store raw data for debug table.
-            const season = getSeason(day.date);
-            const rawSeason = rawData.baseline.year1[season];
-            if (rawSeason) {
-                rawSeason.days++;
-                rawSeason.peakKWh += dailyBreakdown.peakKWh;
-                rawSeason.shoulderKWh += dailyBreakdown.shoulderKWh;
-                rawSeason.offPeakKWh += dailyBreakdown.offPeakKWh;
-                const dailyTotalExport = dailyBreakdown.hourlyExports.reduce((a, b) => a + b, 0);
-                const firstExportRule = (baselineProvider.exportRules || [])[0];
-                if (firstExportRule && firstExportRule.type === 'tiered') {
-                    const tier1Amount = Math.min(dailyTotalExport, firstExportRule.limit || Infinity);
-                    rawSeason.tier1ExportKWh += tier1Amount;
-                    rawSeason.tier2ExportKWh += dailyTotalExport - tier1Amount;
-                } else {
-                    rawSeason.tier1ExportKWh += dailyTotalExport;
-                }
-            }
-            
-            // Calculate the cost for the day and add to the total.
-            let dailyEnergyCost = importCalculator(baselineProvider.importRules, dailyBreakdown, { rate: 0, year: 1 });
-            dailyEnergyCost -= exportCalculator(baselineProvider.exportRules, dailyBreakdown, 1, fitConfig, getDegradedFitRate);
-
-            // Calculate separate controlled load cost for the day
-            const dailyControlledLoadKWh = (day.controlledLoad || []).reduce((a, b) => a + b, 0);
-            const dailyControlledLoadCost = dailyControlledLoadKWh * controlledLoadRateInfo.rate;
-
-            let totalDailyAdjustment = (baselineProvider.dailyCharge || 0) + dailyEnergyCost + dailyControlledLoadCost;
-            totalDailyAdjustment = applySpecialConditions(totalDailyAdjustment, dailyBreakdown, baselineProvider.specialConditions, day.date);
-            totalCostForPeriod += totalDailyAdjustment;
-
-            // Store raw controlled load data
-            if (rawData.baseline.year1[getSeason(day.date)]) {
-                 rawData.baseline.year1[getSeason(day.date)].controlledLoadKWh += dailyControlledLoadKWh;
-            }
-        });
-        // Annualize the cost based on the number of days processed.
-        const annualizationFactor = daysProcessed > 0 ? 365 / daysProcessed : 0;
-        annualizedBaseCost = totalCostForPeriod * annualizationFactor;
-    }
-
-    // Add a warning if a fallback rate was used for the baseline.
-    if (hasControlledLoadInData && controlledLoadRateInfo.fallbackUsed) {
-        finalResults.warnings.push(`For Baseline Provider '${baselineProvider.name}': No 'Controlled Load' tariff was found. The analysis used the '${controlledLoadRateInfo.fallbackUsed}' rate as a substitute.`);
-    }
-
-    return annualizedBaseCost;
-}
-
-/**
  * Calculates the total annualized electricity cost for a single year with the new system.
- * This is the main simulation function for the 'new system' scenario, handling both
- * manual and CSV data modes, as well as the logic for the controlled load.
- * @param {object} providerData - The tariff configuration for the specific provider being calculated.
- * @param {object} config - The main analysis configuration.
- * @param {number} year - The current year of the analysis (for degradation).
- * @param {object} simulationData - Seasonal average data (for manual mode).
- * @param {Array} electricityData - Parsed usage data (for CSV mode).
- * @param {object} rawData - Object to store raw simulation outputs for debug tables.
- * @param {object} finalResults - The main results object, used here to store warnings.
- * @returns {number} The total estimated annual cost for the system in the given year.
+ * This version is corrected to handle a "full replacement" scenario in CSV mode
+ * even when no historical solar CSV is provided.
  */
 function calculateSystemYear(providerData, config, year, simulationData, electricityData, rawData, finalResults) {
-    // 1. Initialize calculators, configs, and cost variable
+    // 1. Initialize calculators and other variables
     const importCalculator = tariffComponents.IMPORT_RULES.calculate;
     const exportCalculator = tariffComponents.EXPORT_RULES.calculate;
     const fitConfig = {
@@ -620,48 +544,58 @@ function calculateSystemYear(providerData, config, year, simulationData, electri
         degradationEndYear: config.fitDegradationEndYear,
         minimumRate: config.fitMinimumRate,
     };
-    const baselineProvider = config.providers[0]; // Needed for profile generation in manual mode.
+    const baselineProvider = config.providers[0];
     let annualCost = 0;
 
-    // 2. Calculate degraded component performance for the current year
+    // 2. Calculate degraded component performance
     const degradedComponents = calculateDegradedComponents(config, year);
-
-    // 3. Check if there's any controlled load data present to determine if warnings are needed later
-    const hasControlledLoadInData = config.useManual ? config.dailyControlledLoadKWh > 0 : electricityData.some(d => d.controlledLoad && d.controlledLoad.reduce((a, b) => a + b, 0) > 0);
+    
+    // 3. Check for controlled load and get its rate
+    const hasControlledLoadInData = config.useManual 
+        ? Object.values(simulationData).some(q => q.avgControlledLoad > 0) 
+        : electricityData.some(d => d.controlledLoad && d.controlledLoad.reduce((a, b) => a + b, 0) > 0);
+    const controlledLoadRateInfo = getControlledLoadRate(providerData);
 
     // 4. Handle Manual Mode simulation
     if (config.useManual) {
         let totalCostForPeriod = 0;
         const daysInQuarter = 365 / 4;
-        const controlledLoadRateInfo = getControlledLoadRate(providerData);
-        const hourlyControlledLoad = generateHourlyControlledLoadProfile(config.dailyControlledLoadKWh);
 
         for (const q in simulationData) {
             const quarter = simulationData[q];
             const season = q.split('_')[1];
 
-            const batteryConfig = { capacity: degradedComponents.batteryCapacity, inverterKW: config.newBatteryInverterKW, gridChargeThreshold: config.gridChargeThreshold, socChargeTrigger: config.socChargeTrigger };
-            let currentSOC = batteryConfig.capacity * 0.5; // Assume average starting SOC for each quarter.
+            const hourlyControlledLoad = generateHourlyControlledLoadProfile(quarter.avgControlledLoad);
+            const batteryConfig = {
+                capacity: degradedComponents.batteryCapacity,
+                inverterKW: config.replaceExistingSystem ? config.newBatteryInverterKW : (config.isAcCoupled ? config.newBatteryInverterKW + config.existingSolarInverterKW : config.newBatteryInverterKW),
+                gridChargeThreshold: config.gridChargeThreshold,
+                socChargeTrigger: config.socChargeTrigger
+            };
+            let currentSOC = batteryConfig.capacity * 0.5;
 
             let trueHourlyConsumption = generateHourlyConsumptionProfileFromDailyTOU(quarter.avgPeak, quarter.avgShoulder, quarter.avgOffPeak, baselineProvider.importRules);
-            const totalHourlySolar = generateHourlySolarProfileFromDaily(degradedComponents.manualModeSolarGeneration, q);
+            
+            let totalHourlySolar = generateHourlySolarProfileFromDaily(degradedComponents.manualModeSolarGeneration, q);
+            totalHourlySolar = totalHourlySolar.map(hourlyGeneration => Math.min(hourlyGeneration, batteryConfig.inverterKW));
+
             let dailyControlledLoadCost = 0;
 
-            // Decide whether to merge the controlled load or cost it separately
             if (config.moveControlledLoad) {
-                // Merge controlled load into the main consumption profile to be powered by solar/battery
                 for (let h = 0; h < 24; h++) {
                     trueHourlyConsumption[h] += hourlyControlledLoad[h];
                 }
             } else {
-                // Calculate the cost of the controlled load separately
-                dailyControlledLoadCost = config.dailyControlledLoadKWh * escalate(controlledLoadRateInfo.rate, config.tariffEscalation, year);
+                dailyControlledLoadCost = quarter.avgControlledLoad * escalate(controlledLoadRateInfo.rate, config.tariffEscalation, year);
             }
 
-            const simResults = simulateDay(trueHourlyConsumption, totalHourlySolar, providerData, batteryConfig, currentSOC);
+            let dailyEVChargeKWh = 0;
+            if (config.evChargingEnabled && providerData.evRules && providerData.evRules.length > 0) {
+                dailyEVChargeKWh = (config.evDailyKM / 100) * config.evEfficiency;
+            }
+            const simResults = simulateDay(trueHourlyConsumption, totalHourlySolar, providerData, batteryConfig, currentSOC, dailyEVChargeKWh, config);
             const dailyBreakdown = simResults.dailyBreakdown;
 
-            // Store raw data for Year 1 debug table
             if (year === 1) {
                 const rawSeason = rawData.system[providerData.id].year1[season];
                 if (rawSeason) {
@@ -674,15 +608,17 @@ function calculateSystemYear(providerData, config, year, simulationData, electri
                     rawSeason.gridChargeKWh += dailyBreakdown.gridChargeKWh * daysInQuarter;
                     rawSeason.solarChargeKWh += dailyBreakdown.solarChargeKWh * daysInQuarter;
                     rawSeason.gridChargeCost += simResults.gridChargeCost * daysInQuarter;
+                    rawSeason.evLoadKWh += dailyBreakdown.evChargedKWh * daysInQuarter;
+                    if (!config.moveControlledLoad) {
+                        rawSeason.controlledLoadKWh += quarter.avgControlledLoad * daysInQuarter;
+                    }
                 }
             }
 
-            // Calculate the total daily cost for the main circuit
             let dailyEnergyCost = simResults.gridChargeCost || 0;
             dailyEnergyCost += importCalculator(providerData.importRules, dailyBreakdown, { rate: config.tariffEscalation, year: year });
             dailyEnergyCost -= exportCalculator(providerData.exportRules, dailyBreakdown, year, fitConfig, getDegradedFitRate);
             
-            // Combine main circuit cost, controlled load cost (if separate), and daily charge
             let totalDailyAdjustment = (providerData.dailyCharge || 0) + dailyEnergyCost;
             totalCostForPeriod += (totalDailyAdjustment + dailyControlledLoadCost) * daysInQuarter;
         }
@@ -693,12 +629,27 @@ function calculateSystemYear(providerData, config, year, simulationData, electri
         let totalCostForPeriod = 0;
         let daysProcessed = 0;
         const solarDataMap = new Map(state.solarData.map(d => [d.date, d.hourly]));
-        const controlledLoadRateInfo = getControlledLoadRate(providerData);
-        let currentSOC = degradedComponents.batteryCapacity * 0.5; // Start with average SOC for the whole period.
+        let currentSOC = degradedComponents.batteryCapacity * 0.5;
 
         electricityData.forEach(day => {
+            // *** THE FIX IS HERE: 'trueHourlyConsumption' is declared only ONCE. ***
+            let trueHourlyConsumption;
             const existingHourlySolar_historical = solarDataMap.get(day.date);
-            if (!existingHourlySolar_historical) return; // Skip days with no matching solar data.
+
+            // Determine how to calculate the true consumption based on the scenario.
+            if (!config.replaceExistingSystem && existingHourlySolar_historical) {
+                // If we're adding to an existing system, we MUST have historical solar data to reconstruct the true load.
+                trueHourlyConsumption = reconstructTrueConsumption(day, existingHourlySolar_historical);
+            } else if (config.replaceExistingSystem) {
+                // If it's a full replacement, we assume the grid import WAS the total consumption,
+                // as there was no old solar system to self-consume from. This allows the simulation to run
+                // even if the user didn't provide a (now irrelevant) historical solar file.
+                trueHourlyConsumption = day.consumption;
+            } else {
+                // Failsafe: if we are in an 'addition' scenario but have no historical solar data, we cannot proceed for this day.
+                return; 
+            }
+            
             daysProcessed++;
 
             const batteryConfig = {
@@ -707,28 +658,27 @@ function calculateSystemYear(providerData, config, year, simulationData, electri
                 gridChargeThreshold: config.gridChargeThreshold,
                 socChargeTrigger: config.socChargeTrigger
             };
-
-            let trueHourlyConsumption = reconstructTrueConsumption(day, existingHourlySolar_historical);
+            
             const totalHourlySolar = generateTotalSolarProfile(config, day, year, solarDataMap);
             let dailyControlledLoadCost = 0;
             const dailyControlledLoadKWh = (day.controlledLoad || []).reduce((a, b) => a + b, 0);
 
-            // Decide whether to merge the controlled load or cost it separately
             if (config.moveControlledLoad) {
-                // Merge this day's controlled load into the main consumption profile
                 for (let h = 0; h < 24; h++) {
                     trueHourlyConsumption[h] += day.controlledLoad[h] || 0;
                 }
             } else {
-                // Calculate the cost of this day's controlled load separately
                 dailyControlledLoadCost = dailyControlledLoadKWh * escalate(controlledLoadRateInfo.rate, config.tariffEscalation, year);
             }
-
-            const simResults = simulateDay(trueHourlyConsumption, totalHourlySolar, providerData, batteryConfig, currentSOC);
-            currentSOC = simResults.finalSOC; // Carry over the final SOC to the next day
+            
+            let dailyEVChargeKWh = 0;
+            if (config.evChargingEnabled && providerData.evRules && providerData.evRules.length > 0) {
+                dailyEVChargeKWh = (config.evDailyKM / 100) * config.evEfficiency;
+            }
+            const simResults = simulateDay(trueHourlyConsumption, totalHourlySolar, providerData, batteryConfig, currentSOC, dailyEVChargeKWh, config);
+            currentSOC = simResults.finalSOC;
             const dailyBreakdown = simResults.dailyBreakdown;
 
-            // Store raw data for Year 1 debug table
             if (year === 1) {
                 const season = getSeason(day.date);
                 const rawSeason = rawData.system[providerData.id].year1[season];
@@ -742,36 +692,171 @@ function calculateSystemYear(providerData, config, year, simulationData, electri
                     rawSeason.gridChargeKWh += dailyBreakdown.gridChargeKWh;
                     rawSeason.solarChargeKWh += dailyBreakdown.solarChargeKWh;
                     rawSeason.gridChargeCost += simResults.gridChargeCost;
-                    // Only add to raw data if it was NOT moved to the main circuit
+                    rawSeason.evLoadKWh += dailyBreakdown.evChargedKWh;
                     if (!config.moveControlledLoad) {
-                       rawData.system[providerData.id].year1[getSeason(day.date)].controlledLoadKWh += dailyControlledLoadKWh;
+                       rawSeason.controlledLoadKWh += dailyControlledLoadKWh;
                     }
                 }
             }
 
-            // Calculate the total daily cost for the main circuit
             let dailyEnergyCost = simResults.gridChargeCost || 0;
             dailyEnergyCost += importCalculator(providerData.importRules, dailyBreakdown, { rate: config.tariffEscalation, year: year });
             dailyEnergyCost -= exportCalculator(providerData.exportRules, dailyBreakdown, year, fitConfig, getDegradedFitRate);
             
-            // Combine all daily costs: daily charge, main circuit, special conditions, and the separate controlled load cost
             let totalDailyAdjustment = (providerData.dailyCharge || 0) + dailyEnergyCost;
             totalDailyAdjustment = applySpecialConditions(totalDailyAdjustment, dailyBreakdown, providerData.specialConditions, day.date);
-            totalDailyAdjustment += dailyControlledLoadCost; // Add separate cost if applicable
+            totalDailyAdjustment += dailyControlledLoadCost;
             totalCostForPeriod += totalDailyAdjustment;
         });
 
-        // Annualize the cost based on the number of days of data provided
         const annualizationFactor = daysProcessed > 0 ? 365 / daysProcessed : 0;
         annualCost = totalCostForPeriod * annualizationFactor;
     }
 
-    // 6. Add a warning if a fallback rate was used for this provider (and load wasn't moved)
+    // 6. Add a warning if a fallback rate was used
     if (hasControlledLoadInData && !config.moveControlledLoad && controlledLoadRateInfo.fallbackUsed) {
         finalResults.warnings.push(`For Provider '${providerData.name}': No 'Controlled Load' tariff was found. The analysis used the '${controlledLoadRateInfo.fallbackUsed}' rate as a substitute.`);
     }
 
     return annualCost;
+}
+/**
+ * Calculates the total annualized electricity cost for the baseline scenario.
+ * The baseline represents the user's current situation, including any existing solar or battery systems.
+ * This function handles both manual and CSV data modes and correctly simulates an existing battery if one is defined.
+ * @param {object} config - The main analysis configuration object.
+ * @param {object} simulationData - Seasonal average data (used only in manual mode).
+ * @param {Array} electricityData - Parsed usage data from the CSV file.
+ * @param {object} rawData - Object used to store raw simulation outputs for the debug tables.
+ * @param {object} finalResults - The main results object, used here to store warnings.
+ * @returns {number} The total estimated annual cost for the baseline scenario.
+ */
+function calculateBaseline(config, simulationData, electricityData, rawData, finalResults) {
+    // 1. Initialize calculators, provider configuration, and cost variable
+    const baselineProvider = config.providers[0]; // The baseline always uses the first provider in the list.
+    const importCalculator = tariffComponents.IMPORT_RULES.calculate;
+    const exportCalculator = tariffComponents.EXPORT_RULES.calculate;
+    const fitConfig = {
+        degradationStartYear: config.fitDegradationStartYear,
+        degradationEndYear: config.fitDegradationEndYear,
+        minimumRate: config.fitMinimumRate,
+    };
+    let annualizedBaseCost = 0;
+    // Declare here so it's available to the entire function's scope.
+    let controlledLoadRateInfo;
+
+    // 2. Configure the EXISTING battery if one is present
+    let existingBatteryConfig = null;
+    if (config.existingBattery > 0) {
+        const degradedExistingBattery = config.existingBattery * Math.pow(1 - config.batteryDegradation, config.existingSystemAge);
+        existingBatteryConfig = {
+            capacity: degradedExistingBattery,
+            inverterKW: config.isHybridInverter ? config.existingSolarInverterKW : config.existingBatteryInverter,
+            gridChargeThreshold: config.gridChargeThreshold,
+            socChargeTrigger: config.socChargeTrigger
+        };
+    }
+
+    // 3. Check if any controlled load data exists to determine if warnings are needed later
+    const hasControlledLoadInData = config.useManual
+        ? Object.values(simulationData).some(q => q.avgControlledLoad > 0)
+        : electricityData.some(d => d.controlledLoad && d.controlledLoad.reduce((a, b) => a + b, 0) > 0);
+
+    // 4. Handle Manual Mode simulation
+    if (config.useManual) {
+        let totalCostForPeriod = 0;
+        const daysInQuarter = 365 / 4;
+        controlledLoadRateInfo = getControlledLoadRate(baselineProvider); // Assign value
+
+        for (const q in simulationData) {
+            const quarter = simulationData[q];
+            const season = q.split('_')[1];
+
+            const hourlyConsumption = generateHourlyConsumptionProfileFromDailyTOU(quarter.avgPeak, quarter.avgShoulder, quarter.avgOffPeak, baselineProvider.importRules);
+            const degradedExistingSolar = (config.existingSolarKW * config.manualSolarProfile) * Math.pow(1 - config.solarDegradation, config.existingSystemAge);
+            const hourlySolar = generateHourlySolarProfileFromDaily(degradedExistingSolar, q);
+
+            const simResults = simulateDay(hourlyConsumption, hourlySolar, baselineProvider, existingBatteryConfig, 0);
+            const dailyBreakdown = simResults.dailyBreakdown;
+
+            if (rawData.baseline.year1[season]) {
+                const rawSeason = rawData.baseline.year1[season];
+                rawSeason.days += daysInQuarter;
+                rawSeason.peakKWh += dailyBreakdown.peakKWh * daysInQuarter;
+                rawSeason.shoulderKWh += dailyBreakdown.shoulderKWh * daysInQuarter;
+                rawSeason.offPeakKWh += dailyBreakdown.offPeakKWh * daysInQuarter;
+                rawSeason.tier1ExportKWh += dailyBreakdown.tier1ExportKWh * daysInQuarter;
+                rawSeason.tier2ExportKWh += dailyBreakdown.tier2ExportKWh * daysInQuarter;
+                rawSeason.controlledLoadKWh += quarter.avgControlledLoad * daysInQuarter;
+                rawSeason.solarChargeKWh += dailyBreakdown.solarChargeKWh * daysInQuarter;
+                rawSeason.gridChargeKWh += dailyBreakdown.gridChargeKWh * daysInQuarter;
+            }
+
+            let dailyEnergyCost = importCalculator(baselineProvider.importRules, dailyBreakdown, { rate: 0, year: 1 });
+            dailyEnergyCost -= exportCalculator(baselineProvider.exportRules, dailyBreakdown, 1, fitConfig, getDegradedFitRate);
+
+            const dailyControlledLoadCost = quarter.avgControlledLoad * escalate(controlledLoadRateInfo.rate, config.tariffEscalation, 1);
+            let totalDailyAdjustment = (baselineProvider.dailyCharge || 0) + dailyEnergyCost + dailyControlledLoadCost;
+            totalCostForPeriod += totalDailyAdjustment * daysInQuarter;
+        }
+        annualizedBaseCost = totalCostForPeriod;
+
+    // 5. Handle CSV Mode simulation
+    } else if (electricityData) {
+        let totalCostForPeriod = 0;
+        let daysProcessed = 0;
+        controlledLoadRateInfo = getControlledLoadRate(baselineProvider); // Assign value
+        const solarDataMap = new Map(state.solarData.map(d => [d.date, d.hourly]));
+        let currentSOC = existingBatteryConfig ? existingBatteryConfig.capacity * 0.5 : 0;
+
+        electricityData.forEach(day => {
+            const existingHourlySolar_historical = solarDataMap.get(day.date);
+            if (!existingHourlySolar_historical) return;
+            daysProcessed++;
+
+            const trueHourlyConsumption = reconstructTrueConsumption(day, existingHourlySolar_historical);
+            const degradedHourlySolar = existingHourlySolar_historical.map(s => s * Math.pow(1 - config.solarDegradation, config.existingSystemAge));
+
+            const simResults = simulateDay(trueHourlyConsumption, degradedHourlySolar, baselineProvider, existingBatteryConfig, currentSOC);
+            currentSOC = simResults.finalSOC;
+            const dailyBreakdown = simResults.dailyBreakdown;
+
+            const season = getSeason(day.date);
+            const rawSeason = rawData.baseline.year1[season];
+            if (rawSeason) {
+                rawSeason.days++;
+                rawSeason.peakKWh += dailyBreakdown.peakKWh;
+                rawSeason.shoulderKWh += dailyBreakdown.shoulderKWh;
+                rawSeason.offPeakKWh += dailyBreakdown.offPeakKWh;
+                rawSeason.tier1ExportKWh += dailyBreakdown.tier1ExportKWh;
+                rawSeason.tier2ExportKWh += dailyBreakdown.tier2ExportKWh;
+                rawSeason.solarChargeKWh += dailyBreakdown.solarChargeKWh;
+                rawSeason.gridChargeKWh += dailyBreakdown.gridChargeKWh;
+                const dailyControlledLoadKWh = (day.controlledLoad || []).reduce((a, b) => a + b, 0);
+                rawSeason.controlledLoadKWh += dailyControlledLoadKWh;
+            }
+
+            let dailyEnergyCost = importCalculator(baselineProvider.importRules, dailyBreakdown, { rate: 0, year: 1 });
+            dailyEnergyCost -= exportCalculator(baselineProvider.exportRules, dailyBreakdown, 1, fitConfig, getDegradedFitRate);
+
+            const dailyControlledLoadKWh = (day.controlledLoad || []).reduce((a, b) => a + b, 0);
+            const dailyControlledLoadCost = dailyControlledLoadKWh * controlledLoadRateInfo.rate;
+
+            let totalDailyAdjustment = (baselineProvider.dailyCharge || 0) + dailyEnergyCost + dailyControlledLoadCost;
+            totalDailyAdjustment = applySpecialConditions(totalDailyAdjustment, dailyBreakdown, baselineProvider.specialConditions, day.date);
+            totalCostForPeriod += totalDailyAdjustment;
+        });
+
+        const annualizationFactor = daysProcessed > 0 ? 365 / daysProcessed : 0;
+        annualizedBaseCost = totalCostForPeriod * annualizationFactor;
+    }
+
+    // 6. Add a warning if a fallback rate was used.
+    if (hasControlledLoadInData && controlledLoadRateInfo && controlledLoadRateInfo.fallbackUsed) {
+        finalResults.warnings.push(`For Baseline Provider '${baselineProvider.name}': No 'Controlled Load' tariff was found. The analysis used the '${controlledLoadRateInfo.fallbackUsed}' rate as a substitute.`);
+    }
+
+    return annualizedBaseCost;
 }
 
 /**
@@ -792,8 +877,8 @@ export function runSimulation(config, simulationData, electricityData) {
         finalResults[provider.id] = { annualCosts: [], cumulativeSavingsPerYear: [], roiYear: null, npv: 0 };
         rawData.system[provider.id] = { year1: {} };
         for (const q of ['Summer', 'Autumn', 'Winter', 'Spring']) {
-            rawData.baseline.year1[q] = { days: 0, peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, tier1ExportKWh: 0, tier2ExportKWh: 0, gridChargeKWh: 0, solarChargeKWh: 0, gridChargeCost: 0, controlledLoadKWh: 0 };
-            rawData.system[provider.id].year1[q] = { days: 0, peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, tier1ExportKWh: 0, tier2ExportKWh: 0, gridChargeKWh: 0, solarChargeKWh: 0, gridChargeCost: 0 };
+            rawData.baseline.year1[q] = { days: 0, peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, tier1ExportKWh: 0, tier2ExportKWh: 0, gridChargeKWh: 0, solarChargeKWh: 0, gridChargeCost: 0, controlledLoadKWh: 0, evLoadKWh: 0 };
+            rawData.system[provider.id].year1[q] = { days: 0, peakKWh: 0, shoulderKWh: 0, offPeakKWh: 0, tier1ExportKWh: 0, tier2ExportKWh: 0, gridChargeKWh: 0, solarChargeKWh: 0, gridChargeCost: 0, controlledLoadKWh: 0, evLoadKWh: 0 };
         }
     });
 

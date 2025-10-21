@@ -2,6 +2,8 @@
 <!--/*
  * Home Battery & Solar ROI Analyser
  * Copyright (c) 2025 [DaSando62]
+ * Versin 1.2.9
+ *
  *
  * This software is licensed under the MIT License.
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -50,6 +52,7 @@
 		class="export-button" 
 		title="Save all configuration in a json file except the uploaded csv files and any results. Once saved the json file can be used to configure the analyser including providers and tariffs">
 		Save Current Settings</button>
+		<button id="resetProviders" class="debug-button" style="display: inline-block; background-color: #f0ad4e;" title="Warning: This will delete all your current provider configurations and restore the original application defaults.">Reset All Providers</button>
     </div>
 </section>
 
@@ -119,6 +122,7 @@
             <label>Average Daily Peak Consumption (kWh): <input type="number" step="0.01" id="summerDailyPeak" value="10"></label>
             <label>Average Daily Shoulder Consumption (kWh): <input type="number" step="0.01" id="summerDailyShoulder" value="5"></label>
             <label>Average Daily Off-Peak Consumption (kWh): <input type="number" step="0.01" id="summerDailyOffPeak" value="3"></label>
+			<label>Average Daily Controlled Load (kWh): <input type="number" step="0.01" id="summerDailyControlledLoad" value="5.0"></label>
             <label>Average Daily Solar Generation (kWh/day): <input type="number" step="0.01" id="summerDailySolar" value="25"></label>
         </div>
     </details>
@@ -129,6 +133,7 @@
             <label>Average Daily Peak Consumption (kWh): <input type="number" step="0.01" id="autumnDailyPeak" value="8"></label>
             <label>Average Daily Shoulder Consumption (kWh): <input type="number" step="0.01" id="autumnDailyShoulder" value="6"></label>
             <label>Average Daily Off-Peak Consumption (kWh): <input type="number" step="0.01" id="autumnDailyOffPeak" value="4"></label>
+			<label>Average Daily Controlled Load (kWh): <input type="number" step="0.01" id="autumnDailyControlledLoad" value="5.0"></label>
             <label>Average Daily Solar Generation (kWh/day): <input type="number" step="0.01" id="autumnDailySolar" value="20"></label>
         </div>
     </details>
@@ -139,6 +144,7 @@
             <label>Average Daily Peak Consumption (kWh): <input type="number" step="0.01" id="winterDailyPeak" value="12"></label>
             <label>Average Daily Shoulder Consumption (kWh): <input type="number" step="0.01" id="winterDailyShoulder" value="7"></label>
             <label>Average Daily Off-Peak Consumption (kWh): <input type="number" step="0.01" id="winterDailyOffPeak" value="5"></label>
+			<label>Average Daily Controlled Load (kWh): <input type="number" step="0.01" id="winterDailyControlledLoad" value="6.0"></label>
             <label>Average Daily Solar Generation (kWh/day): <input type="number" step="0.01" id="winterDailySolar" value="15"></label>
         </div>
     </details>
@@ -149,6 +155,7 @@
             <label>Average Daily Peak Consumption (kWh): <input type="number" step="0.01" id="springDailyPeak" value="7"></label>
             <label>Average Daily Shoulder Consumption (kWh): <input type="number" step="0.01" id="springDailyShoulder" value="5"></label>
             <label>Average Daily Off-Peak Consumption (kWh): <input type="number" step="0.01" id="springDailyOffPeak" value="3"></label>
+			<label>Average Daily Controlled Load (kWh): <input type="number" step="0.01" id="springDailyControlledLoad" value="5.0"></label>
             <label>Average Daily Solar Generation (kWh/day): <input type="number" step="0.01" id="springDailySolar" value="22"></label>
         </div>
     </details>
@@ -182,6 +189,30 @@
             <label>Date Format (e.g., DD.MM.YYYY): <input type="text" id="solarDateFormat" value="DD.MM.YYYY" placeholder="DD.MM.YYYY" title="Specify the format of the date portion only. For example, for a timestamp like 13.10.2025 3:30pm, the correct format to enter is DD.MM.YYYY. The analyser will handle the time part automatically."></label>
             <label>Generation (kWh) Header: <input type="text" id="solarGenerationHeader" value="Generation,Total Generation (kWh)" title="Enter the column header for the energy value. You can provide a comma-separated list to check multiple possible names, for example: Generation,Total Generation (kWh)."></label>
 		</div>	
+    </details>
+</section>
+
+<section>
+    <details class="collapsible-section">
+        <summary>Electric Vehicle (EV) Charging</summary>
+        <div class="subsettings">
+            <label title="Enable this to add a simulated daily EV charging load to your household's consumption profile.">
+                <input type="checkbox" id="enableEVCharging"> Enable EV Charging Simulation
+            </label>
+            <div id="evSettingsContainer" style="display:none; margin-top: 15px; padding-top: 10px; border-top: 1px solid #ddd;">
+                <label>Average Daily Driving (km):
+                    <input type="number" id="evDailyKM" value="40">
+                </label>
+                <label>EV Efficiency (kWh / 100km):
+                    <input type="number" step="0.1" id="evEfficiency" value="18.5">
+                </label>
+				<div title="Set a minimum battery level to preserve for household use. The EV will not be allowed to charge from the battery if the state of charge is below this percentage.">
+					<label>Minimum Solar Battery % for EV Charging:
+						<input type="number" id="minSOCForEV" min="0" max="100" value="50">
+					</label>
+				</div>
+            </div>
+        </div>
     </details>
 </section>
 

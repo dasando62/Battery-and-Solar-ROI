@@ -1,5 +1,5 @@
 // js/dataParser.js 
-// Version 1.2.4
+// Version 1.2.9
 // This module is responsible for handling file uploads and parsing CSV data.
 // It reads electricity usage and solar generation files, processes them into a
 // standardized hourly format, and stores the results in the global state.

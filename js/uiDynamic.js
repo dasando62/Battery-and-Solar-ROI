@@ -1,5 +1,5 @@
 // js/uiDynamic.js
-//Version 1.2.4
+//Version 1.2.9
 // This module is responsible for dynamically generating the HTML for the
 // provider settings section. It reads the provider data from the manager
 // and builds the complex UI with all its nested rules and conditions.
@@ -33,6 +33,29 @@ import { sanitize } from './utils.js';
 import { TARIFF_RULE_TYPES, SPECIAL_CONDITIONS } from './constants.js'
 
 /**
+ * Renders the HTML for a single EV charging rule row.
+ * @param {object} rule - The EV rule object.
+ * @param {string} providerId - The ID of the parent provider.
+ * @param {number} index - The index of this rule in the provider's array.
+ * @returns {string} The HTML string for the EV rule row.
+ */
+function renderEVRuleRow(rule, providerId, index) {
+    return `
+        <div class="rule-row ev-rule-row" data-index="${index}">
+            <div class="rule-row-content">
+                <select class="provider-input" data-field="source">
+                    <option value="excess_solar" ${rule.source === 'excess_solar' ? 'selected' : ''}>From Excess Solar</option>
+                    <option value="grid" ${rule.source === 'grid' ? 'selected' : ''}>From Grid</option>
+                    <option value="battery" ${rule.source === 'battery' ? 'selected' : ''}>From Battery</option>
+                </select>
+                <span class="rule-label">during</span>
+                <input type="text" class="provider-input" data-field="hours" placeholder="e.g., 9am-4pm, 10pm-5am" value="${rule.hours || ''}">
+                <button class="remove-ev-rule-button" data-id="${providerId}" data-index="${index}" title="Remove EV Rule">-</button>
+            </div>
+        </div>`;
+}
+
+/**
  * Renders the HTML for a single "special condition" rule row.
  * @param {object} condition - The special condition object.
  * @param {string} providerId - The ID of the parent provider.
@@ -40,9 +63,15 @@ import { TARIFF_RULE_TYPES, SPECIAL_CONDITIONS } from './constants.js'
  * @returns {string} The HTML string for the condition row.
  */
 function renderConditionRow(condition, providerId, index) {
+    // Defensive coding: Ensure nested objects exist to prevent errors with malformed data.
+    // If condition.condition doesn't exist, create a default 'cond' object.
+    const cond = condition.condition || { metric: 'peak_import', operator: 'less_than_or_equal_to', value: 0 };
+    // If condition.action doesn't exist, create a default 'act' object.
+    const act = condition.action || { type: 'flat_credit', value: 0 };
+
     // Conditionally show the 'hours' input only if the metric requires it.
-    const hoursInput = (condition.condition.metric === SPECIAL_CONDITIONS.METRIC.IMPORT_IN_WINDOW)
-        ? `<input type="text" class="provider-input" data-field="condition.hours" placeholder="e.g., 5pm-7pm" value="${condition.condition.hours || ''}">`
+    const hoursInput = (cond.metric === SPECIAL_CONDITIONS.METRIC.IMPORT_IN_WINDOW)
+        ? `<input type="text" class="provider-input" data-field="condition.hours" placeholder="e.g., 5pm-7pm" value="${cond.hours || ''}">`
         : '';
 
     // Returns a template literal with all the inputs for a special condition.
@@ -56,26 +85,26 @@ function renderConditionRow(condition, providerId, index) {
                 
                 <span class="rule-label">IF</span>
                 <select class="provider-input" data-field="condition.metric">
-            <option value="${SPECIAL_CONDITIONS.METRIC.PEAK_IMPORT}" ${condition.condition.metric === SPECIAL_CONDITIONS.METRIC.PEAK_IMPORT ? 'selected' : ''}>Peak Import is</option>
-            <option value="${SPECIAL_CONDITIONS.METRIC.NET_GRID_USAGE}" ${condition.condition.metric === SPECIAL_CONDITIONS.METRIC.NET_GRID_USAGE ? 'selected' : ''}>Net Grid Usage is</option>
-            <option value="${SPECIAL_CONDITIONS.METRIC.IMPORT_IN_WINDOW}" ${condition.condition.metric === SPECIAL_CONDITIONS.METRIC.IMPORT_IN_WINDOW ? 'selected' : ''}>Import during</option>
+                    <option value="${SPECIAL_CONDITIONS.METRIC.PEAK_IMPORT}" ${cond.metric === SPECIAL_CONDITIONS.METRIC.PEAK_IMPORT ? 'selected' : ''}>Peak Import is</option>
+                    <option value="${SPECIAL_CONDITIONS.METRIC.NET_GRID_USAGE}" ${cond.metric === SPECIAL_CONDITIONS.METRIC.NET_GRID_USAGE ? 'selected' : ''}>Net Grid Usage is</option>
+                    <option value="${SPECIAL_CONDITIONS.METRIC.IMPORT_IN_WINDOW}" ${cond.metric === SPECIAL_CONDITIONS.METRIC.IMPORT_IN_WINDOW ? 'selected' : ''}>Import during</option>
                 </select>
                 ${hoursInput}
                 <select class="provider-input" data-field="condition.operator">
-                    <option value="less_than_or_equal_to" ${condition.condition.operator === 'less_than_or_equal_to' ? 'selected' : ''}>&lt;=</option>
-            <option value="${SPECIAL_CONDITIONS.OPERATOR.LESS_THAN_OR_EQUAL}" ${condition.condition.operator === SPECIAL_CONDITIONS.OPERATOR.LESS_THAN_OR_EQUAL ? 'selected' : ''}>&lt;=</option>
-            <option value="${SPECIAL_CONDITIONS.OPERATOR.LESS_THAN}" ${condition.condition.operator === SPECIAL_CONDITIONS.OPERATOR.LESS_THAN ? 'selected' : ''}>&lt;</option>
-                <option value="${SPECIAL_CONDITIONS.OPERATOR.GREATER_THAN_OR_EQUAL}" ${condition.condition.operator === SPECIAL_CONDITIONS.OPERATOR.GREATER_THAN_OR_EQUAL ? 'selected' : ''}>&gt;=</option>
-            </select>
-            <input type="number" step="0.01" class="provider-input" data-field="condition.value" placeholder="Value (kWh)" value="${condition.condition.value ?? 0}">
-            
-            <span class="rule-label">THEN</span>
-            <select class="provider-input" data-field="action.type">
-                <option value="${SPECIAL_CONDITIONS.ACTION.FLAT_CREDIT}" ${condition.action.type === SPECIAL_CONDITIONS.ACTION.FLAT_CREDIT ? 'selected' : ''}>Apply Credit</option>
-                <option value="${SPECIAL_CONDITIONS.ACTION.FLAT_CHARGE}" ${condition.action.type === SPECIAL_CONDITIONS.ACTION.FLAT_CHARGE ? 'selected' : ''}>Apply Charge</option>
-            </select>
+                    <option value="${SPECIAL_CONDITIONS.OPERATOR.LESS_THAN_OR_EQUAL}" ${cond.operator === SPECIAL_CONDITIONS.OPERATOR.LESS_THAN_OR_EQUAL ? 'selected' : ''}>&lt;=</option>
+                    <option value="${SPECIAL_CONDITIONS.OPERATOR.LESS_THAN}" ${cond.operator === SPECIAL_CONDITIONS.OPERATOR.LESS_THAN ? 'selected' : ''}>&lt;</option>
+                    <option value="${SPECIAL_CONDITIONS.OPERATOR.GREATER_THAN}" ${cond.operator === SPECIAL_CONDITIONS.OPERATOR.GREATER_THAN ? 'selected' : ''}>&gt;</option>
+                    <option value="${SPECIAL_CONDITIONS.OPERATOR.GREATER_THAN_OR_EQUAL}" ${cond.operator === SPECIAL_CONDITIONS.OPERATOR.GREATER_THAN_OR_EQUAL ? 'selected' : ''}>&gt;=</option>
+                </select>
+                <input type="number" step="0.01" class="provider-input" data-field="condition.value" placeholder="Value (kWh)" value="${cond.value ?? 0}">
+                
+                <span class="rule-label">THEN</span>
+                <select class="provider-input" data-field="action.type">
+                    <option value="${SPECIAL_CONDITIONS.ACTION.FLAT_CREDIT}" ${act.type === SPECIAL_CONDITIONS.ACTION.FLAT_CREDIT ? 'selected' : ''}>Apply Credit</option>
+                    <option value="${SPECIAL_CONDITIONS.ACTION.FLAT_CHARGE}" ${act.type === SPECIAL_CONDITIONS.ACTION.FLAT_CHARGE ? 'selected' : ''}>Apply Charge</option>
+                </select>
                 <span class="rule-label">$</span>
-                <input type="number" step="0.01" class="provider-input" data-field="action.value" placeholder="Amount" value="${condition.action.value ?? 0}">
+                <input type="number" step="0.01" class="provider-input" data-field="action.value" placeholder="Amount" value="${act.value ?? 0}">
 
                 <button class="remove-condition-button" data-id="${providerId}" data-index="${index}" title="Remove this Rule">-</button>
             </div>
@@ -155,6 +184,13 @@ export function renderProviderSettings() {
             conditionsHTML += renderConditionRow(condition, provider.id, conditionIndex);
         });
         conditionsHTML += `<button class="add-condition-button" data-id="${provider.id}">+ Add Condition</button>`;
+		
+        // Build the HTML for EV charging rules
+        let evRulesHTML = '<h4>EV Charging Rules (Priority Order)</h4><div class="ev-rules-container">';
+        (provider.evRules || []).forEach((rule, ruleIndex) => {
+            evRulesHTML += renderEVRuleRow(rule, provider.id, ruleIndex);
+        });
+        evRulesHTML += `</div><button class="add-ev-rule-button" data-id="${provider.id}">+ Add EV Charging Rule</button>`;		
         
         // Assemble the complete HTML for the provider's collapsible section.
         providersHTML += `<details class="collapsible-section provider-details" ${provider.isExpanded ? 'open' : ''} data-provider-id="${provider.id}">
@@ -183,6 +219,7 @@ export function renderProviderSettings() {
                 <hr>${importHTML}
                 <hr>${exportHTML}
                 <hr>${conditionsHTML}
+				<hr>${evRulesHTML}
                 <hr>
                 
                 <details class="collapsible-section">

@@ -1,5 +1,5 @@
 // js/uiRender.js
-// Version 1.2.4
+// Version 1.2.9
 // This module is responsible for all UI rendering that occurs AFTER a calculation
 // or analysis is complete. This includes displaying financial results tables,
 // rendering charts, and showing system sizing recommendations.
@@ -125,6 +125,8 @@ function buildRawDataTable(data, isFlatRate = false, hasTieredExport = false) {
     } else {
         tableHTML += `<th>Peak (kWh)</th><th>Shoulder (kWh)</th><th>Off-Peak (kWh)</th>`;
     }
+	tableHTML += `<th>Controlled Load (kWh)</th>`;
+	tableHTML += `<th>EV Load (kWh)</th>`;
     tableHTML += `<th>Solar Charge (kWh)</th><th>Grid Charge (kWh)</th>`;
     if (hasTieredExport) {
         tableHTML += `<th>Export Tier 1 (kWh)</th><th>Export Tier 2 (kWh)</th>`;
@@ -135,7 +137,7 @@ function buildRawDataTable(data, isFlatRate = false, hasTieredExport = false) {
     
     // --- Dynamically Build Body Rows ---
     // Initialize totals for the summary row.
-    let totals = { days: 0, peak: 0, shoulder: 0, offPeak: 0, gridCharge: 0, solarCharge: 0, tier1: 0, tier2: 0 };
+    let totals = { days: 0, peak: 0, shoulder: 0, offPeak: 0, controlledLoad: 0, evLoad: 0, gridCharge: 0, solarCharge: 0, tier1: 0, tier2: 0 };
     
     for (const seasonName in data) {
         const seasonData = data[seasonName];
@@ -145,6 +147,8 @@ function buildRawDataTable(data, isFlatRate = false, hasTieredExport = false) {
             totals.peak += seasonData.peakKWh || 0;
             totals.shoulder += seasonData.shoulderKWh || 0;
             totals.offPeak += seasonData.offPeakKWh || 0;
+			totals.controlledLoad += seasonData.controlledLoadKWh || 0;
+			totals.evLoad += seasonData.evLoadKWh || 0;
             totals.gridCharge += seasonData.gridChargeKWh || 0;
 			totals.solarCharge += seasonData.solarChargeKWh || 0;
             totals.tier1 += seasonData.tier1ExportKWh || 0;
@@ -158,6 +162,8 @@ function buildRawDataTable(data, isFlatRate = false, hasTieredExport = false) {
             } else {
                 tableHTML += `<td>${(seasonData.peakKWh || 0).toFixed(2)}</td><td>${(seasonData.shoulderKWh || 0).toFixed(2)}</td><td>${(seasonData.offPeakKWh || 0).toFixed(2)}</td>`;
             }
+			tableHTML += `<td>${(seasonData.controlledLoadKWh || 0).toFixed(2)}</td>`;
+			tableHTML += `<td>${(seasonData.evLoadKWh || 0).toFixed(2)}</td>`;
             tableHTML += `<td>${(seasonData.solarChargeKWh || 0).toFixed(2)}</td>`;
 			tableHTML += `<td>${(seasonData.gridChargeKWh || 0).toFixed(2)}</td>`;
             if (hasTieredExport) {
@@ -178,6 +184,8 @@ function buildRawDataTable(data, isFlatRate = false, hasTieredExport = false) {
     } else {
         tableHTML += `<td><strong>${totals.peak.toFixed(2)}</strong></td><td><strong>${totals.shoulder.toFixed(2)}</strong></td><td><strong>${totals.offPeak.toFixed(2)}</strong></td>`;
     }
+	tableHTML += `<td><strong>${totals.controlledLoad.toFixed(2)}</strong></td>`;
+	tableHTML += `<td><strong>${totals.evLoad.toFixed(2)}</strong></td>`;
 	tableHTML += `<td><strong>${totals.solarCharge.toFixed(2)}</strong></td>`;
     tableHTML += `<td><strong>${totals.gridCharge.toFixed(2)}</strong></td>`;
     if (hasTieredExport) {
@@ -226,7 +234,12 @@ export function renderSizingResults(sizingResults, state, config) {
                 <strong>Recommended Solar: ${heuristic.solar.toFixed(1)} kW</strong><br>
                 <strong>Recommended Battery: ${heuristic.battery.toFixed(1)} kWh</strong><br>
                 <strong>Recommended Inverter: ${heuristic.inverter.toFixed(1)} kW</strong>
-            </p>`;
+            </p>
+			<button class="apply-simple-sizing" 
+				data-solar="${heuristic.solar.toFixed(1)}" 
+				data-battery="${heuristic.battery.toFixed(1)}" 
+				data-inverter="${heuristic.inverter.toFixed(1)}">Apply Simple Sizing</button>
+		`;
     }
 
     // --- Block 2: Build the Detailed Sizing Recommendation ---
@@ -245,7 +258,11 @@ export function renderSizingResults(sizingResults, state, config) {
             <p>
                 <strong>Recommended Inverter Power: ${detailed.recommendedInverterKW.toFixed(1)} kW</strong><br>
                 <small><em>This would have met max power demand on ${detailed.inverterCoverageDays} of ${detailed.totalDays} days.</em></small>
-            </p>`;
+            </p>
+            <button class="apply-detailed-sizing" 
+              data-battery="${detailed.recommendedBatteryKWh}" 
+              data-inverter="${detailed.recommendedInverterKW.toFixed(1)}">Apply Detailed Sizing</button>			
+		`;
     }
 
     // --- Block 3: Build the Blackout Protection Sizing ---

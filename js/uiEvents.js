@@ -1,5 +1,5 @@
 // js/uiEvents.js 
-// Version 1.2.4
+// Version 1.2.9
 // This module serves as the central hub for handling all user interactions.
 // It attaches event listeners to UI elements and calls the appropriate business logic
 // from other modules in response to user actions (e.g., clicks, changes).
@@ -36,8 +36,9 @@ import { getNumericInput, getSimulationData, displayError, clearError, parseRang
 import { handleUsageCsv, handleSolarCsv } from './dataParser.js';
 import { wireSaveLoadEvents } from './storage.js';
 import { hideAllDebugContainers, renderDebugDataTable, renderExistingSystemDebugTable, renderProvidersDebugTable, renderAnalysisPeriodDebugTable, renderLoanDebugTable, renderOpportunityCostDebugTable } from './debugTables.js';
-import { saveProvider, deleteProvider, getProviders, saveAllProviders } from './providerManager.js';
+import { saveProvider, deleteProvider, getProviders, saveAllProviders, initializeDefaultProviders  } from './providerManager.js';
 import { renderProviderSettings } from './uiDynamic.js';
+import { LOCAL_STORAGE_KEYS, TARIFF_RULE_TYPES } from './constants.js';
 
 // a variable to cache the satet of the solar data
 let solarDataCache = null;
@@ -79,6 +80,11 @@ function setNestedProperty(obj, path, value) {
  * and saves them to the provider object in localStorage.
  * @param {string} providerId - The ID of the provider to save.
  */
+/**
+ * Reads all the current values from a provider's UI section in the DOM
+ * and saves them to the provider object in localStorage.
+ * @param {string} providerId - The ID of the provider to save.
+ */
 function saveProviderFromDOM(providerId) {
     let providers = getProviders();
     const providerToSave = providers.find(p => p.id === providerId);
@@ -94,9 +100,9 @@ function saveProviderFromDOM(providerId) {
         else providerToSave[field] = input.value;
     });
 
-    // Save import rule rows
+    // Save import rule rows (using a more specific selector to avoid conflicts)
     providerToSave.importRules = [];
-    providerDetailsContainer.querySelectorAll('.import-rules-container .rule-row').forEach(row => {
+    providerDetailsContainer.querySelectorAll('.import-rules-container .rule-row:not(.condition-row):not(.ev-rule-row)').forEach(row => {
         const rule = {};
         row.querySelectorAll('.provider-input[data-field]').forEach(input => {
             const field = input.dataset.field;
@@ -106,9 +112,9 @@ function saveProviderFromDOM(providerId) {
         providerToSave.importRules.push(rule);
     });
     
-    // Save export rule rows
+    // Save export rule rows (also using a more specific selector)
     providerToSave.exportRules = [];
-    providerDetailsContainer.querySelectorAll('.export-rules-container .rule-row').forEach(row => {
+    providerDetailsContainer.querySelectorAll('.export-rules-container .rule-row:not(.condition-row):not(.ev-rule-row)').forEach(row => {
         const rule = {};
         row.querySelectorAll('.provider-input[data-field]').forEach(input => {
             const field = input.dataset.field;
@@ -118,9 +124,10 @@ function saveProviderFromDOM(providerId) {
         providerToSave.exportRules.push(rule);
     });
 
-    // Save special condition rows
+    // --- THE FIX IS HERE ---
+    // Save special condition rows using the unique '.condition-row' class.
     providerToSave.specialConditions = [];
-    providerDetailsContainer.querySelectorAll('.conditions-container .rule-row').forEach(row => {
+    providerDetailsContainer.querySelectorAll('.conditions-container .condition-row').forEach(row => {
         const condition = {};
         row.querySelectorAll('.provider-input[data-field]').forEach(input => {
             const field = input.dataset.field;
@@ -130,6 +137,17 @@ function saveProviderFromDOM(providerId) {
             setNestedProperty(condition, field, value);
         });
         providerToSave.specialConditions.push(condition);
+    });
+
+    // Save EV charging rule rows using the unique '.ev-rule-row' class.
+    providerToSave.evRules = [];
+    providerDetailsContainer.querySelectorAll('.ev-rules-container .ev-rule-row').forEach(row => {
+        const rule = {};
+        row.querySelectorAll('.provider-input[data-field]').forEach(input => {
+            const field = input.dataset.field;
+            rule[field] = input.value;
+        });
+        providerToSave.evRules.push(rule);
     });
 
     // Specifically find the notes textarea to save its resized dimensions
@@ -238,13 +256,39 @@ export function wireStaticEvents() {
     document.getElementById('enableBlackoutSizing')?.addEventListener('change', (e) => {
         document.getElementById('blackoutSettingsContainer').style.display = e.target.checked ? 'block' : 'none';
     });
+	
+    // Listener for the EV Charging toggle
+    const evToggle = document.getElementById('enableEVCharging');
+    const evSettings = document.getElementById('evSettingsContainer');
+    const handleEVToggle = () => {
+        if(evSettings) evSettings.style.display = evToggle.checked ? 'block' : 'none';
+    };
+    evToggle?.addEventListener('change', handleEVToggle);
+    handleEVToggle(); // Set initial state on page load	
+	
     document.getElementById('enableLoan')?.addEventListener('change', (e) => {
         document.getElementById('loanSettingsContainer').style.display = e.target.checked ? 'block' : 'none';
     });
     document.getElementById('enableDiscountRate')?.addEventListener('change', (e) => {
         document.getElementById('discountRateSettingsContainer').style.display = e.target.checked ? 'block' : 'none';
     });
-
+	
+    // Listener to reset all provider data to the application defaults
+    document.getElementById('resetProviders')?.addEventListener('click', () => {
+        if (confirm("Are you sure you want to delete all your providers and restore the application defaults? This cannot be undone.")) {
+            // Remove the keys from localStorage
+            localStorage.removeItem(LOCAL_STORAGE_KEYS.PROVIDERS);
+            localStorage.removeItem(LOCAL_STORAGE_KEYS.DEFAULTS_LOADED);
+ 
+            // Re-initialize and re-render
+            initializeDefaultProviders();
+            renderProviderSettings();
+ 
+            // Let the user know it worked
+            alert("Providers have been reset to their default configurations.");
+        }
+    });
+	
     // Listener for the results-section debug toggle
     document.getElementById('showRawDataDebug')?.addEventListener('click', (e) => {
         const container = document.getElementById('raw-data-debug-container');
@@ -282,6 +326,31 @@ export function wireStaticEvents() {
     formatNem12Radio?.addEventListener('change', toggleAdvancedOptions);
     formatAdvancedRadio?.addEventListener('change', toggleAdvancedOptions);
 	
+    // Listener for the dynamically added 'Apply' buttons in the sizing section
+    document.getElementById('sizing-recommendation-section')?.addEventListener('click', (event) => {
+        const target = event.target;
+        let solarInput, batteryInput, inverterInput;
+
+        if (target.matches('.apply-simple-sizing') || target.matches('.apply-detailed-sizing')) {
+            // Find the input fields
+            solarInput = document.getElementById('newSolarKW');
+            batteryInput = document.getElementById('newBattery');
+            inverterInput = document.getElementById('newBatteryInverter');
+
+            // Read data from the button's data attributes and update the fields
+            if (batteryInput) batteryInput.value = target.dataset.battery;
+            if (inverterInput) inverterInput.value = target.dataset.inverter;
+            
+            // Only the simple sizing button has a solar recommendation
+            if (target.matches('.apply-simple-sizing') && solarInput) {
+                solarInput.value = target.dataset.solar;
+            }
+ 
+            // Optional: Scroll to the new system section so the user sees the change
+            solarInput?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    });
+	
 	// --- THE HYBRID INVERTER CHECKBOX LOGIC ---
     const hybridCheckbox = document.getElementById('isHybridInverter');
     const existingBatteryInverterInput = document.getElementById('existingBatteryInverter');
@@ -305,13 +374,13 @@ export function wireStaticEvents() {
 
 /**
  * Wires up event listeners for the dynamically generated provider settings UI.
- * It uses event delegation on the main container for efficiency.
+ * It uses a single, delegated event listener on the main container for efficiency.
  */
 export function wireDynamicProviderEvents() {
     const providerContainer = document.getElementById('provider-settings-container');
     if (!providerContainer) return;
-    
-    // Listener for dropdown changes to show/hide conditional fields in rule rows
+
+    // Listener for showing/hiding conditional inputs in rule rows
     providerContainer.addEventListener('change', (event) => {
         const target = event.target;
         if (target.matches('select[data-field="type"]')) {
@@ -320,16 +389,16 @@ export function wireDynamicProviderEvents() {
                 const hoursWrapper = parent.querySelector('.hours-input-wrapper');
                 const limitWrapper = parent.querySelector('.limit-input-wrapper');
                 const selectedType = target.value;
-                if (hoursWrapper) hoursWrapper.style.display = selectedType === 'tou' ? '' : 'none';
-                if (limitWrapper) limitWrapper.style.display = selectedType === 'tiered' ? '' : 'none';
+                if (hoursWrapper) hoursWrapper.style.display = selectedType === TARIFF_RULE_TYPES.TIME_OF_USE ? '' : 'none';
+                if (limitWrapper) limitWrapper.style.display = selectedType === TARIFF_RULE_TYPES.TIERED ? '' : 'none';
             }
         }
     });
 
-    // Main delegated listener for all button clicks within the provider container
+    // Main delegated listener for all button clicks
     providerContainer.addEventListener('click', (event) => {
         const target = event.target;
-        let providers = getProviders();
+        let providers; // Will be populated after saving
         const updateAndRender = () => { saveAllProviders(providers); renderProviderSettings(); };
 
         // Handle "Add Rule" (Import or Export)
@@ -340,7 +409,7 @@ export function wireDynamicProviderEvents() {
             const ruleType = target.dataset.type;
             const provider = providers.find(p => p.id === providerId);
             if (provider) {
-                const newRule = { type: 'flat', name: 'New Rule', rate: 0 };
+                const newRule = { type: TARIFF_RULE_TYPES.FLAT, name: 'New Rule', rate: 0 };
                 const rulesKey = ruleType === 'import' ? 'importRules' : 'exportRules';
                 if (!Array.isArray(provider[rulesKey])) { provider[rulesKey] = []; }
                 provider[rulesKey].push(newRule);
@@ -348,7 +417,7 @@ export function wireDynamicProviderEvents() {
             }
         }
         
-        // Handle provider-specific "Save Changes"
+        // Handle "Apply Changes"
         if (target.matches('.save-provider-button')) {
             const providerId = target.dataset.id;
             saveProviderFromDOM(providerId);
@@ -359,8 +428,9 @@ export function wireDynamicProviderEvents() {
             }
         }
 
-        // Handle provider reordering
+        // Handle reordering
         if (target.matches('.move-provider-up, .move-provider-down')) {
+            providers = getProviders(); // Get current state first
             const index = parseInt(target.dataset.index, 10);
             const direction = target.classList.contains('move-provider-up') ? 'up' : 'down';
             if (direction === 'up' && index > 0) { [providers[index], providers[index - 1]] = [providers[index - 1], providers[index]]; }
@@ -372,7 +442,7 @@ export function wireDynamicProviderEvents() {
         if (target.matches('.delete-provider-button')) {
             const providerId = target.dataset.id;
             if (confirm(`Are you sure you want to delete this provider?`)) {
-                providers = providers.filter(p => p.id !== providerId);
+                providers = getProviders().filter(p => p.id !== providerId);
                 updateAndRender();
             }
         }
@@ -387,7 +457,10 @@ export function wireDynamicProviderEvents() {
                 const ruleType = target.dataset.type;
                 const ruleIndex = parseInt(target.dataset.index, 10);
                 const rulesKey = ruleType === 'import' ? 'importRules' : 'exportRules';
-                if (provider[rulesKey]) { provider[rulesKey].splice(ruleIndex, 1); updateAndRender(); }
+                if (provider[rulesKey]) { 
+                    provider[rulesKey].splice(ruleIndex, 1); 
+                    updateAndRender(); 
+                }
             }
         }
         
@@ -407,7 +480,7 @@ export function wireDynamicProviderEvents() {
 
         // Handle "Remove Condition"
         if (target.matches('.remove-condition-button')) {
-            const providerId = target.dataset.id;
+            const providerId = target.closest('.provider-details').dataset.providerId;
             saveProviderFromDOM(providerId);
             providers = getProviders();
             const provider = providers.find(p => p.id === providerId);
@@ -417,9 +490,36 @@ export function wireDynamicProviderEvents() {
                 updateAndRender();
             }
         }
+
+        // Handle "Add EV Rule"
+        if (target.matches('.add-ev-rule-button')) {
+            const providerId = target.dataset.id;
+            saveProviderFromDOM(providerId); // <-- THE FIX IS HERE
+            providers = getProviders();      // <-- AND HERE
+            const provider = providers.find(p => p.id === providerId);
+            if (provider) {
+                const newRule = { source: 'excess_solar', hours: '9am-4pm' };
+                if (!Array.isArray(provider.evRules)) { provider.evRules = []; }
+                provider.evRules.push(newRule);
+                updateAndRender();
+            }
+        }
+
+        // Handle "Remove EV Rule"
+        if (target.matches('.remove-ev-rule-button')) {
+            const providerId = target.closest('.provider-details').dataset.providerId;
+            saveProviderFromDOM(providerId); // <-- THE FIX IS HERE
+            providers = getProviders();      // <-- AND HERE
+            const provider = providers.find(p => p.id === providerId);
+            if (provider && provider.evRules) {
+                const ruleIndex = parseInt(target.dataset.index, 10);
+                provider.evRules.splice(ruleIndex, 1);
+                updateAndRender();
+            }
+        }
     });
 
-    // Listener for saving the open/closed state of a provider section
+    // Listener for saving the open/closed state
     providerContainer.addEventListener('toggle', (event) => {
         const target = event.target;
         if (target.classList.contains('provider-details')) {

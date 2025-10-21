@@ -1,5 +1,5 @@
 // js/debugTables.js
-// Version 1.2.4
+// Version 1.2.9
 // This module contains all functions related to rendering the "Debug Tables".
 // These tables provide transparency into the calculator's inputs, intermediate calculations,
 // and simulation results, aiding in validation and troubleshooting.
@@ -40,7 +40,8 @@ import {
 } from './utils.js';
 import { 
 	generateHourlyConsumptionProfileFromDailyTOU, 
-	generateHourlySolarProfileFromDaily 
+	generateHourlySolarProfileFromDaily,
+	generateEVChargingProfile
 } from './profiles.js';
 import { simulateDay, calculateSizingRecommendations, calculateDetailedSizing } from './analysis.js';
 import { state } from './state.js';
@@ -57,15 +58,18 @@ export function hideAllDebugContainers() {
 
 /**
  * Calculates seasonal averages for battery behavior (grid charging, morning SOC)
- * by simulating the entire provided dataset.
+ * by simulating an average day for each season. This function provides diagnostic data
+ * for the "Providers Debug Table" and uses a simplified simulation approach compared
+ * to the main analysis engine. It ensures the simulation uses the correct inverter power
+ * and grid charge settings based on the user's configuration.
  * @param {object} provider - The provider configuration to use for the simulation.
- * @param {object} batteryConfig - The battery configuration.
- * @param {object} state - The global application state containing electricity and solar data.
- * @returns {object} An object with calculated averages for each season.
+ * @param {object} batteryConfigFromUI - DEPRECATED (kept for compatibility, but not used). The function now uses values from the main `config` object.
+ * @param {object} config - The main application configuration object, containing all UI inputs and settings.
+ * @param {object} state - The global application state, used here to access quarterly averages.
+ * @returns {object} An object containing the calculated averages (avgGridCharge, avgSolarCharge, avgSocPercent) for each season ('Summer', 'Autumn', 'Winter', 'Spring').
  */
-// In js/debugTables.js
-
-function calculateSeasonalAverages(provider, batteryConfig, config, state) {
+function calculateSeasonalAverages(provider, batteryConfigFromUI, config, state) {
+    // Initialize the structure to hold results for each season.
     const seasonalData = {
         Summer: { avgGridCharge: 0, avgSolarCharge: 0, avgSocPercent: 0 },
         Autumn: { avgGridCharge: 0, avgSolarCharge: 0, avgSocPercent: 0 },
@@ -73,47 +77,115 @@ function calculateSeasonalAverages(provider, batteryConfig, config, state) {
         Spring: { avgGridCharge: 0, avgSolarCharge: 0, avgSocPercent: 0 },
     };
 
+    // Exit if the pre-calculated quarterly average data isn't available.
     if (!state.quarterlyAverages) return seasonalData;
 
-    // Get the baseline provider's import rules to create a single, consistent consumption profile.
-    const baselineProvider = config.providers[0];
-    if (!baselineProvider) return seasonalData; // Failsafe
+    // --- Correctly calculate the DEGRADED battery capacity and TOTAL inverter power for Year 1 ---
+    const degradedExistingBattery = (config.replaceExistingSystem ? 0 : config.existingBattery) * Math.pow(1 - config.batteryDegradation, config.existingSystemAge);
+    const degradedNewBattery = config.newBatteryKWH * Math.pow(1 - config.batteryDegradation, 0); // Year 1 = age 0
+    const totalDegradedBatteryCapacity = degradedExistingBattery + degradedNewBattery;
 
-    // Loop through each season and simulate a single "average" day.
+    let totalInverterPower;
+    if (config.replaceExistingSystem) {
+        totalInverterPower = config.newBatteryInverterKW;
+    } else if (config.isAcCoupled) {
+        totalInverterPower = config.newBatteryInverterKW + config.existingSolarInverterKW;
+    } else {
+        totalInverterPower = config.newBatteryInverterKW;
+    }
+
+    const batteryConfigForSim = {
+        capacity: totalDegradedBatteryCapacity,
+        inverterKW: totalInverterPower,
+    };
+    // --- End of corrected battery and inverter calculation ---
+
+
+    // Calculate the daily EV charge needed if EV charging is enabled globally AND this provider has rules.
+    let dailyEVChargeKWh = 0;
+    if (config.evChargingEnabled && provider.evRules && provider.evRules.length > 0) {
+        dailyEVChargeKWh = (config.evDailyKM / 100) * config.evEfficiency;
+    }
+
+    // Loop through each season defined in the quarterly averages data.
     for (const quarterKey in state.quarterlyAverages) {
         const seasonName = quarterKey.split('_')[1];
         const quarterData = state.quarterlyAverages[quarterKey];
 
         if (!quarterData || !seasonalData[seasonName]) continue;
 
-        // 1. Generate the average hourly consumption profile for this season ONCE, using the baseline provider's rules.
-        const hourlyConsumption = generateHourlyConsumptionProfileFromDailyTOU(
+        // Generate the base hourly household consumption profile using the CURRENT provider's import rules.
+        const hourlyConsumptionBase = generateHourlyConsumptionProfileFromDailyTOU(
             quarterData.avgPeak,
             quarterData.avgShoulder,
             quarterData.avgOffPeak,
-            baselineProvider.importRules 
+            provider.importRules
         );
 
-        // 2. Generate the average hourly solar profile for the new system in this season.
-        const newSolarGenerationDaily = config.newSolarKW * config.manualSolarProfile;
-        const totalSolarDaily = quarterData.avgSolar + newSolarGenerationDaily;
-        const hourlySolar = generateHourlySolarProfileFromDaily(totalSolarDaily, quarterKey);
+        // Add EV load to the base consumption if applicable.
+        // Create a copy of the base array to avoid modifying it directly.
+        let hourlyConsumptionTotal = Array.from(hourlyConsumptionBase);
+        if (config.evChargingEnabled) {
+            const evProfile = generateEVChargingProfile(config.evDailyKM, config.evEfficiency, "10pm-6am");
+            for (let h = 0; h < 24; h++) {
+                hourlyConsumptionTotal[h] += evProfile[h];
+            }
+        }
+        
+        // Generate the average hourly solar profile for the new system (Year 1).
+        const degradedExistingSolarDaily = (config.replaceExistingSystem ? 0 : config.existingSolarKW * config.manualSolarProfile) * Math.pow(1 - config.solarDegradation, config.existingSystemAge);
+        const degradedNewSolarDaily = config.newSolarKW * config.manualSolarProfile * Math.pow(1 - config.solarDegradation, 0);
+        const totalDegradedSolarDaily = degradedExistingSolarDaily + degradedNewSolarDaily;
+        let hourlySolar = generateHourlySolarProfileFromDaily(totalDegradedSolarDaily, quarterKey);
+        hourlySolar = hourlySolar.map(gen => Math.min(gen, batteryConfigForSim.inverterKW));
 
-        // 3. Run a two-pass simulation for better accuracy.
-        // The first pass "warms up" the battery to find a realistic end-of-day SOC.
-        const warmUpSOC = batteryConfig.capacity * 0.5;
-        const warmUpResults = simulateDay(hourlyConsumption, hourlySolar, provider, batteryConfig, warmUpSOC);
 
-        // The second pass uses the result of the first as its starting point, mimicking a continuous cycle.
+        // --- Pass correct grid charge and EV settings to simulateDay ---
+        // Create a temporary config object for the simulation call.
+        // This explicitly includes all necessary properties from the main config object
+        // that the simulateDay function might need access to, ensuring correct behavior.
+        const configForSim = {
+            loanEnabled: config.loanEnabled,
+            discountRateEnabled: config.discountRateEnabled,
+            loanAmount: config.loanAmount,
+            loanInterestRate: config.loanInterestRate,
+            loanTerm: config.loanTerm,
+            discountRate: config.discountRate,
+            numYears: config.numYears,
+            tariffEscalation: config.tariffEscalation,
+            solarDegradation: config.solarDegradation,
+            batteryDegradation: config.batteryDegradation,
+            fitDegradationStartYear: config.fitDegradationStartYear,
+            fitDegradationEndYear: config.fitDegradationEndYear,
+            fitMinimumRate: config.fitMinimumRate,
+            gridChargeThreshold: config.gridChargeThreshold, // Grid charge setting
+            socChargeTrigger: config.socChargeTrigger,       // Grid charge setting
+            evChargingEnabled: config.evChargingEnabled,
+            evDailyKM: config.evDailyKM,
+            evEfficiency: config.evEfficiency,
+            minSOCForEV: config.minSOCForEV,                   // EV setting
+            initialSystemCost: config.initialSystemCost,
+            annualLoanRepayment: config.annualLoanRepayment
+            // Add any other properties from the main 'config' object that simulateDay might implicitly rely on.
+        };
+        // --- End of passing correct settings ---
+
+        // Run a two-pass simulation for better accuracy.
+        const warmUpSOC = batteryConfigForSim.capacity * 0.5;
+		
+        const warmUpResults = simulateDay(hourlyConsumptionTotal, hourlySolar, provider, batteryConfigForSim, warmUpSOC, dailyEVChargeKWh, configForSim);
+
         const realisticInitialSOC = warmUpResults.finalSOC;
-        const simResults = simulateDay(hourlyConsumption, hourlySolar, provider, batteryConfig, realisticInitialSOC);
+		
+        const simResults = simulateDay(hourlyConsumptionTotal, hourlySolar, provider, batteryConfigForSim, realisticInitialSOC, dailyEVChargeKWh, configForSim);
 
-		// 4. Use the value directly from the simulation results.
+		// Store results.
 		seasonalData[seasonName].avgGridCharge = simResults.dailyBreakdown.gridChargeKWh;
 		seasonalData[seasonName].avgSolarCharge = simResults.dailyBreakdown.solarChargeKWh;
-		seasonalData[seasonName].avgSocPercent = batteryConfig.capacity > 0 ? (simResults.socAt6am / batteryConfig.capacity) * 100 : 0;
+		seasonalData[seasonName].avgSocPercent = batteryConfigForSim.capacity > 0 ? (simResults.socAt6am / batteryConfigForSim.capacity) * 100 : 0;
     }
 
+    // Return the object containing the calculated averages for all seasons.
     return seasonalData;
 }
 
