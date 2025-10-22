@@ -1,5 +1,5 @@
 // js/uiDynamic.js
-//Version 1.2.9
+//Version 1.3.2
 // This module is responsible for dynamically generating the HTML for the
 // provider settings section. It reads the provider data from the manager
 // and builds the complex UI with all its nested rules and conditions.

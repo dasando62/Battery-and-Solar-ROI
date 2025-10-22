@@ -1,5 +1,5 @@
 // js/analysis.js
-// Version 1.2.9
+// Version 1.3.2
 // This is the core of the ROI calculator. It contains the simulation engine,
 // financial calculation functions (IRR, NPV), and system sizing algorithms.
 
@@ -636,18 +636,25 @@ function calculateSystemYear(providerData, config, year, simulationData, electri
             let trueHourlyConsumption;
             const existingHourlySolar_historical = solarDataMap.get(day.date);
 
-            // Determine how to calculate the true consumption based on the scenario.
-            if (!config.replaceExistingSystem && existingHourlySolar_historical) {
-                // If we're adding to an existing system, we MUST have historical solar data to reconstruct the true load.
+// Determine how to calculate the true consumption based on the scenario.
+            if (existingHourlySolar_historical) {
+                // **Path 1 (Correct):** We have historical solar data.
+                // ALWAYS reconstruct the true load. This is correct for both
+                // "adding to" and "replacing" an existing system.
                 trueHourlyConsumption = reconstructTrueConsumption(day, existingHourlySolar_historical);
-            } else if (config.replaceExistingSystem) {
-                // If it's a full replacement, we assume the grid import WAS the total consumption,
-                // as there was no old solar system to self-consume from. This allows the simulation to run
-                // even if the user didn't provide a (now irrelevant) historical solar file.
+            
+            } else if (config.noExistingSolar) {
+                // **Path 2 (Correct):** We have NO historical solar data, 
+                // AND the user explicitly told us they don't have an existing solar system.
+                // Therefore, grid import (day.consumption) IS their true load.
                 trueHourlyConsumption = day.consumption;
+
             } else {
-                // Failsafe: if we are in an 'addition' scenario but have no historical solar data, we cannot proceed for this day.
-                return; 
+                // **Path 3 (Error):** We have NO historical solar data,
+                // BUT the user did NOT check "No existing solar".
+                // This means we are missing the required solar file for their existing system.
+                // We cannot proceed for this day.
+                return; // Skip this day
             }
             
             daysProcessed++;

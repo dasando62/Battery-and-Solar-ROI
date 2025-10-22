@@ -1,5 +1,5 @@
 // js/utils.js
-// Version 1.2.9
+// Version 1.3.2
 // This file is a collection of small, reusable utility functions used throughout the application.
 // It helps to keep other modules clean and focused on their primary tasks.
 
@@ -30,6 +30,30 @@
 import { state } from './state.js';
 import { calculateQuarterlyAverages } from './dataParser.js';
 import { DEFAULT_TOU_HOURS } from './constants.js';
+
+/**
+ * Calculates the total system inverter power for the new/upgraded system.
+ * This logic determines the total power available for solar clipping and battery dispatch.
+ * @param {object} config - The main analysis configuration object.
+ * @returns {number} The total inverter power in kW.
+ */
+export function getUpgradedSystemInverterKW(config) {
+    if (config.replaceExistingSystem) {
+        // If replacing the whole system, only the new inverter matters.
+        return config.newBatteryInverterKW;
+    }
+    
+    if (config.isAcCoupled) {
+        // For AC coupled additions, the inverters work in parallel.
+        // Total power is the sum of the new battery inverter and the existing solar inverter.
+        return config.newBatteryInverterKW + config.existingSolarInverterKW;
+    }
+    
+    // For DC coupled upgrades (default, isAcCoupled is false),
+    // the new hybrid inverter replaces the old solar inverter and handles everything.
+    // Its power is the total system limit.
+    return config.newBatteryInverterKW;
+}
 
 /**
  * Determines the Time-of-Use hours from the baseline provider's tariff rules.

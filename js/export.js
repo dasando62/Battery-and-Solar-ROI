@@ -1,5 +1,5 @@
 // js/export.js
-// Version 1.2.9
+// Version 1.3.2
 
 
 // This module handles all functionality related to exporting analysis results,
@@ -106,8 +106,12 @@ async function addElementToPdf(pdf, element, yPosition) {
         const imgData = canvas.toDataURL('image/png');
         const imgHeight = canvas.height * contentWidth / canvas.width;
 
-        // Check if the element fits on the current page; if not, add a new page.
-        if (yPosition + imgHeight > pdf.internal.pageSize.getHeight() - pdfMargin * 2) {
+		// Check if the element overflows the current page.
+        // We add a check for `yPosition > pdfMargin`. This ensures we don't
+        // add a new page if we're *already* at the top of a fresh page.
+        // This prevents the "blank page" bug, where the main function adds a
+        // page and this helper *also* adds a page.
+        if (yPosition > pdfMargin && (yPosition + imgHeight > pdf.internal.pageSize.getHeight() - pdfMargin * 2)) {
             pdf.addPage();
             yPosition = pdfMargin;
             addHeaderFooter(pdf, pdf.internal.getNumberOfPages(), new Date().toLocaleDateString('en-AU', { year: 'numeric', month: '2-digit', day: '2-digit' }));
@@ -365,7 +369,7 @@ async function generateCsvModeReport(pdf, commonData, config) {
         yPos = await addChartDirectly(state.maxHourlyChart, 'Daily Maximum Hourly Load Distribution', maxHourlyDesc);
     }
 
-    // Appendix D: Provider Simulation Averages
+	// Appendix D: Provider Simulation Averages
     const providerDebugEl = document.getElementById('providersDebugTableContainer');
     if (providerDebugEl && providerDebugEl.innerHTML.trim().length > 10) {
         pdf.addPage('a4', 'portrait');
@@ -373,33 +377,30 @@ async function generateCsvModeReport(pdf, commonData, config) {
         addHeaderFooter(pdf, pdf.internal.getNumberOfPages(), today);
         reportContainer.innerHTML = `<h2>Appendix D: Provider Simulation Averages</h2>`;
         yPos = await addElementToPdf(pdf, reportContainer, yPos);
-		//added to capture important note in Provider & Tariff Inputs table
-        const noteElement = providerDebugEl.querySelector('.pdf-export-note');
+
+        // --- NEW: Select by data-attribute ---
+        const noteElement = providerDebugEl.querySelector('[data-report-note="provider-note"]');
         if (noteElement) {
             reportContainer.innerHTML = ''; // Clear the temp container
             reportContainer.appendChild(noteElement.cloneNode(true));
             yPos = await addElementToPdf(pdf, reportContainer, yPos);
         }
 
-        // --- FIX #2: Group headings and tables to prevent orphans ---
-        // Process the household averages table first.
-        const householdTable = providerDebugEl.querySelector('table');
+        // --- NEW: Select by data-attribute ---
+        const householdTable = providerDebugEl.querySelector('[data-report-section="household-avg"]');
         if (householdTable) {
             reportContainer.innerHTML = '';
             reportContainer.appendChild(householdTable.cloneNode(true));
             yPos = await addElementToPdf(pdf, reportContainer, yPos);
         }
 
-        // Then, iterate through each provider's section, grouping the h4 with its table.
-        const providerHeadings = providerDebugEl.querySelectorAll('h4');
-        for (const heading of providerHeadings) {
-            const table = heading.nextElementSibling;
+        // --- NEW: Loop through the new wrapper divs ---
+        const providerSections = providerDebugEl.querySelectorAll('[data-report-section="provider-avg"]');
+        for (const section of providerSections) {
             reportContainer.innerHTML = ''; // Clear the temp container
-            reportContainer.appendChild(heading.cloneNode(true)); // Add heading
-            if (table && table.tagName === 'TABLE') {
-                reportContainer.appendChild(table.cloneNode(true)); // Add its table
-            }
-            // Add the combined heading and table block to the PDF.
+            // Clone the entire section (which already contains the H4 and its table)
+            reportContainer.appendChild(section.cloneNode(true));
+            // Add the combined block to the PDF. This prevents orphans.
             yPos = await addElementToPdf(pdf, reportContainer, yPos);
         }
     }

@@ -1,5 +1,5 @@
 // js/debugTables.js
-// Version 1.2.9
+// Version 1.3.2
 // This module contains all functions related to rendering the "Debug Tables".
 // These tables provide transparency into the calculator's inputs, intermediate calculations,
 // and simulation results, aiding in validation and troubleshooting.
@@ -36,7 +36,8 @@ import {
 	formatHoursToRanges,
 	determineTouHours,
 	getSimulationData,
-	getSeason
+	getSeason,
+	getUpgradedSystemInverterKW
 } from './utils.js';
 import { 
 	generateHourlyConsumptionProfileFromDailyTOU, 
@@ -85,14 +86,7 @@ function calculateSeasonalAverages(provider, batteryConfigFromUI, config, state)
     const degradedNewBattery = config.newBatteryKWH * Math.pow(1 - config.batteryDegradation, 0); // Year 1 = age 0
     const totalDegradedBatteryCapacity = degradedExistingBattery + degradedNewBattery;
 
-    let totalInverterPower;
-    if (config.replaceExistingSystem) {
-        totalInverterPower = config.newBatteryInverterKW;
-    } else if (config.isAcCoupled) {
-        totalInverterPower = config.newBatteryInverterKW + config.existingSolarInverterKW;
-    } else {
-        totalInverterPower = config.newBatteryInverterKW;
-    }
+	const totalInverterPower = getUpgradedSystemInverterKW(config);
 
     const batteryConfigForSim = {
         capacity: totalDegradedBatteryCapacity,
@@ -107,6 +101,12 @@ function calculateSeasonalAverages(provider, batteryConfigFromUI, config, state)
         dailyEVChargeKWh = (config.evDailyKM / 100) * config.evEfficiency;
     }
 
+	// --- FIX: Get the BASELINE provider's rules ONCE, before the loop ---
+    // This ensures all provider simulations in this debug table use the
+    // same consistent household load profile.
+    const baselineProvider = config.providers.find(p => p.id === config.selectedProviders[0]);
+    const baselineImportRules = baselineProvider ? baselineProvider.importRules : [];
+
     // Loop through each season defined in the quarterly averages data.
     for (const quarterKey in state.quarterlyAverages) {
         const seasonName = quarterKey.split('_')[1];
@@ -114,12 +114,12 @@ function calculateSeasonalAverages(provider, batteryConfigFromUI, config, state)
 
         if (!quarterData || !seasonalData[seasonName]) continue;
 
-        // Generate the base hourly household consumption profile using the CURRENT provider's import rules.
+        // Generate the base hourly household consumption profile using the BASELINE provider's import rules.
         const hourlyConsumptionBase = generateHourlyConsumptionProfileFromDailyTOU(
             quarterData.avgPeak,
             quarterData.avgShoulder,
             quarterData.avgOffPeak,
-            provider.importRules
+            baselineImportRules // <-- Use the consistent baseline rules here
         );
 
         // Add EV load to the base consumption if applicable.
@@ -447,7 +447,7 @@ export function renderProvidersDebugTable(state, shouldShow = true) {
 
         // Add a note explaining where the tariff periods come from.
         tableHTML += `
-        <p class="pdf-export-note" style="font-size: 0.9em; font-style: italic; border: 1px solid #f0ad4e; padding: 10px; border-radius: 5px; background-color: #fcf8e3;">
+        <p class="pdf-export-note" data-report-note="provider-note" style="font-size: 0.9em; font-style: italic; border: 1px solid #f0ad4e; padding: 10px; border-radius: 5px; background-color: #fcf8e3;">
         <strong>Important Note:</strong> The daily averages in this table are calculated from <strong>isolated daily simulations</strong> and are for diagnostic purposes. They may differ from the final "System Performance" results, which use a more realistic, <strong>continuous simulation</strong> where the battery's state of charge carries over from one day to the next.
         </p>
 		`;
@@ -458,7 +458,7 @@ export function renderProvidersDebugTable(state, shouldShow = true) {
         `;
 
         // Build the table header.
-		tableHTML += `<table><thead><tr><th colspan="2" class="provider-header-cell"><strong>Total Household Consumption Quarterly Averages (Daily)</strong></th></tr></thead><tbody>`;
+		tableHTML += `<table data-report-section="household-avg"><thead><tr><th colspan="2" class="provider-header-cell"><strong>Total Household Consumption Quarterly Averages (Daily)</strong></th></tr></thead><tbody>`;
 		
         // Create a row for each period in each quarter, displaying the calculated hours.
         for (const quarter in state.quarterlyAverages) {
@@ -475,7 +475,9 @@ export function renderProvidersDebugTable(state, shouldShow = true) {
     config.selectedProviders.forEach(pKey => {
         const providerConfig = config.providers.find(p => p.id === pKey);
         if (!providerConfig) return;
-        tableHTML += `<h4 style="margin-top:20px;">${providerConfig.name}</h4>`;
+        // Add a wrapper div with the data-attribute
+		tableHTML += `<div data-report-section="provider-avg">`;
+		tableHTML += `<h4 style="margin-top:20px;">${providerConfig.name}</h4>`;
 
         if (!useManual) {
             // Assemble the full battery configuration for the simulation.
@@ -498,6 +500,8 @@ export function renderProvidersDebugTable(state, shouldShow = true) {
         } else {
             tableHTML += `<p><em>Seasonal averages are only available in CSV mode.</em></p>`;
         }
+		// Close the wrapper div
+		tableHTML += `</div>`;
     });
 
     // Finally, inject the generated HTML into the page.
