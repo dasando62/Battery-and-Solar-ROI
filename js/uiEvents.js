@@ -229,10 +229,20 @@ export function toggleExistingSolar() {
  */
 export function wireStaticEvents() {
     document.getElementById('noExistingSolar')?.addEventListener('change', toggleExistingSolar);
-    // Toggle between CSV and Manual input sections
+// Toggle between CSV and Manual input sections
     document.getElementById('manualInputToggle')?.addEventListener('change', (e) => {
-        document.getElementById('csvInputSection').style.display = e.target.checked ? 'none' : 'block';
-        document.getElementById('manualInputSection').style.display = e.target.checked ? 'block' : 'none';
+        const isManual = e.target.checked;
+        const csvDisplay = isManual ? 'none' : 'block';
+        const manualDisplay = isManual ? 'block' : 'none';
+
+        // Hide/show the main sections
+        document.getElementById('csvInputSection').style.display = csvDisplay;
+        document.getElementById('manualInputSection').style.display = manualDisplay;
+
+        // --- ADDED FIX ---
+        // Also hide/show the advanced CSV option sections
+        document.getElementById('advanced-usage-options').style.display = csvDisplay;
+        document.getElementById('advanced-solar-options').style.display = csvDisplay;
     });
     // Toggle visibility of all debug-related buttons and containers
     document.getElementById('debugToggle')?.addEventListener('change', (e) => {
