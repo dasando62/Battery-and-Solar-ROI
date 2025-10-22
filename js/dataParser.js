@@ -1,5 +1,5 @@
 // js/dataParser.js 
-// Version 1.2.9
+// Version 1.3.2
 // This module is responsible for handling file uploads and parsing CSV data.
 // It reads electricity usage and solar generation files, processes them into a
 // standardized hourly format, and stores the results in the global state.
@@ -239,98 +239,104 @@ export function handleUsageCsv(event) {
  * @param {Event} event - The file input change event.
  */
 export function handleSolarCsv(event) {
-    // Get the selected file from the input event.
-    const file = event.target.files[0];
-    // Get the UI elements for displaying status and filename.
-    const statusEl = document.getElementById('solarCounts');
-    const fileNameEl = document.getElementById('solarFileName');
+    // Return a Promise that resolves with the success status
+    return new Promise((resolve) => {
+        // Get the selected file from the input event.
+        const file = event.target.files[0];
+        // Get the UI elements for displaying status and filename.
+        const statusEl = document.getElementById('solarCounts');
+        const fileNameEl = document.getElementById('solarFileName');
 
-    // If the user cancels the file dialog, reset the UI.
-    if (!file) {
-        if (fileNameEl) fileNameEl.textContent = 'No file chosen';
-        if (statusEl) statusEl.textContent = '';
-        return;
-    }
-
-    // 1. Immediately display the selected filename in the designated span.
-    if (fileNameEl) fileNameEl.textContent = file.name;
-    // 2. Show a "Processing..." message to the user.
-    if (statusEl) statusEl.textContent = 'Processing...';
-
-    // Initialize FileReader to read the file content.
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        try {
-            // Parse the raw CSV text into an array of objects.
-            const csvData = parseCSV(e.target.result);
-            // Use a Map to efficiently aggregate data by date.
-            const dailyData = new Map();
-
-            // Read all advanced CSV parsing options from the UI.
-            const dateTimeHeader = document.getElementById('solarDateTimeHeader').value;
-            const dateFormat = document.getElementById('solarDateFormat').value;
-            const generationHeaders = document.getElementById('solarGenerationHeader').value.split(',').map(h => h.trim());
-
-            // Iterate through each row of the parsed CSV data.
-            for (const row of csvData) {
-                const dateTimeString = row[dateTimeHeader];
-                const dateTime = parseDateString(dateTimeString, dateFormat);
-                // Skip rows with invalid or unparsable dates.
-                if (!dateTime || isNaN(dateTime.getTime())) continue;
-
-                // Standardize date and get the hour for aggregation.
-                const date = dateTime.toISOString().split('T')[0];
-                const hour = dateTime.getUTCHours();
-
-                // If this is the first entry for a date, initialize its data structure.
-                if (!dailyData.has(date)) {
-                    dailyData.set(date, { date: date, hourly: Array(24).fill(0), rowCount: 0 });
-                }
-                const day = dailyData.get(date);
-
-                // Find and parse the energy value, checking multiple possible headers.
-                const valueString = findValueInRow(row, generationHeaders);
-                const value = parseFloat(valueString);
-                
-                // Add the value to the hourly array for that day.
-                if (!isNaN(value)) {
-                    day.hourly[hour] += value;
-                    day.rowCount++;
-                }
-            }
-
-            // Post-processing step: Check for and distribute daily total entries.
-            // Some systems export a single daily total at midnight instead of hourly data.
-            for (const day of dailyData.values()) {
-                const totalForDay = day.hourly.reduce((a,b) => a + b, 0);
-                // If a day has only one data row and all the energy is at midnight...
-                if (day.rowCount === 1 && day.hourly[0] === totalForDay && totalForDay > 0) {
-                    const month = parseInt(day.date.split('-')[1], 10);
-                    const season = [12,1,2].includes(month) ? SEASONS.SUMMER : [3,4,5].includes(month) ? SEASONS.AUTUMN : [6,7,8].includes(month) ? SEASONS.WINTER : SEASONS.SPRING;
-                    // ...replace the hourly data with a realistic solar curve for that season.
-                    day.hourly = generateHourlySolarProfileFromDaily(totalForDay, season);
-                }
-            }
-            // Convert the Map to an array, sort by date, and store in the global state.
-            state.solarData = Array.from(dailyData.values()).sort((a, b) => a.date.localeCompare(b.date));
-            
-            // 3. Update the status message with the successful result.
-            if(statusEl) statusEl.textContent = `${state.solarData.length} days of solar data loaded.`;
-
-        } catch (err) {
-            // If an error occurs, update the status and log the error.
-            if(statusEl) statusEl.textContent = 'Failed to process solar CSV.';
-            displayError('Please check the file format and advanced options.', 'data-input-error');
-            console.error(err);
-        } finally {
-            // 4. Reset the hidden input's value. This is crucial to allow
-            // the user to re-upload the same file again, triggering the 'change' event.
-            event.target.value = null;
+        // If the user cancels the file dialog, reset the UI.
+        if (!file) {
+            if (fileNameEl) fileNameEl.textContent = 'No file chosen';
+            if (statusEl) statusEl.textContent = '';
+            resolve(false); // Resolve with false as no file was loaded
+            return;
         }
-    };
-    // Start reading the file as text.
-    reader.readAsText(file);
-} 
+
+        // 1. Immediately display the selected filename in the designated span.
+        if (fileNameEl) fileNameEl.textContent = file.name;
+        // 2. Show a "Processing..." message to the user.
+        if (statusEl) statusEl.textContent = 'Processing...';
+
+        // Initialize FileReader to read the file content.
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                // Parse the raw CSV text into an array of objects.
+                const csvData = parseCSV(e.target.result);
+                // Use a Map to efficiently aggregate data by date.
+                const dailyData = new Map();
+
+                // Read all advanced CSV parsing options from the UI.
+                const dateTimeHeader = document.getElementById('solarDateTimeHeader').value;
+                const dateFormat = document.getElementById('solarDateFormat').value;
+                const generationHeaders = document.getElementById('solarGenerationHeader').value.split(',').map(h => h.trim());
+
+                // Iterate through each row of the parsed CSV data.
+                for (const row of csvData) {
+                    const dateTimeString = row[dateTimeHeader];
+                    const dateTime = parseDateString(dateTimeString, dateFormat);
+                    // Skip rows with invalid or unparsable dates.
+                    if (!dateTime || isNaN(dateTime.getTime())) continue;
+
+                    // Standardize date and get the hour for aggregation.
+                    const date = dateTime.toISOString().split('T')[0];
+                    const hour = dateTime.getUTCHours();
+
+                    // If this is the first entry for a date, initialize its data structure.
+                    if (!dailyData.has(date)) {
+                        dailyData.set(date, { date: date, hourly: Array(24).fill(0), rowCount: 0 });
+                    }
+                    const day = dailyData.get(date);
+
+                    // Find and parse the energy value, checking multiple possible headers.
+                    const valueString = findValueInRow(row, generationHeaders);
+                    const value = parseFloat(valueString);
+                    
+                    // Add the value to the hourly array for that day.
+                    if (!isNaN(value)) {
+                        day.hourly[hour] += value;
+                        day.rowCount++;
+                    }
+                }
+
+                // Post-processing step: Check for and distribute daily total entries.
+                // Some systems export a single daily total at midnight instead of hourly data.
+                for (const day of dailyData.values()) {
+                    const totalForDay = day.hourly.reduce((a,b) => a + b, 0);
+                    // If a day has only one data row and all the energy is at midnight...
+                    if (day.rowCount === 1 && day.hourly[0] === totalForDay && totalForDay > 0) {
+                        const month = parseInt(day.date.split('-')[1], 10);
+                        const season = [12,1,2].includes(month) ? SEASONS.SUMMER : [3,4,5].includes(month) ? SEASONS.AUTUMN : [6,7,8].includes(month) ? SEASONS.WINTER : SEASONS.SPRING;
+                        // ...replace the hourly data with a realistic solar curve for that season.
+                        day.hourly = generateHourlySolarProfileFromDaily(totalForDay, season);
+                    }
+                }
+                // Convert the Map to an array, sort by date, and store in the global state.
+                state.solarData = Array.from(dailyData.values()).sort((a, b) => a.date.localeCompare(b.date));
+                
+                // 3. Update the status message with the successful result.
+                if(statusEl) statusEl.textContent = `${state.solarData.length} days of solar data loaded.`;
+                resolve(true); // Resolve with true on success
+
+            } catch (err) {
+                // If an error occurs, update the status and log the error.
+                if(statusEl) statusEl.textContent = 'Failed to process solar CSV.';
+                displayError('Please check the file format and advanced options.', 'data-input-error');
+                console.error(err);
+                resolve(false); // Resolve with false on error
+            } finally {
+                // 4. Reset the hidden input's value. This is crucial to allow
+                // the user to re-upload the same file again, triggering the 'change' event.
+                event.target.value = null;
+            }
+        };
+        // Start reading the file as text.
+        reader.readAsText(file);
+    });
+}
  
 
 /**

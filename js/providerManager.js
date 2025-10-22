@@ -1,5 +1,5 @@
 // js/providerManager.js
-//Version 1.2.9
+//Version 1.3.2
 // This module manages all CRUD (Create, Read, Update, Delete) operations
 // for electricity provider configurations. It uses the browser's localStorage
 // for persistence, allowing provider data to be saved between sessions.

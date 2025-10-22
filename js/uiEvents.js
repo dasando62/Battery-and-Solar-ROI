@@ -1,5 +1,5 @@
 // js/uiEvents.js 
-// Version 1.2.9
+// Version 1.3.2
 // This module serves as the central hub for handling all user interactions.
 // It attaches event listeners to UI elements and calls the appropriate business logic
 // from other modules in response to user actions (e.g., clicks, changes).
@@ -42,6 +42,18 @@ import { LOCAL_STORAGE_KEYS, TARIFF_RULE_TYPES } from './constants.js';
 
 // a variable to cache the satet of the solar data
 let solarDataCache = null;
+
+/**
+ * Displays a temporary "Applied!" message for a specific provider.
+ * @param {string} providerId - The ID of the provider to show feedback for.
+ */
+function showSaveFeedback(providerId) {
+    const statusEl = document.getElementById(`save-status-${providerId.toLowerCase()}`);
+    if (statusEl) {
+        statusEl.textContent = "Applied! Use main 'Save Settings' button to make permanent.";
+        setTimeout(() => { statusEl.textContent = ""; }, 3000);
+    }
+}
 
 /**
  * Checks which debug tables are currently visible and re-renders them.
@@ -244,8 +256,16 @@ export function wireStaticEvents() {
 	handleGridChargeToggle();
 
     // File input listeners
-    document.getElementById("usageCsv")?.addEventListener("change", handleUsageCsv);
-    document.getElementById("solarCsv")?.addEventListener("change", handleSolarCsv);
+	document.getElementById("usageCsv")?.addEventListener("change", handleUsageCsv);
+    document.getElementById("solarCsv")?.addEventListener("change", async (event) => {
+        // Await the result of the async file handler
+        const isSuccess = await handleSolarCsv(event);
+        
+        // If the file was loaded and parsed successfully, clear the cache.
+        if (isSuccess) {
+            solarDataCache = null;
+        }
+    });
 	wireSaveLoadEvents(); // Attach save/load button listeners
     
     // Main action button listeners
@@ -399,7 +419,14 @@ export function wireDynamicProviderEvents() {
     providerContainer.addEventListener('click', (event) => {
         const target = event.target;
         let providers; // Will be populated after saving
-        const updateAndRender = () => { saveAllProviders(providers); renderProviderSettings(); };
+		const updateAndRender = (callback) => {
+            saveAllProviders(providers);
+            renderProviderSettings();
+            if (callback) {
+                // Use a short timeout to let the DOM re-render first
+                setTimeout(callback, 50); 
+            }
+        };
 
         // Handle "Add Rule" (Import or Export)
         if (target.matches('.add-rule-button')) {
@@ -413,19 +440,15 @@ export function wireDynamicProviderEvents() {
                 const rulesKey = ruleType === 'import' ? 'importRules' : 'exportRules';
                 if (!Array.isArray(provider[rulesKey])) { provider[rulesKey] = []; }
                 provider[rulesKey].push(newRule);
-                updateAndRender();
+                updateAndRender(() => showSaveFeedback(providerId));
             }
         }
         
         // Handle "Apply Changes"
-        if (target.matches('.save-provider-button')) {
+		if (target.matches('.save-provider-button')) {
             const providerId = target.dataset.id;
             saveProviderFromDOM(providerId);
-            const statusEl = document.getElementById(`save-status-${providerId.toLowerCase()}`);
-            if (statusEl) {
-                statusEl.textContent = "Applied! Use main 'Save Settings' button to make permanent.";
-                setTimeout(() => { statusEl.textContent = ""; }, 3000);
-            }
+            showSaveFeedback(providerId);
         }
 
         // Handle reordering
@@ -459,7 +482,7 @@ export function wireDynamicProviderEvents() {
                 const rulesKey = ruleType === 'import' ? 'importRules' : 'exportRules';
                 if (provider[rulesKey]) { 
                     provider[rulesKey].splice(ruleIndex, 1); 
-                    updateAndRender(); 
+                    updateAndRender(() => showSaveFeedback(providerId));
                 }
             }
         }
@@ -474,7 +497,7 @@ export function wireDynamicProviderEvents() {
                 const newCondition = { name: 'New Condition', condition: { metric: 'peak_import', operator: 'less_than', value: 1 }, action: { type: 'flat_credit', value: 0.10 } };
                 if (!provider.specialConditions) { provider.specialConditions = []; }
                 provider.specialConditions.push(newCondition);
-                updateAndRender();
+               updateAndRender(() => showSaveFeedback(providerId));
             }
         }
 
@@ -487,7 +510,7 @@ export function wireDynamicProviderEvents() {
             if (provider && provider.specialConditions) {
                 const ruleIndex = parseInt(target.dataset.index, 10);
                 provider.specialConditions.splice(ruleIndex, 1);
-                updateAndRender();
+                updateAndRender(() => showSaveFeedback(providerId));
             }
         }
 
@@ -501,7 +524,7 @@ export function wireDynamicProviderEvents() {
                 const newRule = { source: 'excess_solar', hours: '9am-4pm' };
                 if (!Array.isArray(provider.evRules)) { provider.evRules = []; }
                 provider.evRules.push(newRule);
-                updateAndRender();
+                updateAndRender(() => showSaveFeedback(providerId));
             }
         }
 
@@ -514,7 +537,7 @@ export function wireDynamicProviderEvents() {
             if (provider && provider.evRules) {
                 const ruleIndex = parseInt(target.dataset.index, 10);
                 provider.evRules.splice(ruleIndex, 1);
-                updateAndRender();
+                updateAndRender(() => showSaveFeedback(providerId));
             }
         }
     });

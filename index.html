@@ -2,7 +2,7 @@
 <!--/*
  * Home Battery & Solar ROI Analyser
  * Copyright (c) 2025 [DaSando62]
- * Versin 1.2.9
+ * Versin 1.3.2
  *
  *
  * This software is licensed under the MIT License.
@@ -248,7 +248,7 @@
     
     <label title="Enter the total cost for purchasing and installing the new battery and inverter.">Cost of Additional Battery ($): <input type="number" step="0.01" id="costBattery" value="9500"></label>
     
-    <div title="Check this box if your new battery has its own built-in inverter and is being added to a home that already has a separate solar inverter (e.g., adding a Tesla Powerwall). This is known as an AC Coupled system.">
+    <div title="This setting controls how the inverter power limit is calculated for your combined system.&#10Check this box (AC Coupled): Select this if your new battery has its own inverter (e.g., a Tesla Powerwall) and is being added alongside your existing solar inverter.&#10Total Inverter Limit = (New Battery Inverter kW) + (Existing Solar Inverter kW)&#10Leave unchecked (DC Coupled Upgrade): Select this if you are installing a new hybrid inverter that will replace your old solar inverter and manage all solar panels (both old and new) and the battery.&#10Total Inverter Limit = (New Battery Inverter kW) only ">
         <label><input type="checkbox" id="isAcCoupled"> New battery is AC Coupled (e.g., Tesla Powerwall)</label>
     </div>
 	
