@@ -241,7 +241,6 @@ document.getElementById('manualInputToggle')?.addEventListener('change', (e) => 
 
         // Also hide/show the advanced CSV option sections
         document.getElementById('advanced-usage-options').style.display = csvDisplay;
-        document.getElementById('advanced-solar-options').style.display = csvDisplay;
 
         // --- ADDED --- Show/Hide the Manual Yield input in the New System section
         const yieldContainer = document.getElementById('manual-yield-input-container');
