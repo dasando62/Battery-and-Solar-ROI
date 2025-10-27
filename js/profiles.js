@@ -1,5 +1,5 @@
 // js/profiles.js
-//Version 1.3.2
+//Version 1.3.4
 // This module provides functions to generate 24-hour energy profiles (consumption and solar)
 // from single daily total values, based on typical patterns.
 

@@ -1,5 +1,5 @@
 // js/state.js
-//Version 1.3.2 ***update in state array as well***
+//Version 1.3.4 ***update in state array as well***
 // This file defines and exports a central, global `state` object.
 // This object acts as a single source of truth for shared application data,
 // making it accessible across different modules without passing it as a function parameter everywhere.
@@ -30,7 +30,7 @@
 
 export const state = {
   // Holds the current code version for pdf report and web page.
-  appVersion: "1.3.2",
+  appVersion: "1.3.4",
   // Holds the parsed hourly electricity usage data from the CSV file.
   electricityData: null,
   // Holds the parsed hourly solar generation data from the CSV file.

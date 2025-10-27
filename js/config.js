@@ -1,5 +1,5 @@
 // js/config.js
-//Version 1.3.2
+//Version 1.3.4
 // This module is responsible for gathering all user-configurable settings from the UI
 // and assembling them into a single configuration object used by the analysis engine.
 
@@ -37,30 +37,24 @@ import { SEASONS } from './constants.js';
  * @returns {object} The complete analysis configuration object.
  */
 export function gatherConfigFromUI() {
-    // Get the full, up-to-date list of all provider configurations from the provider manager.
-    const allProviders = getProviders(); 
-    
-    // Get the IDs of only the providers the user has checked for inclusion in the analysis.
+    const allProviders = getProviders();
     const selectedProviderIds = Array.from(document.querySelectorAll(".providerCheckbox:checked")).map(cb => cb.value);
-
-    // Determine if the user is using manual data entry or CSV upload.
     const useManual = document.getElementById("manualInputToggle")?.checked;
 
-    // The main configuration object.
     const config = {
         // --- General Settings ---
         selectedProviders: selectedProviderIds,
         useManual: useManual,
         noExistingSolar: document.getElementById("noExistingSolar")?.checked,
-        
+
         // --- Controlled Load Settings ---
         moveControlledLoad: document.getElementById("moveControlledLoad")?.checked,
         controlledLoadIdentifier: document.getElementById('controlledLoadIdentifier')?.value || '',
-		
+
         // --- System Sizing ---
         existingSolarKW: getNumericInput("existingSolarKW"),
-		existingSolarInverterKW: getNumericInput("existingSolarInverter"),
-		isHybridInverter: document.getElementById("isHybridInverter")?.checked,
+        existingSolarInverterKW: getNumericInput("existingSolarInverter"),
+        isHybridInverter: document.getElementById("isHybridInverter")?.checked,
         existingBattery: getNumericInput("existingBattery"),
         existingBatteryInverter: getNumericInput("existingBatteryInverter"),
         existingSystemAge: getNumericInput("existingSystemAge", 0),
@@ -68,22 +62,22 @@ export function gatherConfigFromUI() {
         replaceExistingSystem: document.getElementById("replaceExistingSystem")?.checked,
         newBatteryKWH: getNumericInput("newBattery"),
         newBatteryInverterKW: getNumericInput("newBatteryInverter"),
-		isAcCoupled: document.getElementById("isAcCoupled")?.checked, 
+        isAcCoupled: document.getElementById("isAcCoupled")?.checked,
         costSolar: getNumericInput("costSolar"),
         costBattery: getNumericInput("costBattery"),
-		
+
         // --- EV Charging Settings ---
         evChargingEnabled: document.getElementById('enableEVCharging')?.checked,
-		evDailyKM: getNumericInput('evDailyKM', 40),
+        evDailyKM: getNumericInput('evDailyKM', 40),
         evEfficiency: getNumericInput('evEfficiency', 18.5),
         minSOCForEV: getNumericInput('minSOCForEV', 50),
-		
+
         // --- Blackout & Sizing Recommendation Settings ---
         blackoutSizingEnabled: document.getElementById("enableBlackoutSizing")?.checked,
         blackoutDuration: getNumericInput('blackoutDuration'),
         blackoutCoverage: getNumericInput('blackoutCoverage') / 100,
         recommendationCoverageTarget: getNumericInput('recommendationCoverageTarget', 90),
-        
+
         // --- Financial Settings ---
         loanEnabled: document.getElementById("enableLoan")?.checked,
         discountRateEnabled: document.getElementById("enableDiscountRate")?.checked,
@@ -91,7 +85,7 @@ export function gatherConfigFromUI() {
         loanInterestRate: getNumericInput("loanInterestRate") / 100,
         loanTerm: getNumericInput("loanTerm"),
         discountRate: getNumericInput("discountRate") / 100,
-        
+
         // --- Analysis Period & Degradation ---
         numYears: getNumericInput("numYears", 15),
         tariffEscalation: getNumericInput("tariffEscalation", 2) / 100,
@@ -99,34 +93,71 @@ export function gatherConfigFromUI() {
         batteryDegradation: getNumericInput("batteryDegradation", 2) / 100,
         fitDegradationStartYear: getNumericInput("fitDegradationStartYear", 1),
         fitDegradationEndYear: getNumericInput("fitDegradationEndYear", 10),
-        fitMinimumRate: getNumericInput("fitMinimumRate", -0.00),
-        
+        fitMinimumRate: getNumericInput("fitMinimumRate", 0.00), // Corrected default
+
         // --- Battery-specific Settings ---
         gridChargeThreshold: getNumericInput("gridChargeThreshold", 80),
-		socChargeTrigger: getNumericInput("socChargeTrigger", 50),
-        
-        // --- Manual Mode Data ---
-        manualSolarProfile: getNumericInput("manualSolarProfile", 4.0),
+        socChargeTrigger: getNumericInput("socChargeTrigger", 50),
+
+        // --- Solar Yield (Manual Mode Only) ---
+        newSolarYield: getNumericInput("newSolarYield", 4.0), // Used only in manual mode for new panels
+
+        // --- Manual Mode Data --- Initialize here! ---
         manualData: null,
 
         // Filter the full list of providers to only include the selected ones.
-        providers: allProviders.filter(p => selectedProviderIds.includes(p.id))
+        providers: allProviders.filter(p => selectedProviderIds.includes(p.id)),
+
+        // Initialize calculated properties
+        initialSystemCost: 0,
+        annualLoanRepayment: 0,
+        manualTotalDays: 365 // Default annualization days
     };
 
-    // If in manual mode, gather the seasonal average daily values.
+    // --- NOW Populate manualData if needed ---
     if (useManual) {
-        config.manualData = {
-            [SEASONS.SUMMER]: { avgPeak: getNumericInput("summerDailyPeak"), avgShoulder: getNumericInput("summerDailyShoulder"), avgOffPeak: getNumericInput("summerDailyOffPeak"), avgSolar: getNumericInput("summerDailySolar"), avgControlledLoad: getNumericInput("summerDailyControlledLoad") },
-            [SEASONS.AUTUMN]: { avgPeak: getNumericInput("autumnDailyPeak"), avgShoulder: getNumericInput("autumnDailyShoulder"), avgOffPeak: getNumericInput("autumnDailyOffPeak"), avgSolar: getNumericInput("autumnDailySolar"), avgControlledLoad: getNumericInput("autumnDailyControlledLoad") },
-            [SEASONS.WINTER]: { avgPeak: getNumericInput("winterDailyPeak"), avgShoulder: getNumericInput("winterDailyShoulder"), avgOffPeak: getNumericInput("winterDailyOffPeak"), avgSolar: getNumericInput("winterDailySolar"), avgControlledLoad: getNumericInput("winterDailyControlledLoad") },
-            [SEASONS.SPRING]: { avgPeak: getNumericInput("springDailyPeak"), avgShoulder: getNumericInput("springDailyShoulder"), avgOffPeak: getNumericInput("springDailyOffPeak"), avgSolar: getNumericInput("springDailySolar"), avgControlledLoad: getNumericInput("springDailyControlledLoad") },
+        const isFlatRate = document.getElementById('manualFlatRateToggle')?.checked;
+        config.manualData = {}; // Overwrite null with an empty object
+
+        const seasons = {
+            [SEASONS.SUMMER]: "summer",
+            [SEASONS.AUTUMN]: "autumn",
+            [SEASONS.WINTER]: "winter",
+            [SEASONS.SPRING]: "spring",
         };
+
+        for (const seasonKey in seasons) {
+            const prefix = seasons[seasonKey];
+            const daysInQ = getNumericInput(`${prefix}Days`);
+
+            config.manualData[seasonKey] = {
+                days: daysInQ,
+                totalExport: getNumericInput(`${prefix}TotalExport`),
+                totalControlledLoad: getNumericInput(`${prefix}TotalControlledLoad`),
+                totalSolar: getNumericInput(`${prefix}TotalSolar`),
+                isFlatRate: isFlatRate
+            };
+
+            if (isFlatRate) {
+                config.manualData[seasonKey].totalFlatImport = getNumericInput(`${prefix}TotalImport`);
+                config.manualData[seasonKey].totalPeakImport = 0;
+                config.manualData[seasonKey].totalShoulderImport = 0;
+                config.manualData[seasonKey].totalOffPeakImport = 0;
+            } else {
+                config.manualData[seasonKey].totalPeakImport = getNumericInput(`${prefix}TotalPeakImport`);
+                config.manualData[seasonKey].totalShoulderImport = getNumericInput(`${prefix}TotalShoulderImport`);
+                config.manualData[seasonKey].totalOffPeakImport = getNumericInput(`${prefix}TotalOffPeakImport`);
+                config.manualData[seasonKey].totalFlatImport = 0;
+            }
+        }
+
+        const totalManualDays = Object.values(config.manualData).reduce((sum, q) => sum + (q.days || 0), 0);
+        config.manualTotalDays = totalManualDays > 0 ? totalManualDays : 365;
     }
 
-    // Calculate the total initial investment cost.
+    // --- Calculate costs AFTER potentially populating manualData ---
     config.initialSystemCost = config.costSolar + config.costBattery;
 
-    // Calculate the annual loan repayment amount if a loan is enabled and valid.
     if (config.loanEnabled && config.loanAmount > 0 && config.loanInterestRate > 0 && config.loanTerm > 0) {
         const i = config.loanInterestRate / 12;
         const n = config.loanTerm * 12;

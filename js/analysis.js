@@ -1,5 +1,5 @@
 // js/analysis.js
-// Version 1.3.2
+// Version 1.3.4
 // This is the core of the ROI calculator. It contains the simulation engine,
 // financial calculation functions (IRR, NPV), and system sizing algorithms.
 
@@ -28,7 +28,7 @@
  */
 
 import { state } from './state.js';
-import { getNumericInput, escalate, parseRangesToHours, getSeason } from './utils.js';
+import { getNumericInput, escalate, parseRangesToHours, getSeason, getUpgradedSystemInverterKW } from './utils.js';
 import { tariffComponents } from './tariffComponents.js';
 import { generateHourlyConsumptionProfileFromDailyTOU, generateHourlySolarProfileFromDaily, generateEVChargingProfile  } from './profiles.js';
 import { SEASONS, SPECIAL_CONDITIONS, DEFAULT_TOU_HOURS, TARIFF_RULE_TYPES } from './constants.js';
@@ -40,7 +40,7 @@ import { SEASONS, SPECIAL_CONDITIONS, DEFAULT_TOU_HOURS, TARIFF_RULE_TYPES } fro
  * @param {number} dailyTotal - The total kWh used by the controlled load per day.
  * @returns {number[]} An array of 24 hourly load values.
  */
-function generateHourlyControlledLoadProfile(dailyTotal) {
+export function generateHourlyControlledLoadProfile(dailyTotal) {
     if (dailyTotal <= 0) return Array(24).fill(0);
     // Assumes a 7-hour heating window from 11pm to 6am.
     const heatingHours = 7;
@@ -101,13 +101,8 @@ function calculateDegradedComponents(config, year) {
     const degradedNewBattery = config.newBatteryKWH * Math.pow(1 - config.batteryDegradation, newSystemCurrentAge);
     const totalDegradedBatteryCapacity = degradedExistingBattery + degradedNewBattery;
 
-    const degradedExistingSolarDaily = (config.replaceExistingSystem ? 0 : config.existingSolarKW * config.manualSolarProfile) * Math.pow(1 - config.solarDegradation, existingSystemCurrentAge);
-    const degradedNewSolarDaily = config.newSolarKW * config.manualSolarProfile * Math.pow(1 - config.solarDegradation, newSystemCurrentAge);
-    const totalDegradedSolarDaily = degradedExistingSolarDaily + degradedNewSolarDaily;
-
     return {
         batteryCapacity: totalDegradedBatteryCapacity,
-        manualModeSolarGeneration: totalDegradedSolarDaily, // Used only in manual mode
     };
 }
 
@@ -151,7 +146,9 @@ function generateTotalSolarProfile(config, day, year, solarDataMap) {
 
     // Generate and degrade the profile for the new panels
     const newSolarGenerationDaily = config.newSolarKW * config.manualSolarProfile;
-    const degradedNewSolarDaily = newSolarGenerationDaily * Math.pow(1 - config.solarDegradation, newSystemCurrentAge);
+	// Calculate degraded NEW panel output for THIS YEAR (using the SEASONAL solar profile/yield)
+	// Calculate degraded NEW panel output for THIS YEAR (using the single average yield)
+    const degradedNewSolarDaily = (config.newSolarKW * config.newSolarYield) * Math.pow(1 - config.solarDegradation, newSystemCurrentAge);
     const newHourlySolar = generateHourlySolarProfileFromDaily(degradedNewSolarDaily, getSeason(day.date));
 
     const existingSolarForSim = config.replaceExistingSystem ? Array(24).fill(0) : degradedExistingSolar;
@@ -557,72 +554,126 @@ function calculateSystemYear(providerData, config, year, simulationData, electri
     const controlledLoadRateInfo = getControlledLoadRate(providerData);
 
     // 4. Handle Manual Mode simulation
-    if (config.useManual) {
+if (config.useManual) {
         let totalCostForPeriod = 0;
-        const daysInQuarter = 365 / 4;
 
         for (const q in simulationData) {
             const quarter = simulationData[q];
             const season = q.split('_')[1];
+            const daysInQ = quarter.days || (config.manualTotalDays / 4);
 
-            const hourlyControlledLoad = generateHourlyControlledLoadProfile(quarter.avgControlledLoad);
+            if (daysInQ <= 0) continue;
+
+			// --- Calculate Daily Averages from Quarterly Totals ---
+            let avgPeakImport = 0;
+            let avgShoulderImport = 0;
+            let avgOffPeakImport = 0;
+            let avgFlatImport = 0;
+
+            if (quarter.isFlatRate) {
+                avgFlatImport = (quarter.totalFlatImport || 0) / daysInQ;
+                avgOffPeakImport = avgFlatImport; // Assign to off-peak for profile generation
+            } else {
+                avgPeakImport = (quarter.totalPeakImport || 0) / daysInQ;
+                avgShoulderImport = (quarter.totalShoulderImport || 0) / daysInQ;
+                avgOffPeakImport = (quarter.totalOffPeakImport || 0) / daysInQ;
+            }
+            const avgExport = (quarter.totalExport || 0) / daysInQ;
+            const avgControlledLoad = (quarter.totalControlledLoad || 0) / daysInQ;
+
+			// --- Reconstruct Daily Total Consumption ---
+            // Calculate average daily figures from user totals
+            const avgSolarGeneration_existing = (quarter.totalSolar / daysInQ) * Math.pow(1 - config.solarDegradation, config.existingSystemAge); // Apply initial degradation
+            const avgSelfConsumed_existing = Math.max(0, avgSolarGeneration_existing - avgExport);
+
+            // --- Generate HOURLY profiles based on Daily Averages ---
+            const hourlyImport = generateHourlyConsumptionProfileFromDailyTOU(avgPeakImport, avgShoulderImport, avgOffPeakImport, baselineProvider.importRules);
+            const hourlySelfConsumed = generateHourlySolarProfileFromDaily(avgSelfConsumed_existing, q);
+            let trueHourlyConsumption = hourlyImport.map((imp, h) => imp + (hourlySelfConsumed[h] || 0));
+
+            // --- Generate HOURLY Solar for NEW/UPGRADED system ---
+            const existingSystemCurrentAge = config.existingSystemAge + year - 1;
+            const newSystemCurrentAge = year - 1;
+            // Calculate degraded EXISTING panel output for THIS YEAR (based on user's totalSolar)
+            const degradedExistingSolarDaily = (config.replaceExistingSystem ? 0 : quarter.totalSolar / daysInQ) * Math.pow(1 - config.solarDegradation, existingSystemCurrentAge);
+            // Calculate degraded NEW panel output for THIS YEAR (using default 4.0 yield - COULD BE IMPROVED LATER if we add seasonal yield inputs)
+            const degradedNewSolarDaily = (config.newSolarKW * 4.0) * Math.pow(1 - config.solarDegradation, newSystemCurrentAge);
+            const totalDegradedSolarDaily_upgraded = degradedExistingSolarDaily + degradedNewSolarDaily;
+            let totalHourlySolar_upgraded = generateHourlySolarProfileFromDaily(totalDegradedSolarDaily_upgraded, q);
+
+            // Apply inverter clipping
+            const totalInverterPower = getUpgradedSystemInverterKW(config);
+            totalHourlySolar_upgraded = totalHourlySolar_upgraded.map(gen => Math.min(gen, totalInverterPower));
+
+            // --- Battery Config ---
+            const degradedComponents = calculateDegradedComponents(config, year); // Only calculates battery now
             const batteryConfig = {
                 capacity: degradedComponents.batteryCapacity,
-                inverterKW: config.replaceExistingSystem ? config.newBatteryInverterKW : (config.isAcCoupled ? config.newBatteryInverterKW + config.existingSolarInverterKW : config.newBatteryInverterKW),
+                inverterKW: totalInverterPower, // Use the already calculated total power
                 gridChargeThreshold: config.gridChargeThreshold,
                 socChargeTrigger: config.socChargeTrigger
             };
-            let currentSOC = batteryConfig.capacity * 0.5;
+            let currentSOC = batteryConfig.capacity * 0.5; // Start sim each quarter
 
-            let trueHourlyConsumption = generateHourlyConsumptionProfileFromDailyTOU(quarter.avgPeak, quarter.avgShoulder, quarter.avgOffPeak, baselineProvider.importRules);
-            
-            let totalHourlySolar = generateHourlySolarProfileFromDaily(degradedComponents.manualModeSolarGeneration, q);
-            totalHourlySolar = totalHourlySolar.map(hourlyGeneration => Math.min(hourlyGeneration, batteryConfig.inverterKW));
-
+            // --- Handle Controlled Load ---
+            const hourlyControlledLoad = generateHourlyControlledLoadProfile(avgControlledLoad);
             let dailyControlledLoadCost = 0;
-
             if (config.moveControlledLoad) {
                 for (let h = 0; h < 24; h++) {
                     trueHourlyConsumption[h] += hourlyControlledLoad[h];
                 }
             } else {
-                dailyControlledLoadCost = quarter.avgControlledLoad * escalate(controlledLoadRateInfo.rate, config.tariffEscalation, year);
+                dailyControlledLoadCost = avgControlledLoad * escalate(controlledLoadRateInfo.rate, config.tariffEscalation, year);
             }
 
+            // --- Handle EV ---
             let dailyEVChargeKWh = 0;
+            // Create configForSim inside the loop if needed by simulateDay
+            const configForSim = { /* ... populate necessary config fields ... */ minSOCForEV: config.minSOCForEV };
             if (config.evChargingEnabled && providerData.evRules && providerData.evRules.length > 0) {
-                dailyEVChargeKWh = (config.evDailyKM / 100) * config.evEfficiency;
+                 dailyEVChargeKWh = (config.evDailyKM / 100) * config.evEfficiency;
             }
-            const simResults = simulateDay(trueHourlyConsumption, totalHourlySolar, providerData, batteryConfig, currentSOC, dailyEVChargeKWh, config);
+
+            // --- Run Simulation ---
+            const simResults = simulateDay(trueHourlyConsumption, totalHourlySolar_upgraded, providerData, batteryConfig, currentSOC, dailyEVChargeKWh, configForSim);
             const dailyBreakdown = simResults.dailyBreakdown;
 
+            // --- Log Raw Data (Year 1 only) ---
             if (year === 1) {
                 const rawSeason = rawData.system[providerData.id].year1[season];
                 if (rawSeason) {
-                    rawSeason.days += daysInQuarter;
-                    rawSeason.peakKWh += dailyBreakdown.peakKWh * daysInQuarter;
-                    rawSeason.shoulderKWh += dailyBreakdown.shoulderKWh * daysInQuarter;
-                    rawSeason.offPeakKWh += dailyBreakdown.offPeakKWh * daysInQuarter;
-                    rawSeason.tier1ExportKWh += dailyBreakdown.tier1ExportKWh * daysInQuarter;
-                    rawSeason.tier2ExportKWh += dailyBreakdown.tier2ExportKWh * daysInQuarter;
-                    rawSeason.gridChargeKWh += dailyBreakdown.gridChargeKWh * daysInQuarter;
-                    rawSeason.solarChargeKWh += dailyBreakdown.solarChargeKWh * daysInQuarter;
-                    rawSeason.gridChargeCost += simResults.gridChargeCost * daysInQuarter;
-                    rawSeason.evLoadKWh += dailyBreakdown.evChargedKWh * daysInQuarter;
+                    rawSeason.days += daysInQ;
+                    // Log imports based on sim results * days
+                    rawSeason.peakKWh += dailyBreakdown.peakKWh * daysInQ;
+                    rawSeason.shoulderKWh += dailyBreakdown.shoulderKWh * daysInQ;
+                    rawSeason.offPeakKWh += dailyBreakdown.offPeakKWh * daysInQ;
+                    rawSeason.tier1ExportKWh += dailyBreakdown.tier1ExportKWh * daysInQ;
+                    rawSeason.tier2ExportKWh += dailyBreakdown.tier2ExportKWh * daysInQ;
+                    rawSeason.gridChargeKWh += dailyBreakdown.gridChargeKWh * daysInQ;
+                    rawSeason.solarChargeKWh += dailyBreakdown.solarChargeKWh * daysInQ;
+                    rawSeason.gridChargeCost += simResults.gridChargeCost * daysInQ;
+                    rawSeason.evLoadKWh += dailyBreakdown.evChargedKWh * daysInQ;
                     if (!config.moveControlledLoad) {
-                        rawSeason.controlledLoadKWh += quarter.avgControlledLoad * daysInQuarter;
+                       rawSeason.controlledLoadKWh += avgControlledLoad * daysInQ;
                     }
                 }
             }
 
+            // --- Calculate Costs ---
             let dailyEnergyCost = simResults.gridChargeCost || 0;
             dailyEnergyCost += importCalculator(providerData.importRules, dailyBreakdown, { rate: config.tariffEscalation, year: year });
             dailyEnergyCost -= exportCalculator(providerData.exportRules, dailyBreakdown, year, fitConfig, getDegradedFitRate);
-            
+
             let totalDailyAdjustment = (providerData.dailyCharge || 0) + dailyEnergyCost;
-            totalCostForPeriod += (totalDailyAdjustment + dailyControlledLoadCost) * daysInQuarter;
+            // Apply special conditions using dailyBreakdown
+            totalDailyAdjustment = applySpecialConditions(totalDailyAdjustment, dailyBreakdown, providerData.specialConditions, `2025-${q.split('_')[0] === 'Q1' ? '01' : q.split('_')[0] === 'Q2' ? '04' : q.split('_')[0] === 'Q3' ? '07' : '10'}-01`); // Use dummy date for month check
+            totalDailyAdjustment += dailyControlledLoadCost; // Add controlled load cost if applicable
+
+            // Add cost for the whole period
+            totalCostForPeriod += totalDailyAdjustment * daysInQ;
         }
-        annualCost = totalCostForPeriod;
+        // Annualize based on total days entered by user
+        annualCost = totalCostForPeriod * (365 / config.manualTotalDays);
 
     // 5. Handle CSV Mode simulation
     } else {
@@ -770,43 +821,83 @@ function calculateBaseline(config, simulationData, electricityData, rawData, fin
         : electricityData.some(d => d.controlledLoad && d.controlledLoad.reduce((a, b) => a + b, 0) > 0);
 
     // 4. Handle Manual Mode simulation
-    if (config.useManual) {
+if (config.useManual) {
         let totalCostForPeriod = 0;
-        const daysInQuarter = 365 / 4;
         controlledLoadRateInfo = getControlledLoadRate(baselineProvider); // Assign value
 
         for (const q in simulationData) {
             const quarter = simulationData[q];
             const season = q.split('_')[1];
+            const daysInQ = quarter.days || (config.manualTotalDays / 4); // Use user days or estimate
 
-            const hourlyConsumption = generateHourlyConsumptionProfileFromDailyTOU(quarter.avgPeak, quarter.avgShoulder, quarter.avgOffPeak, baselineProvider.importRules);
-            const degradedExistingSolar = (config.existingSolarKW * config.manualSolarProfile) * Math.pow(1 - config.solarDegradation, config.existingSystemAge);
-            const hourlySolar = generateHourlySolarProfileFromDaily(degradedExistingSolar, q);
+            if (daysInQ <= 0) continue; // Skip quarters with no days
 
-            const simResults = simulateDay(hourlyConsumption, hourlySolar, baselineProvider, existingBatteryConfig, 0);
+// --- Calculate Daily Averages from Quarterly Totals ---
+            let avgPeakImport = 0;
+            let avgShoulderImport = 0;
+            let avgOffPeakImport = 0;
+            let avgFlatImport = 0; // Add variable for flat rate average
+
+            if (quarter.isFlatRate) {
+                avgFlatImport = (quarter.totalFlatImport || 0) / daysInQ;
+                // For simulation consistency, assign the flat import average to the 'Off-Peak' bucket
+                // as generateHourlyConsumptionProfileFromDailyTOU spreads Off-Peak if no TOU rules exist.
+                avgOffPeakImport = avgFlatImport;
+            } else {
+                avgPeakImport = (quarter.totalPeakImport || 0) / daysInQ;
+                avgShoulderImport = (quarter.totalShoulderImport || 0) / daysInQ;
+                avgOffPeakImport = (quarter.totalOffPeakImport || 0) / daysInQ;
+            }
+            // These are calculated the same way regardless of rate type
+            const avgExport = (quarter.totalExport || 0) / daysInQ;
+            const avgControlledLoad = (quarter.totalControlledLoad || 0) / daysInQ;
+
+			// --- Reconstruct Daily Total Consumption ---
+            // Calculate average daily solar generation from the user's total input
+            const avgSolarGeneration_existing = (quarter.totalSolar / daysInQ) * Math.pow(1 - config.solarDegradation, config.existingSystemAge); // Apply initial degradation
+            const avgSelfConsumed_existing = Math.max(0, avgSolarGeneration_existing - avgExport);
+            const dailyTotalConsumption = avgPeakImport + avgShoulderImport + avgOffPeakImport + avgSelfConsumed_existing; // Correct calculation
+
+			// --- Generate HOURLY profiles based on Daily Averages ---
+            const hourlyConsumption = generateHourlyConsumptionProfileFromDailyTOU(avgPeakImport, avgShoulderImport, avgOffPeakImport, baselineProvider.importRules);
+            const hourlySelfConsumed = generateHourlySolarProfileFromDaily(avgSelfConsumed_existing, q);
+            const trueHourlyConsumption = hourlyConsumption.map((imp, h) => imp + (hourlySelfConsumed[h] || 0));
+			
+			// Generate hourly solar for the existing system using the calculated daily average
+            const hourlySolar_existing = generateHourlySolarProfileFromDaily(avgSolarGeneration_existing, q);
+
+            // --- Run Simulation ---
+            const simResults = simulateDay(trueHourlyConsumption, hourlySolar_existing, baselineProvider, existingBatteryConfig, 0);
             const dailyBreakdown = simResults.dailyBreakdown;
 
+            // --- Log Raw Data (using calculated daily averages) ---
             if (rawData.baseline.year1[season]) {
                 const rawSeason = rawData.baseline.year1[season];
-                rawSeason.days += daysInQuarter;
-                rawSeason.peakKWh += dailyBreakdown.peakKWh * daysInQuarter;
-                rawSeason.shoulderKWh += dailyBreakdown.shoulderKWh * daysInQuarter;
-                rawSeason.offPeakKWh += dailyBreakdown.offPeakKWh * daysInQuarter;
-                rawSeason.tier1ExportKWh += dailyBreakdown.tier1ExportKWh * daysInQuarter;
-                rawSeason.tier2ExportKWh += dailyBreakdown.tier2ExportKWh * daysInQuarter;
-                rawSeason.controlledLoadKWh += quarter.avgControlledLoad * daysInQuarter;
-                rawSeason.solarChargeKWh += dailyBreakdown.solarChargeKWh * daysInQuarter;
-                rawSeason.gridChargeKWh += dailyBreakdown.gridChargeKWh * daysInQuarter;
+                rawSeason.days += daysInQ; // Use actual days for the period
+                rawSeason.peakKWh += avgPeakImport * daysInQ;
+                rawSeason.shoulderKWh += avgShoulderImport * daysInQ;
+                rawSeason.offPeakKWh += avgOffPeakImport * daysInQ;
+                // Note: Tiered export isn't accurately modeled here, group into Tier 1
+                const dailyTotalExport = avgExport;
+                rawSeason.tier1ExportKWh += dailyTotalExport * daysInQ;
+                rawSeason.controlledLoadKWh += avgControlledLoad * daysInQ;
+                // Solar/Grid charge aren't easily derived from totals, use sim result * days
+                rawSeason.solarChargeKWh += dailyBreakdown.solarChargeKWh * daysInQ;
+                rawSeason.gridChargeKWh += dailyBreakdown.gridChargeKWh * daysInQ;
             }
 
+            // --- Calculate Costs ---
             let dailyEnergyCost = importCalculator(baselineProvider.importRules, dailyBreakdown, { rate: 0, year: 1 });
             dailyEnergyCost -= exportCalculator(baselineProvider.exportRules, dailyBreakdown, 1, fitConfig, getDegradedFitRate);
 
-            const dailyControlledLoadCost = quarter.avgControlledLoad * escalate(controlledLoadRateInfo.rate, config.tariffEscalation, 1);
+            const dailyControlledLoadCost = avgControlledLoad * escalate(controlledLoadRateInfo.rate, config.tariffEscalation, 1);
             let totalDailyAdjustment = (baselineProvider.dailyCharge || 0) + dailyEnergyCost + dailyControlledLoadCost;
-            totalCostForPeriod += totalDailyAdjustment * daysInQuarter;
+
+            // Add cost for the whole period
+            totalCostForPeriod += totalDailyAdjustment * daysInQ;
         }
-        annualizedBaseCost = totalCostForPeriod;
+        // Annualize based on total days entered by user
+        annualizedBaseCost = totalCostForPeriod * (365 / config.manualTotalDays);
 
     // 5. Handle CSV Mode simulation
     } else if (electricityData) {
@@ -957,71 +1048,93 @@ export function runSimulation(config, simulationData, electricityData) {
 }
 
 /**
- * Provides a simple, heuristic-based sizing recommendation based on annual energy needs.
+ * Provides a simple, heuristic-based sizing recommendation based on annual energy needs,
+ * now using consistent daily average inputs for both modes.
  * @param {number} coverageTarget - The desired percentage of annual consumption to be met by solar.
- * @param {object} simulationData - Seasonal average consumption data.
+ * @param {object} simulationData - Object containing SEASONAL DAILY AVERAGES (e.g., avgPeak, avgShoulder, avgOffPeak, avgSolar, avgSolarProfile).
+ * @param {object} config - The main configuration object (only used for existingSolarKW in CSV yield estimation).
+ * @param {boolean} isManualMode - Flag indicating if manual mode is active.
  * @returns {object} An object with recommended solar, battery, and inverter sizes.
  */
-export function calculateSizingRecommendations(coverageTarget, simulationData) {
+export function calculateSizingRecommendations(coverageTarget, simulationData, config, isManualMode) {
+	if (!config) {
+        console.error("calculateSizingRecommendations called without a valid config object!");
+        // Return default/empty recommendations to prevent further errors
+        return { solar: 0, battery: 0, inverter: 0, coverageTarget: coverageTarget };
+    }
     if (!simulationData || Object.keys(simulationData).length === 0) {
         return { solar: 0, battery: 0, inverter: 0, coverageTarget: coverageTarget };
     }
-    const daysPerQuarter = { 
-        [SEASONS.SUMMER]: 90, 
-        [SEASONS.AUTUMN]: 91, 
-        [SEASONS.WINTER]: 92, 
-        [SEASONS.SPRING]: 92 
-    }
-    let totalKWh = 0, totalEveningKWh = 0, totalDays = 0;
-    
-    // Calculate total annual consumption and "evening" consumption from seasonal averages.
-    for (const quarter in simulationData) {
-        if(simulationData[quarter]){
-            const q = simulationData[quarter];
-            const daysInQ = daysPerQuarter[quarter];
-            if (daysInQ) {
-                totalKWh += (q.avgPeak + q.avgShoulder + q.avgOffPeak) * daysInQ;
-                // Heuristic: "Evening" is all peak usage plus half of off-peak (overnight) usage.
-                totalEveningKWh += (q.avgPeak + (q.avgOffPeak * 0.5)) * daysInQ;
-                totalDays += daysInQ;
-            }
+
+    // Use actual days from simulationData if available (manual mode), estimate otherwise
+    const daysPerQuarter = {
+        [SEASONS.SUMMER]: simulationData[SEASONS.SUMMER]?.days || 90,
+        [SEASONS.AUTUMN]: simulationData[SEASONS.AUTUMN]?.days || 91,
+        [SEASONS.WINTER]: simulationData[SEASONS.WINTER]?.days || 92,
+        [SEASONS.SPRING]: simulationData[SEASONS.SPRING]?.days || 92,
+    };
+    const totalDays = Object.values(daysPerQuarter).reduce((sum, days) => sum + days, 0);
+
+    let totalAnnualKWh = 0;
+    let totalAnnualEveningKWh = 0;
+    let totalAnnualWeightedYield = 0;
+
+    // --- Calculate Annual Totals & Average Yield ---
+    for (const quarterKey in simulationData) {
+        const q = simulationData[quarterKey];
+        if (!q) continue; // Skip if a season's data is missing
+
+        const daysInQ = daysPerQuarter[quarterKey] || (totalDays / 4);
+
+        // Directly use the provided daily averages
+        const avgPeakForCalc = q.avgPeak || 0;
+        const avgShoulderForCalc = q.avgShoulder || 0;
+        const avgOffPeakForCalc = q.avgOffPeak || 0;
+        const avgSolarForCalc = q.avgSolar || 0;
+
+        totalAnnualKWh += (avgPeakForCalc + avgShoulderForCalc + avgOffPeakForCalc) * daysInQ;
+        // Evening load heuristic (Total Peak + Half Total OffPeak Consumption)
+        totalAnnualEveningKWh += (avgPeakForCalc + (avgOffPeakForCalc * 0.5)) * daysInQ;
+
+        // Weighted yield calculation for annual average
+        let seasonalYield = 4.0; // Default
+        if (isManualMode) {
+            seasonalYield = q.avgSolarProfile || 4.0; // Use yield passed from manual averages
+        } else {
+			// Estimate yield: Avg Daily Solar / Existing System Size (if available) - CSV Mode Only
+			if (config && config.existingSolarKW > 0 && avgSolarForCalc > 0) {
+			 seasonalYield = avgSolarForCalc / config.existingSolarKW;
+			}
         }
+        totalAnnualWeightedYield += seasonalYield * daysInQ;
     }
-    
-    // Determine the average daily solar generation per kW of panels.
-    // Use data from existing system if available, otherwise use a default.
-    let avgDailyGenerationPerKW = 4.0; 
-    const existingKW = getNumericInput('existingSolarKW');
-    if (state.solarData && state.solarData.length > 0 && existingKW > 0) {
-        const totalGeneration = state.solarData.reduce((acc, day) => acc + day.hourly.reduce((a, b) => a + b, 0), 0);
-        const avgDailyGeneration = totalGeneration / state.solarData.length;
-        avgDailyGenerationPerKW = avgDailyGeneration / existingKW;
-    }
-    
-    const avgDailyConsumption = totalDays > 0 ? totalKWh / totalDays : 0;
-    const totalAnnualKWh = avgDailyConsumption * 365;
-    const avgDailyEveningConsumption = totalDays > 0 ? totalEveningKWh / totalDays : 0;
-    
-    // Calculate required solar size to meet the coverage target.
+
+    const avgDailyConsumption = totalDays > 0 ? totalAnnualKWh / totalDays : 0;
+    const avgDailyEveningConsumption = totalDays > 0 ? totalAnnualEveningKWh / totalDays : 0;
+    const annualAvgDailyYieldPerKW = totalDays > 0 ? totalAnnualWeightedYield / totalDays : 4.0; // Use calculated average or default
+
+    // --- Recommend Solar ---
     const targetAnnualGeneration = totalAnnualKWh * (coverageTarget / 100);
-    let recommendedSolarKW = (avgDailyGenerationPerKW > 0) ? targetAnnualGeneration / (avgDailyGenerationPerKW * 365) : 0;
-    recommendedSolarKW = Math.round(recommendedSolarKW * 2) / 2; // Round to nearest 0.5 kW.
-    
-    // Recommend battery size based on average evening consumption, fitting to common sizes.
-    const scalingFactor = coverageTarget / 90; // Scale recommendation based on user aggressiveness.
+    let recommendedSolarKW = (annualAvgDailyYieldPerKW > 0 && totalAnnualKWh > 0) ? targetAnnualGeneration / (annualAvgDailyYieldPerKW * 365) : 0; // Check totalAnnualKWh too
+    recommendedSolarKW = Math.max(0, Math.round(recommendedSolarKW * 2) / 2); // Round to nearest 0.5 kW, ensure non-negative
+
+    // --- Recommend Battery ---
+    const scalingFactor = Math.max(0.5, coverageTarget / 90);
     const targetEveningConsumption = avgDailyEveningConsumption * scalingFactor;
     let recommendedBatteryKWh;
     if (targetEveningConsumption <= 5) recommendedBatteryKWh = 5;
     else if (targetEveningConsumption <= 10) recommendedBatteryKWh = 10;
     else if (targetEveningConsumption <= 13.5) recommendedBatteryKWh = 13.5;
     else recommendedBatteryKWh = Math.round(targetEveningConsumption);
-    
-    // Recommend inverter size based on solar panel size.
+    recommendedBatteryKWh = Math.max(0, recommendedBatteryKWh);
+
+    // --- Recommend Inverter ---
     let recommendedInverterKW;
     if (recommendedSolarKW <= 6.6) recommendedInverterKW = 5;
     else if (recommendedSolarKW <= 10) recommendedInverterKW = 8;
     else recommendedInverterKW = 10;
-    
+    recommendedInverterKW = Math.max(0, recommendedInverterKW);
+
     return { solar: recommendedSolarKW, battery: recommendedBatteryKWh, inverter: recommendedInverterKW, coverageTarget: coverageTarget };
 }
 
@@ -1115,7 +1228,7 @@ export function calculateDetailedSizing(correctedElectricityData, solarData, con
     const inverterCoverageDays = dailyMaxHourData.filter(d => d <= finalInverterRec).length;
     
     // Get the heuristic recommendation as a comparison.
-    const heuristicRecs = calculateSizingRecommendations(config.recommendationCoverageTarget, simulationData);
+    const heuristicRecs = calculateSizingRecommendations(config.recommendationCoverageTarget, simulationData, config, false);
 
     // --- Blackout Sizing Calculation ---
     let blackoutResults = null;

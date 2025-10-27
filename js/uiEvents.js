@@ -1,5 +1,5 @@
 // js/uiEvents.js 
-// Version 1.3.2
+// Version 1.3.4
 // This module serves as the central hub for handling all user interactions.
 // It attaches event listeners to UI elements and calls the appropriate business logic
 // from other modules in response to user actions (e.g., clicks, changes).
@@ -229,11 +229,47 @@ export function toggleExistingSolar() {
  */
 export function wireStaticEvents() {
     document.getElementById('noExistingSolar')?.addEventListener('change', toggleExistingSolar);
-    // Toggle between CSV and Manual input sections
-    document.getElementById('manualInputToggle')?.addEventListener('change', (e) => {
-        document.getElementById('csvInputSection').style.display = e.target.checked ? 'none' : 'block';
-        document.getElementById('manualInputSection').style.display = e.target.checked ? 'block' : 'none';
+// Toggle between CSV and Manual input sections
+document.getElementById('manualInputToggle')?.addEventListener('change', (e) => {
+        const isManual = e.target.checked;
+        const csvDisplay = isManual ? 'none' : 'block';
+        const manualDisplay = isManual ? 'block' : 'none';
+
+        // Hide/show the main sections
+        document.getElementById('csvInputSection').style.display = csvDisplay;
+        document.getElementById('manualInputSection').style.display = manualDisplay;
+
+        // Also hide/show the advanced CSV option sections
+        document.getElementById('advanced-usage-options').style.display = csvDisplay;
+        document.getElementById('advanced-solar-options').style.display = csvDisplay;
+
+        // --- ADDED --- Show/Hide the Manual Yield input in the New System section
+        const yieldContainer = document.getElementById('manual-yield-input-container');
+        if (yieldContainer) {
+            yieldContainer.style.display = isManual ? 'block' : 'none'; 
+        }
     });
+	// Initial call to set correct visibility on page load
+    document.getElementById('manualInputToggle')?.dispatchEvent(new Event('change'));
+	// Listener for the Manual Flat Rate Toggle
+    const flatRateToggle = document.getElementById('manualFlatRateToggle');
+    flatRateToggle?.addEventListener('change', (e) => {
+        const isFlatRate = e.target.checked;
+        const touDisplay = isFlatRate ? 'none' : 'block'; // Hide TOU if flat rate is checked
+        const flatDisplay = isFlatRate ? 'block' : 'none'; // Show Flat if flat rate is checked
+
+        // Find all TOU and Flat Rate labels across all seasons
+        document.querySelectorAll('.manual-tou-import-label').forEach(label => {
+            label.style.display = touDisplay;
+        });
+        document.querySelectorAll('.manual-total-import-label').forEach(label => {
+            label.style.display = flatDisplay;
+        });
+    });
+    // Initial call to set the correct state on page load
+    if (flatRateToggle) {
+         flatRateToggle.dispatchEvent(new Event('change'));
+    }
     // Toggle visibility of all debug-related buttons and containers
     document.getElementById('debugToggle')?.addEventListener('change', (e) => {
         const display = e.target.checked ? 'inline-block' : 'none';
@@ -573,29 +609,54 @@ function handleCalculateSizing() {
 
         // Use a timeout to allow the UI to update with "Calculating..." before the main work begins.
         setTimeout(() => {
-            if (config.useManual) {
+if (config.useManual) {
                 // --- MANUAL MODE LOGIC ---
-                // Gather the daily averages directly from the manual input fields.
-                const simulationData = {
-                    'Q1_Summer': { avgPeak: getNumericInput("summerDailyPeak"), avgShoulder: getNumericInput("summerDailyShoulder"), avgOffPeak: getNumericInput("summerDailyOffPeak") },
-                    'Q2_Autumn': { avgPeak: getNumericInput("autumnDailyPeak"), avgShoulder: getNumericInput("autumnDailyShoulder"), avgOffPeak: getNumericInput("autumnDailyOffPeak") },
-                    'Q3_Winter': { avgPeak: getNumericInput("winterDailyPeak"), avgShoulder: getNumericInput("winterDailyShoulder"), avgOffPeak: getNumericInput("winterDailyOffPeak") },
-                    'Q4_Spring': { avgPeak: getNumericInput("springDailyPeak"), avgShoulder: getNumericInput("springDailyShoulder"), avgOffPeak: getNumericInput("springDailyOffPeak") },
-                };
-                
-                // Run only the simple (heuristic) sizing calculation.
-                const heuristicRecs = calculateSizingRecommendations(config.recommendationCoverageTarget, simulationData);
+                // 1. Calculate required Daily Averages from User's Quarterly Totals
+                const manualDailyAverages = {};
+                let validManualData = false;
+                for (const quarterKey in config.manualData) {
+                    const q = config.manualData[quarterKey];
+                    const daysInQ = q.days || (config.manualTotalDays / 4);
 
-                // Create a simplified results object.
-                const sizingResults = {
-                    heuristic: heuristicRecs,
-                    detailed: null, // Detailed results are not available in manual mode
-                    blackout: null  // Blackout results are not available in manual mode
-                };
+                    if (daysInQ > 0) {
+                        validManualData = true;
+                        const avgPeakImport = (q.totalPeakImport || 0) / daysInQ;
+                        const avgShoulderImport = (q.totalShoulderImport || 0) / daysInQ;
+                        const avgOffPeakImport = (q.totalOffPeakImport || 0) / daysInQ;
+                        const avgSolar = (q.totalSolar || 0) / daysInQ; // Avg Daily Solar Gen
+                        const avgExport = (q.totalExport || 0) / daysInQ;
+                        const avgControlledLoad = (q.totalControlledLoad || 0) / daysInQ;
+                        const avgSolarProfile = q.avgSolarProfile || 4.0; // Get yield or default
 
+                        // Reconstruct avg daily total consumption
+                        const avgSelfConsumed = Math.max(0, avgSolar - avgExport);
+                        const avgTotalConsumption = avgPeakImport + avgShoulderImport + avgOffPeakImport + avgSelfConsumed;
+
+                        manualDailyAverages[quarterKey] = {
+                            days: daysInQ, // Keep days for weighting
+                            avgPeak: avgTotalConsumption * (avgPeakImport / (avgPeakImport + avgShoulderImport + avgOffPeakImport || 1)), // Distribute total consumption proportionally to import profile
+                            avgShoulder: avgTotalConsumption * (avgShoulderImport / (avgPeakImport + avgShoulderImport + avgOffPeakImport || 1)),
+                            avgOffPeak: avgTotalConsumption * (avgOffPeakImport / (avgPeakImport + avgShoulderImport + avgOffPeakImport || 1)),
+                            avgSolar: avgSolar, // Pass through avg daily solar
+                            avgSolarProfile: avgSolarProfile // Pass through yield
+                            // We don't need export or controlled load passed to sizing function
+                        };
+                    } else {
+                         manualDailyAverages[quarterKey] = null; // Mark missing data
+                    }
+                }
+
+                if (!validManualData) {
+                    displayError("Please enter valid totals and days for at least one season in Manual Mode.", "sizing-error-message");
+                    return;
+                }
+
+                // 2. Run sizing calculation using the calculated Daily Averages
+                const heuristicRecs = calculateSizingRecommendations(config.recommendationCoverageTarget, manualDailyAverages, config, true);
+
+                // 3. Render results (no change here)
+                const sizingResults = { heuristic: heuristicRecs, detailed: null, blackout: null };
                 renderSizingResults(sizingResults, state, config);
-                
-                // Clear the area where the detailed charts would normally appear.
                 const newSystemEstimatesTable = document.getElementById("newSystemEstimatesTable");
                 if (newSystemEstimatesTable) {
                     newSystemEstimatesTable.innerHTML = '<p><em>Detailed sizing charts and blackout protection require CSV data.</em></p>';

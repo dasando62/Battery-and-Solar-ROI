@@ -1,5 +1,5 @@
 // js/uiRender.js
-// Version 1.3.2
+// Version 1.3.4
 // This module is responsible for all UI rendering that occurs AFTER a calculation
 // or analysis is complete. This includes displaying financial results tables,
 // rendering charts, and showing system sizing recommendations.
@@ -381,6 +381,12 @@ function renderCharts(financials, config) {
     }
     const ctx = document.getElementById("savingsChart")?.getContext("2d");
     if (!ctx) return;
+	// --- ADD VALIDATION FOR numYears ---
+    const numYears = (config && Number.isInteger(config.numYears) && config.numYears > 0) ? config.numYears : 15; // Default to 15 if invalid
+    if (numYears !== config.numYears) {
+        console.warn(`Invalid config.numYears (${config.numYears}) detected in renderCharts. Using default ${numYears}.`);
+    }
+    // --- END VALIDATION ---	
 
     // Create a dataset for each provider's cumulative savings.
     const datasets = config.selectedProviders.map(pKey => {
@@ -404,7 +410,7 @@ function renderCharts(financials, config) {
         const systemCostForProvider = config.initialSystemCost - (providerDetails.rebate || 0);
         return {
             label: `${providerDetails.name} Capital Outlay`,
-            data: Array(config.numYears).fill(systemCostForProvider),
+            data: Array(numYears).fill(systemCostForProvider),
             borderColor: datasets.find(ds => ds.label.startsWith(providerDetails.name))?.borderColor || '#ccc',
             borderDash: [5, 5], // Make it a dashed line
             fill: false,
@@ -417,7 +423,7 @@ function renderCharts(financials, config) {
     state.savingsChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: Array.from({ length: config.numYears }, (_, i) => `Year ${i + 1}`),
+            labels: Array.from({ length: numYears }, (_, i) => `Year ${i + 1}`),
             datasets: [...datasets, ...costDatasets]
         },
         options: {

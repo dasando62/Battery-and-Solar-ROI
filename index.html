@@ -2,7 +2,7 @@
 <!--/*
  * Home Battery & Solar ROI Analyser
  * Copyright (c) 2025 [DaSando62]
- * Versin 1.3.2
+ * Versin 1.3.4
  *
  *
  * This software is licensed under the MIT License.
@@ -108,55 +108,69 @@
 	<div id="data-input-error" class="error-message"></div>
 	<section>    
     <div id="manualInputSection" style="display:none;">
-    <p>Enter your estimated average daily values for each season. All values are in kWh.</p>
-    <div title="Enter your location's average daily solar yield (kWh per kW of panel capacity).&#10;If using data from an existing system, this value should reflect its current performance.&#10;The analyser will use this as the starting point and apply future degradation from there.">
-    <label><strong>Average Daily Solar Generation per kW of Panels (kWh):</strong>
-        <input type="number" step="0.1" id="manualSolarProfile" value="4.0">
-    </label>
-	</div>
+    <p>Enter the <b>total values from your quarterly bill</b> for each season. All values are in <b>kWh</b>.</p>
+	<p style="font-size: 0.85em; font-style: italic; color: #666; margin-top: -10px; margin-bottom: 15px;">
+		Tip: Find your 'Total Solar Generation' for the period in your solar inverter's monitoring app or web portal. If you do not have access to your solar inverters generation data then you can use a site like SunSpot.org.au to estimate them for you.
+	</p>
     <hr>
+	<label style="margin-bottom: 15px; font-weight: bold;">
+        <input type="checkbox" id="manualFlatRateToggle"> My tariff is a simple Flat Rate (no Peak/Shoulder/Off-Peak times)
+    </label>
+    <hr style="margin-top: -5px;">
 
     <details class="collapsible-section" open>
         <summary>☀️ Summer (Dec, Jan, Feb)</summary>
         <div class="subsettings">
-            <label>Average Daily Peak Consumption (kWh): <input type="number" step="0.01" id="summerDailyPeak" value="10"></label>
-            <label>Average Daily Shoulder Consumption (kWh): <input type="number" step="0.01" id="summerDailyShoulder" value="5"></label>
-            <label>Average Daily Off-Peak Consumption (kWh): <input type="number" step="0.01" id="summerDailyOffPeak" value="3"></label>
-			<label>Average Daily Controlled Load (kWh): <input type="number" step="0.01" id="summerDailyControlledLoad" value="5.0"></label>
-            <label>Average Daily Solar Generation (kWh/day): <input type="number" step="0.01" id="summerDailySolar" value="25"></label>
-        </div>
+			<label>Number of Days in Period: <input type="number" step="1" id="summerDays" value="90"></label>
+			<label class="manual-total-import-label" style="display: none;">Total Import for Period (kWh): <input type="number" step="1" id="summerTotalImport" value="1620"></label>
+            <label class="manual-tou-import-label">Total Peak Import for Period (kWh): <input type="number" step="1" id="summerTotalPeakImport" value="900"></label> 
+			<label class="manual-tou-import-label">Total Shoulder Import for Period (kWh): <input type="number" step="1" id="summerTotalShoulderImport" value="450"></label>
+			<label class="manual-tou-import-label">Total Off-Peak Import for Period (kWh): <input type="number" step="1" id="summerTotalOffPeakImport" value="270"></label>
+			<label>Total Controlled Load for Period (kWh): <input type="number" step="1" id="summerTotalControlledLoad" value="450"></label>
+			<label>Total Export for Period (kWh): <input type="number" step="1" id="summerTotalExport" value="1350"></label>
+			<label>Total Solar Generation for Period (kWh): <input type="number" step="1" id="summerTotalSolar" value="2250"></label>
+		</div>
     </details>
 
     <details class="collapsible-section">
         <summary>🍂 Autumn (Mar, Apr, May)</summary>
         <div class="subsettings">
-            <label>Average Daily Peak Consumption (kWh): <input type="number" step="0.01" id="autumnDailyPeak" value="8"></label>
-            <label>Average Daily Shoulder Consumption (kWh): <input type="number" step="0.01" id="autumnDailyShoulder" value="6"></label>
-            <label>Average Daily Off-Peak Consumption (kWh): <input type="number" step="0.01" id="autumnDailyOffPeak" value="4"></label>
-			<label>Average Daily Controlled Load (kWh): <input type="number" step="0.01" id="autumnDailyControlledLoad" value="5.0"></label>
-            <label>Average Daily Solar Generation (kWh/day): <input type="number" step="0.01" id="autumnDailySolar" value="20"></label>
+			<label>Number of Days in Period: <input type="number" step="1" id="autumnDays" value="91"></label>
+			<label class="manual-total-import-label" style="display: none;">Total Import for Period (kWh): <input type="number" step="1" id="autumnTotalImport" value="1638"></label>
+            <label class="manual-tou-import-label">Total Peak Import for Period (kWh): <input type="number" step="1" id="autumnTotalPeakImport" value="728"></label> 
+			<label class="manual-tou-import-label">Total Shoulder Import for Period (kWh): <input type="number" step="1" id="autumnTotalShoulderImport" value="546"></label>
+			<label class="manual-tou-import-label">Total Off-Peak Import for Period (kWh): <input type="number" step="1" id="autumnTotalOffPeakImport" value="364"></label>
+			<label>Total Controlled Load for Period (kWh): <input type="number" step="1" id="autumnTotalControlledLoad" value="455"></label>
+			<label>Total Export for Period (kWh): <input type="number" step="1" id="autumnTotalExport" value="910"></label>
+			<label>Total Solar Generation for Period (kWh): <input type="number" step="1" id="autumnTotalSolar" value="1820"></label>
         </div>
     </details>
 
     <details class="collapsible-section">
         <summary>❄️ Winter (Jun, Jul, Aug)</summary>
         <div class="subsettings">
-            <label>Average Daily Peak Consumption (kWh): <input type="number" step="0.01" id="winterDailyPeak" value="12"></label>
-            <label>Average Daily Shoulder Consumption (kWh): <input type="number" step="0.01" id="winterDailyShoulder" value="7"></label>
-            <label>Average Daily Off-Peak Consumption (kWh): <input type="number" step="0.01" id="winterDailyOffPeak" value="5"></label>
-			<label>Average Daily Controlled Load (kWh): <input type="number" step="0.01" id="winterDailyControlledLoad" value="6.0"></label>
-            <label>Average Daily Solar Generation (kWh/day): <input type="number" step="0.01" id="winterDailySolar" value="15"></label>
+			<label>Number of Days in Period: <input type="number" step="1" id="winterDays" value="92"></label>
+			<label class="manual-total-import-label" style="display: none;">Total Import for Period (kWh): <input type="number" step="1" id="winterTotalImport" value="2208"></label>
+            <label class="manual-tou-import-label">Total Peak Import for Period (kWh): <input type="number" step="1" id="winterTotalPeakImport" value="1104"></label> 
+			<label class="manual-tou-import-label">Total Shoulder Import for Period (kWh): <input type="number" step="1" id="winterTotalShoulderImport" value="644"></label>
+			<label class="manual-tou-import-label">Total Off-Peak Import for Period (kWh): <input type="number" step="1" id="winterTotalOffPeakImport" value="460"></label>
+			<label>Total Controlled Load for Period (kWh): <input type="number" step="1" id="winterTotalControlledLoad" value="552"></label>
+			<label>Total Export for Period (kWh): <input type="number" step="1" id="winterTotalExport" value="460"></label>
+			<label>Total Solar Generation for Period (kWh): <input type="number" step="1" id="winterTotalSolar" value="1380"></label>
         </div>
     </details>
 
     <details class="collapsible-section">
         <summary>🌸 Spring (Sep, Oct, Nov)</summary>
         <div class="subsettings">
-            <label>Average Daily Peak Consumption (kWh): <input type="number" step="0.01" id="springDailyPeak" value="7"></label>
-            <label>Average Daily Shoulder Consumption (kWh): <input type="number" step="0.01" id="springDailyShoulder" value="5"></label>
-            <label>Average Daily Off-Peak Consumption (kWh): <input type="number" step="0.01" id="springDailyOffPeak" value="3"></label>
-			<label>Average Daily Controlled Load (kWh): <input type="number" step="0.01" id="springDailyControlledLoad" value="5.0"></label>
-            <label>Average Daily Solar Generation (kWh/day): <input type="number" step="0.01" id="springDailySolar" value="22"></label>
+			<label>Number of Days in Period: <input type="number" step="1" id="springDays" value="92"></label>
+			<label class="manual-total-import-label" style="display: none;">Total Import for Period (kWh): <input type="number" step="1" id="springTotalImport" value="1380"></label>
+            <label class="manual-tou-import-label">Total Peak Import for Period (kWh): <input type="number" step="1" id="springTotalPeakImport" value="644"></label> 
+			<label class="manual-tou-import-label">Total Shoulder Import for Period (kWh): <input type="number" step="1" id="springTotalShoulderImport" value="460"></label>
+			<label class="manual-tou-import-label">Total Off-Peak Import for Period (kWh): <input type="number" step="1" id="springTotalOffPeakImport" value="276"></label>
+			<label>Total Controlled Load for Period (kWh): <input type="number" step="1" id="springTotalControlledLoad" value="460"></label>
+			<label>Total Export for Period (kWh): <input type="number" step="1" id="springTotalExport" value="1104"></label>
+			<label>Total Solar Generation for Period (kWh): <input type="number" step="1" id="springTotalSolar" value="2024"></label>
         </div>
     </details>
 </div>
@@ -239,6 +253,16 @@
     <h2>3. New System</h2>
     
     <label title="Enter the size of any NEW solar panels you are adding to your system. Do not include the size of your existing panels here.">Additional Solar Panel Size (kW): <input type="number" step="0.1" id="newSolarKW" value="4"></label>
+	
+	<div id="manual-yield-input-container" style="display: none;"> 
+        <label title="Enter the estimated average daily kWh generated per kW of panel capacity for your location. Used only in Manual Mode for new panels.">
+            Average Daily Solar Yield (kWh/kW):
+            <input type="number" step="0.1" id="newSolarYield" value="4.0">
+        </label>
+        <p style="font-size: 0.8em; font-style: italic; color: #666; margin-top: 8px; margin-bottom: 8px;">
+            Tip: Find this average yield value on sites like SunSpot.org.au for your location. 4.0 is a general default. This is used only in Manual Mode to estimate the output of *additional* panels.
+        </p>
+    </div>
     
     <label title="Enter the total cost for purchasing and installing the new solar panels and associated hardware (racking, isolators etc.).">Cost of Additional Solar ($): <input type="number" step="0.01" id="costSolar" value="2500"></label>
     
