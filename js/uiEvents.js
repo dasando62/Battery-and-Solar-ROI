@@ -230,7 +230,7 @@ export function toggleExistingSolar() {
 export function wireStaticEvents() {
     document.getElementById('noExistingSolar')?.addEventListener('change', toggleExistingSolar);
 // Toggle between CSV and Manual input sections
-document.getElementById('manualInputToggle')?.addEventListener('change', (e) => {
+    document.getElementById('manualInputToggle')?.addEventListener('change', (e) => {
         const isManual = e.target.checked;
         const csvDisplay = isManual ? 'none' : 'block';
         const manualDisplay = isManual ? 'block' : 'none';
@@ -239,31 +239,10 @@ document.getElementById('manualInputToggle')?.addEventListener('change', (e) => 
         document.getElementById('csvInputSection').style.display = csvDisplay;
         document.getElementById('manualInputSection').style.display = manualDisplay;
 
+        // --- ADDED FIX ---
         // Also hide/show the advanced CSV option sections
         document.getElementById('advanced-usage-options').style.display = csvDisplay;
-
-        // --- ADDED --- Show/Hide the Manual Yield input in the New System section
-        const yieldContainer = document.getElementById('manual-yield-input-container');
-        if (yieldContainer) {
-            yieldContainer.style.display = isManual ? 'block' : 'none'; 
-        }
-    });
-	// Initial call to set correct visibility on page load
-    document.getElementById('manualInputToggle')?.dispatchEvent(new Event('change'));
-	// Listener for the Manual Flat Rate Toggle
-    const flatRateToggle = document.getElementById('manualFlatRateToggle');
-    flatRateToggle?.addEventListener('change', (e) => {
-        const isFlatRate = e.target.checked;
-        const touDisplay = isFlatRate ? 'none' : 'block'; // Hide TOU if flat rate is checked
-        const flatDisplay = isFlatRate ? 'block' : 'none'; // Show Flat if flat rate is checked
-
-        // Find all TOU and Flat Rate labels across all seasons
-        document.querySelectorAll('.manual-tou-import-label').forEach(label => {
-            label.style.display = touDisplay;
-        });
-        document.querySelectorAll('.manual-total-import-label').forEach(label => {
-            label.style.display = flatDisplay;
-        });
+        document.getElementById('advanced-solar-options').style.display = csvDisplay;
     });
     // Initial call to set the correct state on page load
     if (flatRateToggle) {
