@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Walkthrough: Section 6 - Analysis Period</title>
+    <!-- Link Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Link Custom CSS -->
+    <link rel="stylesheet" href="walkthrough_style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .detail {
+            margin-bottom: 1.5rem; /* Increased spacing */
+            padding-left: 1rem;
+            border-left: 3px solid #60a5fa; /* blue-400 */
+        }
+        .image-placeholder {
+            display: block;
+            margin-top: 0.75rem;
+            margin-bottom: 0.75rem;
+            padding: 2rem 1rem;
+            border: 2px dashed #9ca3af; /* gray-400 */
+            text-align: center;
+            color: #6b7280; /* gray-500 */
+            font-style: italic;
+            border-radius: 0.375rem; /* rounded-md */
+            background-color: #f9fafb; /* gray-50 */
+        }
+         .note {
+            background-color: #eff6ff; /* blue-50 */
+            border-left: 3px solid #3b82f6; /* blue-500 */
+            padding: 0.75rem;
+            border-radius: 0.25rem;
+            margin-top: 0.5rem;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto px-4 py-8 max-w-3xl">
+        <header class="mb-6">
+            <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Back to previous page</a>
+            <h1 class="text-3xl font-bold text-blue-700">Guide: Section 6 - Analysis Period</h1>
+        </header>
+
+        <section class="bg-white p-6 rounded-lg shadow-md">
+            <p class="mb-6 text-gray-600">This section defines the overall duration of the financial simulation and how the performance of your solar panels and battery is expected to decrease over time.</p>
+             <div class="image-placeholder"><img src="images/S6.1.png" alt="Section 6 Analysis Period settings"></div>
+
+            <h2 class="text-2xl font-semibold text-blue-600 mt-6 mb-4 border-b pb-2">Simulation Duration</h2>
+
+            <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Analysis Years (System Lifespan)</h3>
+                <p>Enter the total number of years you want the simulation to run. This typically matches the expected lifespan or warranty period of the major components (e.g., 10, 15, or 20 years).</p>
+                 <div class="note">
+                    <p><strong>How it affects calculations:</strong></p>
+                    <ul class="list-disc pl-5 text-sm mt-1">
+                        <li>Determines the number of years included in the financial results table and chart.</li>
+                        <li>Affects long-term metrics like NPV and IRR, as savings further in the future are included (but may be discounted).</li>
+                        <li>Provides the timeframe over which degradation and tariff escalation are applied.</li>
+                    </ul>
+                </div>
+                 <div class="image-placeholder"><img src="images/S6.2.png" alt="Analysis years"></div>
+            </div>
+
+            <h2 class="text-2xl font-semibold text-blue-600 mt-8 mb-4 border-b pb-2">Component Degradation</h2>
+            <p class="mb-4 text-sm text-gray-600">Solar panels and batteries lose some of their capacity and efficiency over time. These inputs model that gradual decline.</p>
+
+            <div class="detail border-l-4 border-orange-500 bg-orange-50 p-4 rounded"> <!-- Highlight degradation -->
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Solar Degradation (% per year)</h3>
+                <p>Enter the estimated annual percentage decrease in your solar panels' power output. A common value is 0.5% (enter "0.5"). Check your panel datasheet for specific figures.</p>
+                 <div class="note">
+                    <p><strong>How it affects calculations:</strong></p>
+                     <ul class="list-disc pl-5 text-sm mt-1">
+                        <li>Each year, the simulation reduces the calculated solar generation (from both existing and new panels) by this percentage, compounding year after year.</li>
+                        <li>This rate is applied starting from the current age of your panels (using the "Existing System Age" from <a href="section-2-existing-system.html" class="text-blue-600 hover:underline">Section 2</a>).</li>
+                        <li>Lower solar output over time reduces savings and extends the payback period.</li>
+                    </ul>
+                </div>
+                 <div class="image-placeholder"><img src="images/S6.3.png" alt="Solar degredation"></div>
+            </div>
+
+            <div class="detail border-l-4 border-orange-500 bg-orange-50 p-4 rounded"> <!-- Highlight degradation -->
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Battery Degradation (% per year)</h3>
+                <p>Enter the estimated annual percentage decrease in your battery's usable storage capacity (kWh). Typical values range from 1% to 3% (enter "1", "2", or "3"). Check your battery warranty or datasheet.</p>
+                 <div class="note">
+                     <p><strong>How it affects calculations:</strong></p>
+                    <ul class="list-disc pl-5 text-sm mt-1">
+                         <li>Each year, the simulation reduces the total usable capacity of the battery system (both existing and new) by this percentage, compounding year after year.</li>
+                         <li>This rate is applied starting from the current age of your battery (using the "Existing System Age" from <a href="section-2-existing-system.html" class="text-blue-600 hover:underline">Section 2</a>).</li>
+                        <li>A lower battery capacity means less energy can be stored from solar or grid charging, potentially increasing grid imports during peak times and reducing savings.</li>
+                     </ul>
+                </div>
+                 <div class="image-placeholder"><img src="images/S6.4.png" alt="Battery degredation"></div>
+            </div>
+
+
+        </section>
+
+        <footer class="mt-12 text-center text-gray-500 text-sm">
+             <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Back to previous page</a>
+            <p>&copy; 2025 ROI Analyser Walkthroughs. Analyser by DaSando62.</p>
+        </footer>
+    </div>
+
+</body>
+</html>

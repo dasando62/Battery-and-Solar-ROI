@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Walkthrough: Section 3 - New System</title>
+    <!-- Link Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Link Custom CSS -->
+    <link rel="stylesheet" href="walkthrough_style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .detail {
+            margin-bottom: 1rem;
+            padding-left: 1rem;
+            border-left: 3px solid #60a5fa; /* blue-400 */
+        }
+        .image-placeholder {
+            display: block;
+            margin-top: 0.75rem;
+            margin-bottom: 0.75rem;
+            padding: 2rem 1rem;
+            border: 2px dashed #9ca3af; /* gray-400 */
+            text-align: center;
+            color: #6b7280; /* gray-500 */
+            font-style: italic;
+            border-radius: 0.375rem; /* rounded-md */
+            background-color: #f9fafb; /* gray-50 */
+        }
+        .note {
+            background-color: #eff6ff; /* blue-50 */
+            border-left-color: #3b82f6; /* blue-500 */
+            padding: 0.75rem;
+            border-radius: 0.25rem;
+            margin-top: 0.5rem;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto px-4 py-8 max-w-3xl">
+        <header class="mb-6">
+            <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Back to previous page</a>
+            <h1 class="text-3xl font-bold text-blue-700">Guide: Section 3 - New System Details</h1>
+        </header>
+
+        <section class="bg-white p-6 rounded-lg shadow-md">
+            <p class="mb-6 text-gray-600">This section is where you define the solar panels, battery, and inverter system you are considering installing or upgrading to. Enter the specifications based on the quotes you have received.</p>
+             <div class="image-placeholder"><img src="images/S3.1.png" alt="Section 3"></div>
+
+            <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Additional Solar Panel Size (kW)</h3>
+                <p>Enter the total kilowatt (kWp) capacity of any <b>new</b> solar panels being added. Do <b>not</b> include the size of your existing panels here (they are entered in Section 2).</p>
+            </div>
+
+            <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Average Daily Solar Yield (kWh/kW) <span class="text-sm font-normal text-gray-500">(Manual Mode Only)</span></h3>
+                <p>This field appears only when "Manual Mode" is selected in Section 1 by checking the "Enter seasonal totals from bills instead of CSV upload." checkbox.</p>
+                <p>Enter the estimated average daily energy (kWh) that each kWp of <b>new</b> solar panels will generate at your location. You can find this value on sites like <a href="https://solarcalculator.sunspot.org.au/" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">SunSpot.org.au</a>. A value of 4.0 is a reasonable general default.</p>
+                <p class="text-sm text-gray-600 mt-1">Note: The generation for your *existing* panels in manual mode is based on the "Total Solar Generation" you entered for each season.</p>
+                 <div class="image-placeholder"><img src="images/S3.2.png" alt="Manual mode unhides solar yield"></div>
+            </div>
+
+            <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Cost of Additional Solar ($)</h3>
+                <p>Enter the total installed cost (including panels, racking, isolators, labour, etc.) for the <b>new</b> solar panels only.</p>
+            </div>
+
+            <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Additional Battery Size (kWh)</h3>
+                <p>Enter the total <b>usable</b> energy capacity (kWh) of the new battery being installed.</p>
+            </div>
+
+            <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Additional Battery Inverter (kW)</h3>
+                <p>Enter the maximum continuous power output (kW) of the new battery inverter. If you are installing a new <b>hybrid</b> inverter that manages both solar and battery, enter its total rating here.</p>
+            </div>
+
+             <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Cost of Additional Battery ($)</h3>
+                <p>Enter the total installed cost for the <b>new</b> battery and its associated inverter (if separate) or the hybrid inverter.</p>
+            </div>
+
+            <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">New battery is AC Coupled</h3>
+                <p>Check this box if your new battery includes its own inverter and connects to your home's AC wiring independently from your solar inverter (e.g., Tesla Powerwall added to an existing solar system). Leave unchecked if installing a new hybrid inverter or a DC-coupled battery connected directly to a hybrid inverter.</p>
+                <div class="note">
+                    <p><strong>How this affects calculations:</strong></p>
+                    <ul class="list-disc pl-5 text-sm">
+                        <li><b>Checked (AC Coupled):</b> Total system inverter power = (New Battery Inverter kW) + (Existing Solar Inverter kW).</li>
+                        <li><b>Unchecked (DC Coupled/Hybrid):</b> Total system inverter power = (New Battery Inverter kW) only (assumes the new hybrid replaces any old solar inverter).</li>
+                    </ul>
+                </div>
+            <div class="image-placeholder"><img src="images/S3.3.png" alt="AC Coupled Inverter"></div>
+            <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Move Controlled Load</h3>
+                <p>Check this box if you plan to move your controlled load circuit (e.g., electric hot water) to your main switchboard so it can be powered by your solar and battery. Leave unchecked to keep it on its separate, cheaper tariff (if applicable).</p>
+            </div>
+
+			<div class="detail border-l-4 border-orange-500 bg-orange-50 p-4 rounded"> <!-- Add highlighting -->
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">This is a replacement for the existing system</h3>
+                <p>Check this box only if the new system completely replaces your old one (e.g., removing old panels and installing all new components).</p>
+                <p class="mt-2"><strong>How this affects calculations:</strong></p>
+                 <ul class="list-disc pl-5 mt-1 text-sm space-y-1">
+                    <li>If <b>checked</b>, the simulation of your proposed system's performance will <span class="font-medium">ignore</span> the solar/battery values entered in Section 2. It calculates costs as if <b>only</b> the new components exist.</li>
+                    <li>If <b>unchecked</b> (default), the simulation models the performance of your Section 2 components <span class="font-medium">plus</span> the Section 3 components working together (an upgrade scenario).</li>
+                    <li class="font-semibold text-gray-800 mt-1">Important: This checkbox does <span class="text-red-600">NOT</span> affect the Baseline calculation. The Baseline cost is always calculated using your current setup as defined in Section 2.</li>
+                 </ul>
+                 <div class="image-placeholder mt-3"><img src="images/S3.4.png" alt="Replacing the existing system."></div>
+            </div>
+
+            <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Allow battery charging from grid during off-peak</h3>
+                <p>Check this to allow the battery to charge from the grid during specific times (configured per provider in Section 5). This can be beneficial on low-solar days or for tariffs with very cheap off-peak rates.</p>
+                 <div class="note">
+                    <p><strong>Sub-Settings:</strong></p>
+                    <ul class="list-disc pl-5 text-sm">
+                        <li><strong>Charge to a maximum of (%):</strong> Limits grid charging to preserve space for solar charging later in the day.</li>
+                        <li><strong>Only charge if battery is below (%):</strong> Prevents unnecessary grid charging if the battery already has a decent amount of charge.</li>
+                    </ul>
+                </div>
+                 <div class="image-placeholder"><img src="images/S3.5.png" alt="Charge battery from grid"></div>
+            </div>
+
+            <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Add Blackout Protection Sizing</h3>
+                <p>Check this to include an additional battery capacity recommendation designed to cover essential loads during a power outage.</p>
+                 <div class="note">
+                    <p><strong>Sub-Settings:</strong></p>
+                    <ul class="list-disc pl-5 text-sm">
+                        <li><strong>Blackout Duration (Hours):</strong> How long you want protection for.</li>
+                        <li><strong>Usage Coverage During Blackout (%):</strong> What percentage of your historical <b>maximum</b> usage during a similar duration you want the battery reserve to cover.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Energy Self-Sufficiency (%)</h3>
+                <p>This target percentage is used only for the <b>"Simple Sizing"</b> recommendation. It aims to size the solar array large enough to generate this percentage of your total annual energy consumption.</p>
+            </div>
+
+            <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Calculate Sizing Recommendation Button</h3>
+                <p>Click this button after entering your usage data (Section 1) and existing system details (Section 2). It provides both a "Simple" heuristic recommendation and (if using CSV data) a "Detailed" recommendation based on your historical usage patterns.</p>
+                 <div class="image-placeholder"><img src="images/S3.6.png" alt="Calculate sizing recommendations for battery"></div>
+            </div>
+
+        </section>
+
+        <footer class="mt-12 text-center text-gray-500 text-sm">
+             <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Back to previous page</a>
+            <p>&copy; 2025 ROI Analyser Walkthroughs. Analyser by DaSando62.</p>
+        </footer>
+    </div>
+
+</body>
+</html>

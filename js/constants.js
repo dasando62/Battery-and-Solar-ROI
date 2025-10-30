@@ -1,5 +1,5 @@
 // js/constants.js
-// Version 1.3.4
+// Version 1.3.5
 // This file holds constants that are used in multiple files.
 
 /*

@@ -1,0 +1,40 @@
+/* You can add custom styles here if needed, */
+/* but Tailwind classes handle most styling in index.html */
+
+/* Example: Increase link hover brightness slightly */
+a:hover {
+    filter: brightness(1.1);
+}
+
+/* Styling for the main Step headers (h3 inside .step) */
+.step h3 {
+    margin-bottom: 0.75rem;
+    font-size: 1.25rem; /* text-xl */
+    font-weight: 600; /* font-semibold */
+    color: #1d4ed8; /* blue-700 */
+}
+
+/* Styling for the linked Section headers (strong with .section-link-header) */
+.section-link-header {
+    font-size: 1.0rem; /* Slightly smaller than step headers */
+    font-weight: 600; /* font-semibold */
+    color: #1e40af; /* A slightly darker blue maybe? (blue-800) */
+    /* Add an indicator */
+    padding-right: 0.5rem; 
+}
+
+/* Optional: Add a subtle icon using ::after pseudo-element */
+.section-link-header::after {
+    content: ' \2192'; /* Right arrow character */
+    font-size: 0.9em;
+    color: #60a5fa; /* Lighter blue (blue-400) */
+    display: inline-block;
+    margin-left: 4px;
+    transition: transform 0.2s ease-in-out;
+}
+
+/* Optional: Move the arrow slightly on hover over the link */
+a:hover .section-link-header::after {
+    transform: translateX(3px);
+}
+

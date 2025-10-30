@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Walkthrough: Section 4 - Financial Inputs</title>
+    <!-- Link Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Link Custom CSS -->
+    <link rel="stylesheet" href="walkthrough_style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .detail {
+            margin-bottom: 1.5rem; /* Increased spacing */
+            padding-left: 1rem;
+            border-left: 3px solid #60a5fa; /* blue-400 */
+        }
+        .image-placeholder {
+            display: block;
+            margin-top: 0.75rem;
+            margin-bottom: 0.75rem;
+            padding: 2rem 1rem;
+            border: 2px dashed #9ca3af; /* gray-400 */
+            text-align: center;
+            color: #6b7280; /* gray-500 */
+            font-style: italic;
+            border-radius: 0.375rem; /* rounded-md */
+            background-color: #f9fafb; /* gray-50 */
+        }
+         .note {
+            background-color: #eff6ff; /* blue-50 */
+            border-left: 3px solid #3b82f6; /* blue-500 */
+            padding: 0.75rem;
+            border-radius: 0.25rem;
+            margin-top: 0.5rem;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto px-4 py-8 max-w-3xl">
+        <header class="mb-6">
+            <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Back to previous page</a>
+            <h1 class="text-3xl font-bold text-blue-700">Guide: Section 4 - Financial Inputs</h1>
+        </header>
+
+        <section class="bg-white p-6 rounded-lg shadow-md">
+            <p class="mb-6 text-gray-600">This optional section allows you to include the impact of financing (loans) and the time value of money (opportunity cost) in your ROI calculations for a more comprehensive financial picture.</p>
+             <div class="image-placeholder"><img src="images/S4.1.png" alt="Section 4 - Financial Inputs"></div>
+
+            <h2 class="text-2xl font-semibold text-blue-600 mt-6 mb-4 border-b pb-2">Loan Financing</h2>
+
+            <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Enable Loan Financing</h3>
+                <p>Check this box if you plan to finance some or all of the system cost with a loan.</p>
+                 <div class="note">
+                    <p><strong>How it affects calculations:</strong> When enabled, the calculated annual loan repayment amount will be subtracted from your annual savings each year for the duration of the loan term. This impacts:</p>
+                    <ul class="list-disc pl-5 text-sm mt-1">
+                        <li><strong>Cumulative Net Cash Flow:</strong> Shows your actual cash position after loan payments.</li>
+                        <li><strong>Payback Period:</strong> Will likely be longer as savings are reduced by repayments.</li>
+                        <li><strong>Net Present Value (NPV):</strong> Will be lower.</li>
+                        <li><strong>Internal Rate of Return (IRR):</strong> Will be lower.</li>
+                    </ul>
+                </div>
+                 <div class="image-placeholder"><img src="images/S4.2.png" alt="Enabling loan financing"></div>
+            </div>
+
+            <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Loan Amount ($)</h3>
+                <p>Enter the total amount you are borrowing for the system.</p>
+            </div>
+
+            <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Annual Interest Rate (%)</h3>
+                <p>Enter the annual interest rate for the loan (e.g., 6.5 for 6.5%).</p>
+            </div>
+
+            <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Loan Term (Years)</h3>
+                <p>Enter the total duration of the loan in years.</p>
+            </div>
+
+
+            <h2 class="text-2xl font-semibold text-blue-600 mt-8 mb-4 border-b pb-2">Opportunity Cost / Discount Rate</h2>
+
+            <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Enable Opportunity Cost / Discount Rate</h3>
+                <p>Check this box to calculate the Net Present Value (NPV) and Internal Rate of Return (IRR) of your investment, considering the time value of money.</p>
+                 <div class="image-placeholder"><img src="images/S4.3.png" alt="Enabling Opportunity Cost / Discount Rate"></div>
+            </div>
+
+            <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Opportunity Cost / Discount Rate (%)</h3>
+                <p>Enter the annual rate of return (%) you could reasonably expect from investing the system cost elsewhere (e.g., in shares, bonds, or a high-interest savings account). This rate is used to "discount" future savings back to their present-day value.</p>
+                 <div class="note">
+                     <p><strong>How it affects calculations:</strong></p>
+                    <ul class="list-disc pl-5 text-sm mt-1">
+                        <li><strong>Net Present Value (NPV):</strong> This metric calculates the total profitability of the system *in today's dollars*. A positive NPV generally indicates a financially worthwhile investment compared to your alternative (the discount rate). Savings generated further in the future are valued less than savings generated today. A higher discount rate will result in a lower NPV.</li>
+                        <li><strong>Internal Rate of Return (IRR):</strong> This metric calculates the effective annualized rate of return generated by the system's savings over its lifetime. It represents the discount rate at which the NPV would be exactly zero. You can compare the IRR to your opportunity cost (discount rate) or loan interest rate to gauge the investment's attractiveness. An IRR higher than your discount rate or loan rate is generally favorable.</li>
+                    </ul>
+                </div>
+            </div>
+
+
+        </section>
+
+        <footer class="mt-12 text-center text-gray-500 text-sm">
+             <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Back to previous page</a>
+            <p>&copy; 2025 ROI Analyser Walkthroughs. Analyser by DaSando62.</p>
+        </footer>
+    </div>
+
+</body>
+</html>

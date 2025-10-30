@@ -1,5 +1,5 @@
 // js/debugTables.js
-// Version 1.3.4
+// Version 1.3.5
 // This module contains all functions related to rendering the "Debug Tables".
 // These tables provide transparency into the calculator's inputs, intermediate calculations,
 // and simulation results, aiding in validation and troubleshooting.

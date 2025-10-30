@@ -1,5 +1,5 @@
 // js/storage.js
-//Version 1.3.4
+//Version 1.3.5
 // This module handles the saving and loading of the entire application state
 // to and from a JSON configuration file. This allows users to persist their
 // settings and provider configurations.
@@ -77,23 +77,56 @@ function applyAllInputs(inputs) {
 
 /**
  * Main function to save the entire application state (providers and UI inputs) to a JSON file.
+ * Prompts the user for a filename.
  */
 function saveStateToFile() {
-    // Construct the state object to be saved.
+    // 1. Suggest a default filename
+    const defaultFilename = `roi-analyser-settings-${new Date().toISOString().split('T')[0]}.json`;
+
+    // 2. Prompt the user for a filename
+    let userFilename = prompt("Enter a filename for your settings:", defaultFilename);
+
+    // 3. Handle cancellation or empty input
+    if (userFilename === null || userFilename.trim() === "") {
+        console.log("Save cancelled by user.");
+        // Optional: Provide feedback to the user that save was cancelled.
+        // E.g., using a temporary status message element near the save button.
+        // const saveStatus = document.getElementById('saveSettingsStatus');
+        if (saveStatus) {
+            saveStatus.textContent = 'Save cancelled.';
+            setTimeout(() => { saveStatus.textContent = ''; }, 3000);
+        }
+        return; // Abort the save
+    }
+
+    // 4. Sanitize and prepare the final filename
+    // Remove potentially invalid characters (simple approach)
+    let finalFilename = userFilename.replace(/[/\\?%*:|"<>]/g, '-');
+    // Ensure it ends with .json
+    if (!finalFilename.toLowerCase().endsWith('.json')) {
+        finalFilename += '.json';
+    }
+
+    // 5. Gather the state data (same as before)
     const appState = {
-		// Version for the settings file structure itself. 
-        // Increment only if making breaking changes to the saved format that would affect loading old files.
         version: "1.0.2", // Version of the settings file format.
         savedAt: new Date().toISOString(),
-        providers: getProviders(), // Get all current provider configurations.
-        uiInputs: gatherAllInputs(), // Get all current UI input values.
-        // Note: We don't save CSV data itself, only the configuration settings.
+        providers: getProviders(),
+        uiInputs: gatherAllInputs(),
     };
 
-    // Convert the state object to a nicely formatted JSON string.
+    // 6. Convert to JSON (same as before)
     const jsonString = JSON.stringify(appState, null, 2);
-    // Use the utility function to trigger a download of the JSON file.
-    downloadBlob('roi-analyser-settings.json', jsonString, 'application/json');
+
+    // 7. Trigger download using the user's filename
+    downloadBlob(finalFilename, jsonString, 'application/json');
+
+    // Optional: Provide success feedback
+    const saveStatus = document.getElementById('saveSettingsStatus');
+    if (saveStatus) {
+        saveStatus.textContent = `Settings saved as ${finalFilename}`;
+        setTimeout(() => { saveStatus.textContent = ''; }, 5000);
+    }
 }
 
 /**

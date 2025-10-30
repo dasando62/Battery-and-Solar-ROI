@@ -1,5 +1,5 @@
 // js/analysis.js
-// Version 1.3.4
+// Version 1.3.5
 // This is the core of the ROI calculator. It contains the simulation engine,
 // financial calculation functions (IRR, NPV), and system sizing algorithms.
 
@@ -470,31 +470,40 @@ export function simulateDay(hourlyConsumption, hourlySolar, provider, batteryCon
             results.hourlyExports[h] = Math.min(excessSolar, maxSolarExport);
             
             // Grid Charging Logic for the BATTERY
-            if (provider.gridChargeEnabled && h >= provider.gridChargeStart && h < provider.gridChargeEnd) {
-                const chargeThresholdSOC = batteryConfig.capacity * (batteryConfig.gridChargeThreshold / 100);
-                const chargeTriggerSOC = batteryConfig.capacity * (batteryConfig.socChargeTrigger / 100);
-                if (currentSOC < chargeTriggerSOC) {
-                    const chargeNeeded = chargeThresholdSOC - currentSOC;
-                    if (chargeNeeded > 0) {
-                        // --- THE FIX IS HERE ---
-                        // 1. Calculate how much inverter capacity is left after solar has charged the battery.
-                        const inverterHeadroomForGridCharge = Math.max(0, inverterLimit - solarToBattery);
-                        
-                        // 2. Use this remaining headroom to cap the grid charge amount.
-                        const gridChargeAmount = Math.min(chargeNeeded, inverterHeadroomForGridCharge, batteryConfig.capacity - currentSOC);
-                        
-                        if (gridChargeAmount > 0) {
-                            results.gridChargeKWh += gridChargeAmount;
-                            currentSOC += gridChargeAmount;
-                            results.hourlyImports[h] += gridChargeAmount;
-                            const touRule = (provider.importRules || []).find(r => r.type === 'tou' && parseRangesToHours(r.hours).includes(h));
-                            const flatRule = (provider.importRules || []).find(r => r.type === 'flat');
-                            const rateForHour = (touRule || flatRule)?.rate || 0;
-                            gridChargeCost += gridChargeAmount * rateForHour;
-                        }
-                    }
-                }
-            }
+			// 1. Parse the hours string ONCE outside the hourly loop if possible,
+			//    but for simplicity here, we parse it inside. Cache if performance becomes an issue.
+			const gridChargeHours = parseRangesToHours(provider.gridChargeHours || '');
+
+			if (provider.gridChargeEnabled && gridChargeHours.includes(h)) {
+				const chargeThresholdSOC = batteryConfig.capacity * (batteryConfig.gridChargeThreshold / 100);
+				const chargeTriggerSOC = batteryConfig.capacity * (batteryConfig.socChargeTrigger / 100);
+
+				// --- ADDED CHECK: Only attempt charging if below the *trigger* SOC ---
+				if (currentSOC < chargeTriggerSOC) {
+					 const chargeNeeded = chargeThresholdSOC - currentSOC; // Charge needed to reach the *threshold*
+					 if (chargeNeeded > 0) {
+						// Calculate inverter headroom (correct logic from previous fix)
+						const inverterHeadroomForGridCharge = Math.max(0, inverterLimit - solarToBattery);
+						// Determine actual charge amount (limited by need, headroom, and battery space)
+						const gridChargeAmount = Math.min(chargeNeeded, inverterHeadroomForGridCharge, batteryConfig.capacity - currentSOC);
+
+						if (gridChargeAmount > 0) {
+							results.gridChargeKWh += gridChargeAmount;
+							currentSOC += gridChargeAmount;
+							results.hourlyImports[h] += gridChargeAmount; // Add to grid import for costing
+
+							// Find the correct import rate for costing this grid charge
+							// (This logic might need adjustment based on your tariffComponents setup)
+							const touRule = (provider.importRules || []).find(r => r.type === 'tou' && parseRangesToHours(r.hours).includes(h));
+							const flatRule = (provider.importRules || []).find(r => r.type === 'flat');
+							// Prioritize finding an 'Off-Peak' rule if available during these hours
+							const offPeakRule = (provider.importRules || []).find(r => r.name?.toLowerCase().includes('off-peak') && parseRangesToHours(r.hours).includes(h));
+							const rateForHour = (offPeakRule || touRule || flatRule)?.rate || 0; // Prefer off-peak rate if specified for the charge hour
+							gridChargeCost += gridChargeAmount * rateForHour;
+						}
+					 }
+				}
+			}
         } // End of main 'for' loop for battery simulation
     } // End of main if/else block
 

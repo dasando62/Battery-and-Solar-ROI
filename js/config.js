@@ -1,5 +1,5 @@
 // js/config.js
-//Version 1.3.4
+//Version 1.3.5
 // This module is responsible for gathering all user-configurable settings from the UI
 // and assembling them into a single configuration object used by the analysis engine.
 

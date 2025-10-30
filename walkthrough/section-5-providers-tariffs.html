@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Walkthrough: Section 5 - Providers & Tariffs</title>
+    <!-- Link Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Link Custom CSS -->
+    <link rel="stylesheet" href="walkthrough_style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .detail {
+            margin-bottom: 1.5rem;
+            padding-left: 1rem;
+            border-left: 3px solid #60a5fa; /* blue-400 */
+        }
+        .image-placeholder {
+            display: block;
+            margin-top: 0.75rem;
+            margin-bottom: 0.75rem;
+            padding: 2rem 1rem;
+            border: 2px dashed #9ca3af; /* gray-400 */
+            text-align: center;
+            color: #6b7280; /* gray-500 */
+            font-style: italic;
+            border-radius: 0.375rem; /* rounded-md */
+            background-color: #f9fafb; /* gray-50 */
+        }
+         .note {
+            background-color: #eff6ff; /* blue-50 */
+            border-left: 3px solid #3b82f6; /* blue-500 */
+            padding: 0.75rem;
+            border-radius: 0.25rem;
+            margin-top: 0.5rem;
+            font-size: 0.9em;
+        }
+        .config-block {
+             margin-top: 2rem;
+             padding-top: 1.5rem;
+             border-top: 1px solid #e5e7eb; /* gray-200 */
+        }
+        .rule-example {
+            background-color: #f3f4f6; /* gray-100 */
+            padding: 0.75rem;
+            border-radius: 0.375rem;
+            margin-top: 0.5rem;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto px-4 py-8 max-w-4xl"> <!-- Increased max-width for this complex section -->
+        <header class="mb-6">
+            <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Back to previous page</a>
+            <h1 class="text-3xl font-bold text-blue-700">Guide: Section 5 - Providers & Tariffs</h1>
+        </header>
+
+        <section class="bg-white p-6 rounded-lg shadow-md">
+            <p class="mb-6 text-gray-600">This is the core section for defining the electricity plans you want to compare. You can add multiple providers, configure their specific import and export rates, fees, rebates, and even model complex conditions or EV charging rules.</p>
+             <div class="image-placeholder"><img src="images/S5.1.png" alt="5. Providers & Tariffs"></div>
+
+            <!-- General Tariff Settings -->
+            <div class="config-block">
+                <h2 class="text-2xl font-semibold text-blue-600 mb-4 border-b pb-2">General Tariff Settings</h2>
+                <p class="mb-4 text-sm text-gray-600">These settings apply globally to all providers in the simulation.</p>
+
+                <div class="detail">
+                    <h3 class="font-semibold text-lg text-gray-700 mb-2">Annual Tariff Escalation (% per year)</h3>
+                    <p>Enter the estimated percentage by which you expect electricity import rates and daily charges to increase each year (e.g., 2 for 2%). This helps model rising costs over the analysis period.</p>
+                </div>
+                 <div class="detail">
+                    <h3 class="font-semibold text-lg text-gray-700 mb-2">Feed-in Tariff (FIT) Degradation</h3>
+                    <p>These settings model how the rate you receive for exporting solar energy might decrease over time.</p>
+                    <ul class="list-disc pl-5 mt-2 text-sm space-y-1">
+                        <li><strong>Start of FIT Degradation Year:</strong> The simulation year when the FIT rate begins to decrease.</li>
+                        <li><strong>Years to Reach Minimum FIT:</strong> The number of years it takes for the FIT rate to linearly decrease from its starting value down to the minimum rate.</li>
+                        <li><strong>FIT Minimum Rate ($/kWh):</strong> The lowest rate the FIT will fall to after the degradation period. This can be zero or even negative. <span class="font-medium text-red-600">A negative value means you would potentially <b>pay</b> to export energy</span> if wholesale prices drop below zero and your plan reflects this.</li>
+                    </ul>
+                     <div class="image-placeholder"><img src="images/S5.2.png" alt="General Tariff Settings"></div>
+                </div>
+            </div>
+
+            <!-- Managing Providers -->
+            <div class="config-block">
+                <h2 class="text-2xl font-semibold text-blue-600 mb-4 border-b pb-2">Managing Providers</h2>
+                 <div class="image-placeholder"><img src="images/S5.3.png" alt="Managing providers"></div>
+
+                 <div class="detail">
+                    <h3 class="font-semibold text-lg text-gray-700 mb-2">Adding a Provider</h3>
+                    <p>Click the <code class="bg-gray-200 px-1 rounded text-sm">Add New Provider</code> button at the bottom of the section. A new "New Provider" entry will appear in the list.</p>
+                </div>
+                 <div class="detail">
+                    <h3 class="font-semibold text-lg text-gray-700 mb-2">Selecting Providers for Analysis</h3>
+                    <p>Use the checkbox next to each provider's name to include them in the next analysis run. You must select at least one.</p>
+                    <div class="note">
+                        <p><strong>Baseline Provider:</strong> The <b>first</b> checked provider in the list is always used as the <b>Baseline</b> for comparison. The simulation calculates what your costs would be <b>without</b> the new system, using this first provider's tariffs.</p>
+                    </div>
+                </div>
+                 <div class="detail">
+                    <h3 class="font-semibold text-lg text-gray-700 mb-2">Reordering Providers</h3>
+                    <p>Use the ▲ and ▼ buttons next to a provider's name to change their position in the list. This is important for setting which provider acts as the Baseline.</p>
+                </div>
+                <div class="detail">
+                    <h3 class="font-semibold text-lg text-gray-700 mb-2">Expanding/Collapsing Provider Details</h3>
+                    <p>Click the summary bar (containing the checkbox and name) to expand or collapse the detailed settings for that provider.</p>
+                </div>
+                <div class="detail">
+                    <h3 class="font-semibold text-lg text-gray-700 mb-2">Deleting a Provider</h3>
+                    <p>Expand the provider's details and click the <code class="bg-red-200 px-1 rounded text-sm">Delete Provider</code> button at the bottom of their section.</p>
+                </div>
+				<div class="detail border-l-4 border-red-500 bg-red-50 p-4 rounded"> <!-- Add warning style -->
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Resetting All Providers to Defaults</h3>
+                <p>At the very top of the analyser page (above Section 1), there is a <code class="bg-yellow-200 px-1 rounded text-sm">Reset All Providers</code> button.</p>
+                 <div class="image-placeholder"><img src="images/S5.11.png" alt="Default providers"></div>
+                <div class="warning">
+                    <p><strong>Warning:</strong> Clicking this button will <span class="font-bold">permanently delete all your current provider configurations</span> (including any custom ones you've added or edited) and restore the original default providers that came with the analyser. This action cannot be undone.</p>
+                </div>
+                <p class="mt-2 text-sm">This is useful if you have made many changes and want to start fresh with the default settings.</p>
+				<div class="note">
+                    <p><strong>Tip:</strong> Before resetting, you might want to save your current configuration using the main <code class="bg-green-200 px-1 rounded text-sm">Save Current Settings</code> button (at the top of the page). This saves all your settings, including providers, to a JSON file. You can restore your custom providers later by using the <code class="bg-gray-200 px-1 rounded text-sm">Choose File</code> button to load this saved file.</p>
+                </div>
+            </div>
+                 <div class="detail">
+                    <h3 class="font-semibold text-lg text-gray-700 mb-2">Applying Changes vs. Saving Settings</h3>
+                     <p>Changes you make within a provider's section (rates, rules, etc.) are <b>temporary</b> within your browser session.</p>
+                     <ul class="list-disc pl-5 mt-2 text-sm space-y-1">
+                        <li>Click <code class="bg-blue-200 px-1 rounded text-sm">Apply Changes</code> within a provider's section to make the analyser aware of your edits for the <b>next</b> simulation run in this session.</li>
+                         <li>Use the main <code class="bg-green-200 px-1 rounded text-sm">Save Current Settings</code> button (at the top of the page) to download a JSON file containing <b>all</b> your configurations. This is how you permanently save your work or transfer settings.</li>
+                    </ul>
+                     <div class="image-placeholder"><img src="images/S5.4.png" alt="Apply changes and Save Configuration"></div>
+                </div>
+            </div>
+
+            <!-- Configuring a Single Provider -->
+            <div class="config-block">
+                <h2 class="text-2xl font-semibold text-blue-600 mb-4 border-b pb-2">Configuring a Provider's Details</h2>
+                <p class="mb-4 text-sm text-gray-600">Expand a provider to configure their specific plan details.</p>
+
+                <div class="detail">
+                    <h3 class="font-semibold text-lg text-gray-700 mb-2">Basic Info</h3>
+                    <ul class="list-disc pl-5 mt-2 text-sm space-y-1">
+                        <li><strong>Provider Name:</strong> Edit the name for clarity (e.g., "AGL - Solar Savers").</li>
+                        <li><strong>Notes:</strong> Add any relevant details (plan name, quote date, etc.).</li>
+                        <li><strong>Daily Charge ($):</strong> The fixed daily supply charge.</li>
+                        <li><strong>Rebate ($):</strong> Any upfront rebate (e.g., solar feed-in rebate) associated with choosing this provider or plan. This is subtracted from the initial system cost for this provider's analysis.</li>
+                        <li><strong>Monthly Fee ($):</strong> Any recurring monthly fee (e.g., for premium wholesale access plans).</li>
+                    </ul>
+                     <div class="image-placeholder"><img src="images/S5.5.png" alt="Provider general configuration"></div>
+                </div>
+
+                <div class="detail">
+                    <h3 class="font-semibold text-lg text-gray-700 mb-2">Import Rules</h3>
+                    <p>Define how the provider charges for electricity imported from the grid. Click <code class="bg-gray-200 px-1 rounded text-sm">+ Add Import Rule</code> to add rows. Rules are processed in order.</p>
+                     <div class="image-placeholder"><img src="images/S5.6.png" alt="Import rules"></div>
+                    <ul class="list-disc pl-5 mt-2 text-sm space-y-1">
+                        <li><strong>Type:</strong>
+								<ul class="list-circle pl-5 mt-1">
+									  <li><code>Time of Use (TOU)</code>: Charges a specific rate only during the hours you define in the 'Hours' field.
+                                  <ul class="list-disc pl-5 mt-1 text-sm text-gray-600">
+                                      <li>Enter time ranges separated by commas (e.g., "7am-10am, 4pm-10pm").</li>
+                                      <li>You can define ranges that span across midnight (e.g., "10pm-7am").</li>
+                                      <li>Any hours *not* explicitly covered by a TOU rule in your list will automatically be treated as 'Off-Peak' by the simulation and will typically be covered by a final 'Flat Rate' rule if you add one.</li>
+                                 </ul>
+                             </li>
+									<li><code>Tiered</code>: Applies a specific rate to a defined block (tier) of energy used per day, up to the specified 'Limit (kWh)'.
+							<ul class="list-disc pl-5 mt-1 text-sm text-gray-600">
+								<li>Requires a 'Limit (kWh)' value (e.g., "10" for the first 10 kWh).</li>
+								<li><b>Order Matters:</b> Tiered rules are processed based on their order in the list. Place the rule for the first tier (lowest limit) highest in the list.</li>
+								<li>Any usage <b>beyond</b> the limit of a tier will be processed by subsequent rules (like another Tiered rule with a higher limit, a TOU rule, or a Flat Rate rule).</li>
+								<li>Example: Rule 1: Tiered, Rate $0.30, Limit 10 kWh. Rule 2: Flat Rate, $0.20. The first 10 kWh imported today cost $0.30/kWh, all remaining import costs $0.20/kWh.</li>
+							</ul>
+						</li>
+                                <li><code>Flat Rate</code>: Charges a single rate for all usage not covered by preceding rules.</li>
+                                <li><code>Controlled Load</code>: A specific rate for a dedicated circuit (e.g., hot water). Often applies during off-peak hours, but doesn't require hours to be entered here.</li>
+                            </ul>
+                        </li>
+                        <li><strong>Name:</strong> A descriptive name (e.g., "Peak", "Tier 1", "Off-Peak").</li>
+                        <li><strong>Rate ($/kWh):</strong> The cost per kilowatt-hour.</li>
+                        <li><strong>Hours (for TOU):</strong> Comma-separated time ranges (e.g., "3pm-11pm").</li>
+                        <li><strong>Limit (for Tiered):</strong> The kWh threshold for the tier (e.g., "14").</li>
+                        <li>Use the <code class="bg-red-200 px-1 rounded text-sm">-</code> button to remove a rule.</li>
+                    </ul>
+                    <div class="note">
+                        <p><strong>Tip:</strong> For a simple flat rate plan, just add one rule with Type = <code>Flat Rate</code> and enter the rate.</p>
+                    </div>
+                </div>
+
+                <div class="detail">
+                    <h3 class="font-semibold text-lg text-gray-700 mb-2">Export Rules (Feed-in Tariff / FIT)</h3>
+                    <p>Define how the provider credits you for excess solar energy exported to the grid. Click <code class="bg-gray-200 px-1 rounded text-sm">+ Add Export Rule</code> to add rows. Rules are processed in order.</p>
+                     <div class="image-placeholder"><img src="images/S5.7.png" alt="Export rules"></div>
+                    <ul class="list-disc pl-5 mt-2 text-sm space-y-1">
+                        <li><strong>Type:</strong> Similar to Import Rules (TOU, Flat Rate). Controlled Load is not applicable here.</li>
+						<li><strong>Tiered Type Details:</strong> Applies a specific credit rate to a block (tier) of energy exported per day, up to the 'Limit (kWh)'.
+							<ul class="list-disc pl-5 mt-1 text-sm text-gray-600">
+								<li>Requires a 'Limit (kWh)' value (e.g., "10" for the first 10 kWh exported).</li>
+								<li><b>Order Matters:</b> Place the rule for the highest-paying tier (usually with the lowest limit) first in the list.</li>
+								<li>Export beyond a tier's limit is processed by subsequent rules.</li>
+								<li>Example: Rule 1: Tiered, Rate $0.12, Limit 10 kWh. Rule 2: Flat Rate, $0.05. The first 10 kWh exported today earn $0.12/kWh, all remaining export earns $0.05/kWh.</li>
+							</ul>
+						</li>						
+                        <li><strong>Name:</strong> A descriptive name (e.g., "Peak FIT", "Tier 1 Export").</li>
+                        <li><strong>Rate ($/kWh):</strong> The credit per kilowatt-hour exported. <b>Enter this as a positive number.</b></li>
+                        <li><strong>Hours (for TOU):</strong> Comma-separated time ranges.</li>
+                        <li><strong>Limit (for Tiered):</strong> The daily kWh threshold for the export tier (e.g., first "10" kWh exported get a higher rate).</li>
+                        <li>Use the <code class="bg-red-200 px-1 rounded text-sm">-</code> button to remove a rule.</li>
+                    </ul>
+                     <div class="note">
+                        <p><strong>Important:</strong> The FIT Rate entered here is the <b>base rate for Year 1</b>. The analyser will automatically apply the FIT Degradation settings (from the top of Section 5) to this rate in subsequent years of the simulation.</p>
+                    </div>
+                </div>
+
+                <div class="detail">
+                    <h3 class="font-semibold text-lg text-gray-700 mb-2">Special Conditions</h3>
+                    <p>Model non-standard charges or credits based on specific conditions (e.g., daily bonus for low peak usage). Click <code class="bg-gray-200 px-1 rounded text-sm">+ Add Condition</code> to add rows.</p>
+                     <div class="image-placeholder"><img src="images/S5.8.png" alt="Special Conditions rules"></div>
+                     <ul class="list-disc pl-5 mt-2 text-sm space-y-1">
+                         <li><strong>Name:</strong> Describe the condition (e.g., "Low Peak Bonus").</li>
+                         <li><strong>Months:</strong> Comma-separated months (1-12) when this rule applies. Leave blank for all year.</li>
+                         <li><strong>IF Condition:</strong>
+                            <ul class="list-circle pl-5 mt-1">
+                                <li><em>Metric:</em> What to measure (Peak Import, Net Grid Usage, Import in Window).</li>
+                                <li><em>Hours (for Window):</em> Time range if using "Import in Window".</li>
+                                <li><em>Operator:</em> Comparison (<=, <, >, >=).</li>
+                                <li><em>Value (kWh):</em> The threshold for the comparison.</li>
+                            </ul>
+                        </li>
+                        <li><strong>THEN Action:</strong>
+                            <ul class="list-circle pl-5 mt-1">
+                                <li><em>Type:</em> Apply Credit or Apply Charge.</li>
+                                <li><em>Amount ($):</em> The flat dollar amount for the credit/charge.</li>
+                            </ul>
+                        </li>
+                         <li>Use the <code class="bg-red-200 px-1 rounded text-sm">-</code> button to remove a condition.</li>
+                    </ul>
+                </div>
+
+                 <div class="detail">
+                    <h3 class="font-semibold text-lg text-gray-700 mb-2">EV Charging Rules</h3>
+                    <p>Define the priority order for how an electric vehicle (added in Section 1) should be charged. Click <code class="bg-gray-200 px-1 rounded text-sm">+ Add EV Charging Rule</code> to add rows. Rules are evaluated top-down for each hour.</p>
+                     <div class="image-placeholder"><img src="images/S5.9.png" alt="EV charging rules"></div>
+                     <ul class="list-disc pl-5 mt-2 text-sm space-y-1">
+                         <li><strong>Source:</strong> Where should the EV try to draw power from first? (Excess Solar, Grid, Battery).</li>
+                         <li><strong>During (Hours):</strong> When does this rule apply? (e.g., "10pm-6am" for overnight grid charging, "9am-4pm" for daytime solar charging).</li>
+                         <li>The analyser will try the first matching rule for an hour. If that source can't provide power (e.g., no excess solar), it moves to the next rule.</li>
+                         <li>Use the <code class="bg-red-200 px-1 rounded text-sm">-</code> button to remove a rule.</li>
+                    </ul>
+                </div>
+
+				<div class="detail">
+					<h3 class="font-semibold text-lg text-gray-700 mb-2">Battery Grid Charging Options</h3>
+					<p>Configure if and when the <b>house battery</b> (not the EV) should charge from the grid for this specific provider. This is typically used to charge the battery during cheap off-peak times.</p>
+					 <div class="image-placeholder"><img src="images/S5.10.png" alt="Battery Grid Charging options"></div>
+					 <ul class="list-disc pl-5 mt-2 text-sm space-y-1">
+						 <li><strong>Enable Grid Charging:</strong> Checkbox to allow grid charging.</li>
+						 <li><strong>Charge Hours:</strong> Enter the time range(s) when grid charging is permitted, using am/pm format (e.g., "11pm-6am", or "10am-2pm, 11pm-5am"). Handles overnight ranges.</li>
+						 <li><strong>Interaction with Section 3 Settings:</strong> Grid charging will only <b>start</b> if the battery is below the "<span class="font-medium">Only charge if battery is below (%)</span>" threshold (set globally in Section 3). It will then charge up to the "<span class="font-medium">Charge battery from grid to a maximum of (%)</span>" threshold (also set in Section 3), respecting the inverter power limit.</li>
+					</ul>
+            </div>
+        </section>
+
+        <footer class="mt-12 text-center text-gray-500 text-sm">
+             <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Back to previous page</a>
+            <p>&copy; 2025 ROI Analyser Walkthroughs. Analyser by DaSando62.</p>
+        </footer>
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Walkthrough: Section 2 - Existing System</title>
+    <!-- Link Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Link Custom CSS -->
+    <link rel="stylesheet" href="walkthrough_style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .detail {
+            margin-bottom: 1rem;
+            padding-left: 1rem;
+            border-left: 3px solid #60a5fa; /* blue-400 */
+        }
+         .image-placeholder {
+            display: block;
+            margin-top: 0.75rem;
+            margin-bottom: 0.75rem;
+            padding: 2rem 1rem;
+            border: 2px dashed #9ca3af; /* gray-400 */
+            text-align: center;
+            color: #6b7280; /* gray-500 */
+            font-style: italic;
+            border-radius: 0.375rem; /* rounded-md */
+            background-color: #f9fafb; /* gray-50 */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto px-4 py-8 max-w-3xl">
+        <header class="mb-6">
+             <!-- Link back to the main index or potentially the previous page? -->
+             <!-- For now, linking back to index -->
+            <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Back to previous page</a>
+            <h1 class="text-3xl font-bold text-blue-700">Guide: Section 2 - Existing System Details</h1>
+        </header>
+
+        <section class="bg-white p-6 rounded-lg shadow-md">
+            <p class="mb-6 text-gray-600">This section of the analyser is where you tell it about any solar panels, inverters, or batteries you *already* have installed. If you don't have anything yet, you can leave these fields as 0 (or check the "No existing solar system" box in Section 1).</p>
+             <div class="image-placeholder"><img src="images/S2.1.png" alt="Run Analysis."></div>
+
+            <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Existing Solar Panel Size (kW)</h3>
+                <p>Enter the total kilowatt (kWp) capacity of your current solar panels.</p>
+            </div>
+
+            <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Existing Solar Inverter Size (kW)</h3>
+                <p>Enter the maximum power output (kW) of your current solar inverter. For hybrid inverters, enter the total rating.</p>
+            </div>
+
+            <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">This is a Hybrid Inverter</h3>
+                <p>Check this box if your existing solar panels and battery (if any) are managed by a single hybrid inverter unit. Leave unchecked if you have separate inverters for solar and battery (or no battery).</p>
+            </div>
+
+            <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Existing Battery Size (kWh)</h3>
+                <p>Enter the total usable energy capacity (kWh) of your current battery, if you have one.</p>
+            </div>
+
+            <div class="detail">
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Existing Battery Inverter (kW)</h3>
+                <p>Only enter a value here if you have a separate, dedicated inverter just for your battery (an AC-Coupled battery). Leave as 0 if you have a hybrid system or no battery.</p>
+            </div>
+
+            <div class="detail border-blue-600 bg-blue-50 p-3 rounded"> <!-- Highlight this one -->
+                <h3 class="font-semibold text-lg text-gray-700 mb-2">Existing System Age (Years)</h3>
+                <p class="font-medium text-red-600">This is a crucial field!</p>
+                <p>Enter the current age of your system in whole years.</p>
+                <p class="mt-2"><strong>How it affects calculations:</strong></p>
+                <ul class="list-disc pl-5 mt-1 text-sm">
+                    <li>The analyser uses this age, along with the degradation rates set in Section 6, to estimate the <span class="font-medium">current, reduced performance</span> of your existing panels and battery at the start of the simulation.</li>
+                    <li>For example, if your system is 5 years old and the battery degradation rate is 2% per year, the analyser will start the simulation assuming your battery currently holds about 90% of its original capacity (<code>1 * (1 - 0.02)^5 ≈ 0.90</code>).</li>
+                    <li>It will then continue to degrade the components year by year throughout the simulation period.</li>
+                </ul>
+                 <div class="image-placeholder"><img src="images/S2.2.png" alt="System degredation from Section 6 debug table."></div>
+            </div>
+
+        </section>
+
+        <footer class="mt-12 text-center text-gray-500 text-sm">
+             <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Back to previous page</a>
+            <p>&copy; 2025 ROI Analyser Walkthroughs. Analyser by DaSando62.</p>
+        </footer>
+    </div>
+
+</body>
+</html>

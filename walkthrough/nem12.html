@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- ** MODIFIED TITLE ** -->
+    <title>Walkthrough: Importing Data (NEM12 Option)</title>
+    <!-- Link Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Link Custom CSS -->
+    <link rel="stylesheet" href="walkthrough_style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .step { margin-bottom: 2rem; }
+        .image-placeholder {
+            display: block;
+            margin-top: 0.75rem;
+            margin-bottom: 0.75rem;
+            padding: 2rem 1rem;
+            border: 2px dashed #9ca3af; /* gray-400 */
+            text-align: center;
+            color: #6b7280; /* gray-500 */
+            font-style: italic;
+            border-radius: 0.375rem; /* rounded-md */
+            background-color: #f9fafb; /* gray-50 */
+        }
+         .note {
+            background-color: #eff6ff; /* blue-50 */
+            border-left: 3px solid #3b82f6; /* blue-500 */
+            padding: 0.75rem;
+            border-radius: 0.25rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.9em;
+        }
+        .code-block {
+            background-color: #f3f4f6; /* gray-100 */
+            padding: 0.75rem;
+            border-radius: 0.375rem; /* rounded-md */
+            font-family: monospace;
+            font-size: 0.9em;
+            margin-top: 0.5rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        /* Style for linked section headers */
+        .section-link-header {
+            font-size: 1.0rem; /* Slightly smaller than h3 */
+            font-weight: 600; /* semibold */
+            color: #2563eb; /* blue-600 */
+        }
+        .section-link-header::after {
+            content: " →"; /* Add an arrow */
+            display: inline-block;
+            transition: transform 0.2s ease-in-out;
+        }
+        a:hover .section-link-header::after {
+            transform: translateX(3px); /* Move arrow slightly on hover */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto px-4 py-8 max-w-3xl">
+        <header class="mb-6">
+            <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Back to previous page</a>
+            <!-- ** MODIFIED HEADER ** -->
+            <h1 class="text-3xl font-bold text-blue-700">Guide: Importing Data (NEM12 Option)</h1>
+        </header>
+
+        <section class="bg-white p-6 rounded-lg shadow-md">
+            <!-- ** MODIFIED INTRO ** -->
+            <p class="mb-6 text-gray-600">This guide explains how to import your energy usage data using the "NEM12 Format" option. NEM12 is a standardised file format used in Australia for interval meter data, often obtainable from your energy retailer or distributor. Using this format simplifies the import process as no advanced configuration is needed.</p>
+
+            <!-- Step 1: Select NEM12 Format -->
+            <div class="step">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 1: Select NEM12 Format</h3>
+                <p>In Section 1: Data Input, select the radio button labelled <span class="font-medium">"NEM12 Format"</span>.</p>
+                <div class="image-placeholder"><img src="images/walkthr4.1.png" alt="Selecting NEM12 file import option"></div>
+                <p>Selecting this mode will automatically hide the "Advanced Usage CSV Options" section, as it is not required for the standard NEM12 format.</p>
+            </div>
+
+            <!-- Step 2: Understand the Required Files -->
+            <div class="step border-t pt-4">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 2: Understand the Required Files</h3>
+                <p>The NEM12 option requires at least one file:</p>
+                <ul class="list-disc pl-5 space-y-1 mt-2">
+                    <li><strong>Electricity Usage CSV (NEM12 Format):</strong> This file contains your interval data. You can request it from your energy retailer or distributor. It often contains multiple data streams (like grid import 'E1', grid export 'B1', and sometimes controlled load 'C1'). The analyser will automatically parse the relevant streams.</li>
+                    <li><strong>Solar Generation CSV (Optional but Recommended):</strong> While some NEM12 files <i>might</i> include gross solar generation, it's often more reliable to get this data separately from your solar inverter's monitoring system (e.g., Fronius Solar.web, Enphase Enlighten). If you have existing solar, you should upload this file to ensure accurate self-consumption calculations.</li>
+                </ul>
+                 <div class="note">
+                    <p><strong>No Existing Solar?</strong> If you do not currently have a solar system, check the <span class="font-medium">"No existing solar system"</span> box. This will hide the need for a separate Solar Generation CSV file.</p>
+                     <div class="image-placeholder"><img src="images/walkthr4.2.png" alt="Selecting NEM12 file with no existing solar."></div>
+                </div>
+            </div>
+
+            <!-- Step 3: Upload the Files -->
+            <div class="step border-t pt-4">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 3: Upload the Files</h3>
+                 <p>No advanced configuration is needed for NEM12.</p>
+                <ul class="list-disc pl-5 space-y-2 mt-2">
+                    <li>Click the <code class="bg-gray-200 px-1 rounded text-sm">Choose File</code> button under "Electricity Usage CSV" and select your NEM12 file. The analyser will parse grid import (E1), grid export (B1), and controlled load (C1/C2) data automatically.</li>
+                    <li>If you have existing solar and a separate generation file (recommended), click the <code class="bg-gray-200 px-1 rounded text-sm">Choose File</code> button under "Solar Generation CSV" and select that file. (Ensure its format matches the defaults in "Advanced Solar CSV Options", if they don't match then edit the options or save/load a config file where you've previously set them).</li>
+					<p>Wait for the green status messages below each button confirming the number of days loaded (e.g., "365 days of usage data loaded."). If you see errors, ensure the file selected is a valid NEM12 format CSV.</p>
+                </ul>
+                 <div class="image-placeholder"><img src="images/walkthr4.3.png" alt="Loaded NEM12 and Solar Generation files."></div>
+            </div>
+
+             <!-- Step 4: Configure Other Sections -->
+            <div class="step border-t pt-4">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 4: Configure Other Analyser Sections</h3>
+                 <p>With your data successfully loaded via NEM12, you now need to configure the rest of the analyser. Click on the Sections below for details:</p>
+                <ul class="list-disc pl-5 space-y-2 mt-2">
+                    <li><a href="section-2-existing-system.html" class="text-blue-600 hover:underline"><strong class="section-link-header">Section 2: Existing System</strong></a>Enter the details of your current solar panels or batteries, if any.</li>
+                    <li><a href="section-3-new-system.html" class="text-blue-600 hover:underline"><strong class="section-link-header">Section 3: New System</strong></a>Enter the details of the system you are considering installing (panel size, battery size, costs).</li>
+                    <li><a href="section-4-financial-inputs.html" class="text-blue-600 hover:underline"><strong class="section-link-header">Section 4: Financial Inputs</strong></a>Add loan details or discount rates if applicable.</li>
+                    <li><a href="section-5-providers-tariffs.html" class="text-blue-600 hover:underline"><strong class="section-link-header">Section 5: Providers & Tariffs</strong></a>Configure the specific rates and charges so that the analyser can provide a comparson between the different offerings in the financial analysis.</li>
+                    <li><a href="section-6-analysis-period.html" class="text-blue-600 hover:underline"><strong class="section-link-header">Section 6: Analysis Period</strong></a>Set the lifespan for the analysis and degradation rates.</li>
+                </ul>
+                <p class="mt-2"><em>(Click the links above for detailed guides on each section.)</em></p>
+            </div>
+
+            <!-- Step 5: Run Analysis -->
+            <div class="step border-t pt-4">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 5: Run Analysis</h3>
+                <p>Once all sections are configured, scroll down and click the <code class="bg-blue-200 px-1 rounded text-sm">Run ROI Analysis</code> button in Section 7.</p>
+				<p>The results based on your imported NEM12 data will appear below the button.</p>
+                <div class="image-placeholder"><img src="images/walkthr4.4.png" alt="Run analysis"></div>
+            </div>
+
+        </section>
+
+        <footer class="mt-12 text-center text-gray-500 text-sm">
+             <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Back to previous page</a>
+            <p>&copy; 2025 ROI Analyser Walkthroughs. Analyser by DaSando62.</p>
+        </footer>
+    </div>
+
+</body>
+</html>
+    

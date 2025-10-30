@@ -1,5 +1,5 @@
 // js/uiDynamic.js
-//Version 1.3.4
+//Version 1.3.5
 // This module is responsible for dynamically generating the HTML for the
 // provider settings section. It reads the provider data from the manager
 // and builds the complex UI with all its nested rules and conditions.
@@ -223,11 +223,12 @@ export function renderProviderSettings() {
                 <hr>
                 
                 <details class="collapsible-section">
-                    <summary>Grid Charging Options</summary>
+                    <summary>Battery Grid Charging Options</summary>
                     <div class="subsettings">
                         <label><input type="checkbox" class="provider-input" data-field="gridChargeEnabled" ${provider.gridChargeEnabled ? 'checked' : ''} Title="You need to save any changes for them to come into effect"> Enable Grid Charging</label>
-                        <label>Charge Start Hour: <input type="number" class="provider-input" data-field="gridChargeStart" min="0" max="23" value="${provider.gridChargeStart ?? 0}"></label>
-                        <label>Charge End Hour: <input type="number" class="provider-input" data-field="gridChargeEnd" min="0" max="23" value="${provider.gridChargeEnd ?? 0}"></label>
+					<label>Charge Hours:
+                        <input type="text" class="provider-input" data-field="gridChargeHours" placeholder="e.g., 11pm-6am" value="${provider.gridChargeHours || ''}">
+                    </label>
                     </div>
                 </details>
                 <hr>
