@@ -344,16 +344,52 @@ document.getElementById('manualInputToggle')?.addEventListener('change', (e) => 
             alert("Providers have been reset to their default configurations.");
         }
     });
-	
+
+    // Helper function to create a toggle listener for all debug buttons
+    const createDebugToggleListener = (buttonId, containerId, renderFn, showText, hideText) => {
+        const button = document.getElementById(buttonId);
+        const container = document.getElementById(containerId);
+        if (!button || !container) return;
+
+        // Set initial text
+        button.textContent = showText;
+
+        button.addEventListener('click', (e) => {
+            const isVisible = container.style.display === "block";
+
+            if (isVisible) {
+                // It's visible. Just hide it and reset the text.
+                container.style.display = "none";
+                button.textContent = showText;
+            } else {
+                // It's hidden.
+                // 1. Call the render function (which also hides all other tables
+                //    and resets all other buttons via hideAllDebugContainers)
+                if (renderFn) {
+                    renderFn(); 
+                } else {
+                    // Fallback for simple toggles that don't need re-rendering
+                    hideAllDebugContainers();
+                    container.style.display = "block";
+                }
+
+                // 2. Set this button's text to "Hide"
+                button.textContent = hideText;
+            }
+        });
+    };
+
+    // Listeners for all the individual debug table buttons
+    createDebugToggleListener("showDataDebugTable", "dataDebugTableContainer", () => renderDebugDataTable(state), "Show Debug Table", "Hide Debug Table");
+    createDebugToggleListener("showExistingSystemDebugTable", "existingSystemDebugTableContainer", () => renderExistingSystemDebugTable(state), "Show Debug Table", "Hide Debug Table");
+    createDebugToggleListener("showProvidersDebugTable", "providersDebugTableContainer", () => renderProvidersDebugTable(state), "Show Debug Table", "Hide Debug Table");
+    createDebugToggleListener("showAnalysisPeriodDebugTable", "analysisPeriodDebugTableContainer", renderAnalysisPeriodDebugTable, "Show Debug Table", "Hide Debug Table");
+    createDebugToggleListener("showLoanDebugTable", "loanDebugTableContainer", renderLoanDebugTable, "Show Debug Table", "Hide Debug Table");
+    createDebugToggleListener("showOpportunityCostDebugTable", "opportunityCostDebugTableContainer", renderOpportunityCostDebugTable, "Show Debug Table", "Hide Debug Table");
+
     // Listener for the results-section debug toggle
-    document.getElementById('showRawDataDebug')?.addEventListener('click', (e) => {
-        const container = document.getElementById('raw-data-debug-container');
-        if (container) {
-            const isHidden = container.style.display === 'none';
-            container.style.display = isHidden ? 'block' : 'none';
-            e.target.textContent = isHidden ? 'Hide Raw Data Tables' : 'Show Raw Data Tables';
-        }
-    });
+    createDebugToggleListener("showRawDataDebug", "raw-data-debug-container", null, "Show Raw Data Tables", "Hide Raw Data Tables");
+	
     // Listener to add a new provider
     document.getElementById('add-provider-button')?.addEventListener('click', () => {
         const newProvider = { name: "New Provider", id: `custom_${Date.now()}` };
@@ -361,14 +397,6 @@ document.getElementById('manualInputToggle')?.addEventListener('change', (e) => 
         renderProviderSettings();
     });
 
-    // Listeners for all the individual debug table buttons
-    document.getElementById("showDataDebugTable")?.addEventListener("click", () => renderDebugDataTable(state));
-    document.getElementById("showExistingSystemDebugTable")?.addEventListener("click", () => renderExistingSystemDebugTable(state));
-    document.getElementById("showProvidersDebugTable")?.addEventListener("click", () => renderProvidersDebugTable(state));
-    document.getElementById("showAnalysisPeriodDebugTable")?.addEventListener("click", renderAnalysisPeriodDebugTable);
-    document.getElementById("showLoanDebugTable")?.addEventListener("click", renderLoanDebugTable);
-    document.getElementById("showOpportunityCostDebugTable")?.addEventListener("click", renderOpportunityCostDebugTable);
-    
     // Logic for the NEM12 vs Advanced CSV format selection
     const formatNem12Radio = document.getElementById('formatNem12');
     const formatAdvancedRadio = document.getElementById('formatAdvanced');

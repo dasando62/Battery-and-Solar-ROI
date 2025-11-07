@@ -55,6 +55,17 @@ import { SEASONS } from './constants.js';
  */
 export function hideAllDebugContainers() {
     document.querySelectorAll('[id$="DebugTableContainer"], #sizing-recommendation-section').forEach(el => el.style.display = "none");
+    // Reset all debug button texts to their "Show" state
+    document.querySelectorAll('.debug-button').forEach(btn => {
+        if (btn.id.startsWith('show')) { // Targets all section debug buttons
+            btn.textContent = "Show Debug Table";
+        }
+    });
+    // Reset the results debug button separately
+    const rawDataBtn = document.getElementById('showRawDataDebug');
+    if (rawDataBtn) {
+        rawDataBtn.textContent = "Show Raw Data Tables";
+    }
 }
 
 /**
@@ -308,11 +319,11 @@ export function renderExistingSystemDebugTable(state, shouldShow = true) {
         calculatedValuesHTML = `
             <tr><td colspan="2"><strong>Baseline Data Analysis${dataLabelSuffix}</strong></td></tr>
             <tr><td>Total Days in Period (from inputs)</td><td>${totalDays.toFixed(0)} days</td></tr>
-            <tr><td>Annualized Total Consumption (Grid Imports + Self-Consumed Solar)</td><td>${(totalConsumption * annualizationFactor).toFixed(2)} kWh</td></tr>
-            <tr><td>Annualized Total Solar Generation (Initial Degradation Applied)</td><td>${(initialDegradedTotalSolar * annualizationFactor).toFixed(2)} kWh</td></tr>
-            <tr><td>Annualized Total Self-Consumed Solar (Generation - Exports)</td><td>${(totalSelfConsumed * annualizationFactor).toFixed(2)} kWh</td></tr>
-            <tr><td>Annualized Total Imported from Grid</td><td>${(totalImport * annualizationFactor).toFixed(2)} kWh</td></tr>
-            <tr><td>Annualized Total Exported to Grid</td><td>${(totalExport * annualizationFactor).toFixed(2)} kWh</td></tr>
+            <tr><td>Annualised Total Consumption (Grid Imports + Self-Consumed Solar)</td><td>${(totalConsumption * annualizationFactor).toFixed(2)} kWh</td></tr>
+            <tr><td>Annualised Total Solar Generation (Initial Degradation Applied)</td><td>${(initialDegradedTotalSolar * annualizationFactor).toFixed(2)} kWh</td></tr>
+            <tr><td>Annualised Total Self-Consumed Solar (Generation - Exports)</td><td>${(totalSelfConsumed * annualizationFactor).toFixed(2)} kWh</td></tr>
+            <tr><td>Annualised Total Imported from Grid</td><td>${(totalImport * annualizationFactor).toFixed(2)} kWh</td></tr>
+            <tr><td>Annualised Total Exported to Grid</td><td>${(totalExport * annualizationFactor).toFixed(2)} kWh</td></tr>
         `;
 
     } else {
@@ -352,11 +363,11 @@ export function renderExistingSystemDebugTable(state, shouldShow = true) {
         calculatedValuesHTML = `
             <tr><td colspan="2"><strong>Baseline Data Analysis${dataLabelSuffix}</strong></td></tr>
             <tr><td>Total Overlapping Days Analysed</td><td>${totalDays_csv} days</td></tr>
-            <tr><td>Annualized Total Consumption (Grid Imports + Self-Consumed Solar)</td><td>${(totalConsumption_csv * annualizationFactor_csv).toFixed(2)} kWh</td></tr>
-            <tr><td>Annualized Total Solar Generation</td><td>${(totalSolarGeneration_csv * annualizationFactor_csv).toFixed(2)} kWh</td></tr>
-            <tr><td>Annualized Total Self-Consumed Solar (Generation - Exports)</td><td>${(totalSelfConsumed_csv * annualizationFactor_csv).toFixed(2)} kWh</td></tr>
-            <tr><td>Annualized Total Imported from Grid (from Usage CSV)</td><td>${(totalGridImports_csv * annualizationFactor_csv).toFixed(2)} kWh</td></tr>
-            <tr><td>Annualized Total Exported to Grid (from Usage CSV)</td><td>${(totalGridExports_csv * annualizationFactor_csv).toFixed(2)} kWh</td></tr>
+            <tr><td>Annualised Total Consumption (Grid Imports + Self-Consumed Solar)</td><td>${(totalConsumption_csv * annualizationFactor_csv).toFixed(2)} kWh</td></tr>
+            <tr><td>Annualised Total Solar Generation</td><td>${(totalSolarGeneration_csv * annualizationFactor_csv).toFixed(2)} kWh</td></tr>
+            <tr><td>Annualised Total Self-Consumed Solar (Generation - Exports)</td><td>${(totalSelfConsumed_csv * annualizationFactor_csv).toFixed(2)} kWh</td></tr>
+            <tr><td>Annualised Total Imported from Grid (from Usage CSV)</td><td>${(totalGridImports_csv * annualizationFactor_csv).toFixed(2)} kWh</td></tr>
+            <tr><td>Annualised Total Exported to Grid (from Usage CSV)</td><td>${(totalGridExports_csv * annualizationFactor_csv).toFixed(2)} kWh</td></tr>
         `;
     }
 
