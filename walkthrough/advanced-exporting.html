@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Walkthrough: Exporting Your Results (PDF & CSV)</title>
+    <!-- Link Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Link Custom CSS -->
+    <link rel="stylesheet" href="walkthrough_style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .step { margin-bottom: 2rem; }
+        .image-placeholder {
+            display: block;
+            margin-top: 0.75rem;
+            margin-bottom: 0.75rem;
+            padding: 2rem 1rem;
+            border: 2px dashed #9ca3af; /* gray-400 */
+            text-align: center;
+            color: #6b7280; /* gray-500 */
+            font-style: italic;
+            border-radius: 0.375rem; /* rounded-md */
+            background-color: #f9fafb; /* gray-50 */
+        }
+         .note {
+            background-color: #eff6ff; /* blue-50 */
+            border-left: 3px solid #3b82f6; /* blue-500 */
+            padding: 0.75rem;
+            border-radius: 0.25rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto px-4 py-8 max-w-3xl">
+        <header class="mb-6">
+            <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Go Back</a>
+            <h1 class="text-3xl font-bold text-blue-700">Guide: Exporting Your Results (PDF & CSV)</h1>
+        </header>
+
+        <section class="bg-white p-6 rounded-lg shadow-md">
+            <p class="mb-6 text-gray-600">After running an analysis, the analyser provides two options to export your results for sharing or further review. This guide explains what each option does.</p>
+
+            <!-- Step 1: Run an Analysis -->
+            <div class="step">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 1: Run an Analysis</h3>
+                <p>First, you must complete all configuration sections and click the <code class="bg-blue-200 px-1 rounded text-sm">Run ROI Analysis</code> button.</p>
+                <p>Once the analysis is complete and the results are displayed, the <span class="font-medium">"Export to PDF"</span> and <span class="font-medium">"Export to CSV"</span> buttons will appear in Section 7, just below the "Results" title.</p>
+                <div class="image-placeholder"><img src="images/export1.png" alt="Export buttons appear after Run Analysis is clicked."></div>
+            </div>
+
+            <!-- Step 2: Exporting to CSV -->
+            <div class="step border-t pt-4">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 2: Exporting to CSV</h3>
+                <p>Clicking the <code class="bg-green-200 px-1 rounded text-sm">Export to CSV</code> button will generate and download a file named `roi_results.csv`.</p>
+                 <div class="image-placeholder"><img src="images/export2.png" alt="Export to CSV."></div>
+                <p class="mt-2 font-medium">What it's for:</p>
+                <p>This file is ideal for importing into spreadsheet software like Microsoft Excel or Google Sheets. It contains a simple table, matching the "Financial Breakdown by Year" table shown on the screen.</p>
+                <p class="mt-2 font-medium">Content:</p>
+                <ul class="list-disc pl-5 space-y-1 mt-2 text-sm">
+                    <li>Year</li>
+                    <li>Baseline Cost</li>
+                    <li>[Provider 1] Cost w/ System</li>
+                    <li>[Provider 1] Cumulative Net Cash Flow</li>
+                    <li>[Provider 2] Cost w/ System</li>
+                    <li>[Provider 2] Cumulative Net Cash Flow</li>
+                    <li>...and so on for all providers you compared.</li>
+                </ul>
+            </div>
+
+            <!-- Step 3: Exporting to PDF -->
+            <div class="step border-t pt-4">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 3: Exporting to PDF</h3>
+                <p>Clicking the <code class="bg-green-200 px-1 rounded text-sm">Export to PDF</code> button will generate a comprehensive, multi-page report and open your browser's "Save As" dialog.</p>
+                <div class="image-placeholder"><img src="images/export3.png" alt="Export to PDF."></div>
+                <div class="note">
+                    <p><strong>Please Note:</strong> The PDF generation process can take 5-10 seconds as it renders all the charts and data tables. The button will change to "Generating..." while it works.</p>
+                </div>
+                <p class="mt-2 font-medium">What it's for:</p>
+                <p>This file is a professional, shareable document perfect for comparing quotes, saving for your records, or showing to an installer.</p>
+                <p class="mt-2 font-medium">Content:</p>
+                <p>The PDF report is a detailed summary of your entire analysis, including:</p>
+                <ul class="list-disc pl-5 space-y-1 mt-2 text-sm">
+                    <li><strong>Title Page & Executive Summary:</strong> Shows the best-performing provider for Payback, NPV, and IRR.</li>
+                    <li><strong>System Assumptions:</strong> A summary of your inputs from Section 2 (Existing System) and Section 3 (New System).</li>
+                    <li><strong>Financial Analysis:</strong> The "Return on Investment Summary" and the "Financial Breakdown by Year" tables.</li>
+                    <li><strong>Cumulative Savings Chart:</strong> A full-page, landscape view of the main savings graph.</li>
+                    <li><strong>Appendices:</strong> These include the detailed data from the <a href="advanced-debugging.html" class="text-blue-600 hover:underline">Debugging Tables</a>, providing full transparency on the calculations:
+                        <ul class="list-circle pl-5 mt-1">
+                            <li>System Performance (Year 1) Raw Data</li>
+                            <li>Provider Tariff Details (showing all rates, charges, and rules)</li>
+                            <li>Battery Sizing Recommendations (including the distribution charts)</li>
+                            <li>Provider Simulation Averages (Household consumption & battery behaviour)</li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+
+        </section>
+
+        <footer class="mt-12 text-center text-gray-500 text-sm">
+             <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Go Back</a>
+            <p>&copy; 2025 ROI Analyser Walkthroughs. Analyser by DaSando62.</p>
+        </footer>
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Walkthrough: Saving & Loading Your Configuration</title>
+    <!-- Link Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Link Custom CSS -->
+    <link rel="stylesheet" href="walkthrough_style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .step { margin-bottom: 2rem; }
+        .image-placeholder {
+            display: block;
+            margin-top: 0.75rem;
+            margin-bottom: 0.75rem;
+            padding: 2rem 1rem;
+            border: 2px dashed #9ca3af; /* gray-400 */
+            text-align: center;
+            color: #6b7280; /* gray-500 */
+            font-style: italic;
+            border-radius: 0.375rem; /* rounded-md */
+            background-color: #f9fafb; /* gray-50 */
+        }
+         .note {
+            background-color: #eff6ff; /* blue-50 */
+            border-left: 3px solid #3b82f6; /* blue-500 */
+            padding: 0.75rem;
+            border-radius: 0.25rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.9em;
+        }
+        .warning-note {
+            background-color: #fffbeb; /* yellow-50 */
+            border-left: 3px solid #f59e0b; /* yellow-500 */
+            padding: 0.75rem;
+            border-radius: 0.25rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto px-4 py-8 max-w-3xl">
+        <header class="mb-6">
+            <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Go Back</a>
+            <h1 class="text-3xl font-bold text-blue-700">Guide: Saving & Loading Your Configuration</h1>
+        </header>
+
+        <section class="bg-white p-6 rounded-lg shadow-md">
+            <p class="mb-6 text-gray-600">This feature is one of the most powerful tools in the analyser. It allows you to save your entire setup (all inputs and provider tariffs) to a JSON file on your computer. This lets you create backups, build multiple "what-if" scenarios, and share your setup with others.</p>
+
+            <!-- Step 1: Find the Save/Load Controls -->
+            <div class="step">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 1: Find the Save/Load Controls</h3>
+                <p>The controls for saving and loading are located at the very top of the analyser, just below the main title, in the <span class="font-medium">"Save/Load Settings"</span> section.</p>
+                <div class="image-placeholder"><img src="images/savingandloading1.png" alt="Saving and loading options"></div>
+            </div>
+
+            <!-- Step 2: Saving Your Configuration -->
+            <div class="step border-t pt-4">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 2: Saving Your Configuration</h3>
+                <p>Click the <code class="bg-green-200 px-1 rounded text-sm">Save Current Settings</code> button.</p>
+                <ul class="list-disc pl-5 space-y-2 mt-2">
+                    <li>A prompt will appear asking you to enter a filename. A default name with the current date is suggested (e.g., `roi-analyser-settings-2025-10-28.json`).</li>
+                    <li>You can change this to something descriptive, like `my-house-10kw-battery.json`.</li>
+                    <li>Click "OK" to save the file. Your browser will download the JSON file to your computer.</li>
+                </ul>
+                <div class="image-placeholder"><img src="images/savingandloading2.png" alt="Saving the config in a json file"></div>
+                <div class="note">
+                    <p><strong>What is saved:</strong> The file saves *all* your inputs from all sections (system sizes, costs, analysis years, etc.) and your *entire* list of configured providers and their tariffs.</p>
+                    <p><strong>What is NOT saved:</strong> The file does *not* save the large CSV/NEM12 files you uploaded. You will need to re-upload those files separately after loading a configuration.</p>
+                </div>
+            </div>
+
+            <!-- Step 3: Loading Your Configuration -->
+            <div class="step border-t pt-4">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 3: Loading Your Configuration</h3>
+                <p>Click the <code class="bg-gray-200 px-1 rounded text-sm">Choose File</code> button next to "Configuration File:".</p>
+                <ul class="list-disc pl-5 space-y-2 mt-2">
+                    <li>Select a `.json` settings file that you previously saved.</li>
+                    <li>The analyser will instantly load the file, repopulate all input fields, and overwrite your current provider list with the providers from the file.</li>
+                    <li>A green success message will appear confirming the file was loaded and how many providers were imported.</li>
+                </ul>
+                 <div class="image-placeholder"><img src="images/savingandloading3.png" alt="Saving the config in a json file"></div>
+                 <div class="warning-note">
+                    <p><strong>Warning:</strong> Loading a configuration file will <span class="font-medium">overwrite all your current settings</span>, including any provider tariffs you have manually configured. Save your current setup first if you want to keep it.</p>
+                </div>
+            </div>
+
+            <!-- Step 4: Recommended Workflows -->
+            <div class="step border-t pt-4">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 4: Recommended Workflows</h3>
+                <ul class="list-disc pl-5 space-y-3 mt-2">
+                    <li>
+                        <strong>Create Backups:</strong> Before you experiment with complex tariff rules or click the "Reset All Providers" button, save your current settings as a backup.
+                    </li>
+                    <li>
+                        <strong>Compare Scenarios:</strong>
+                        <ol class="list-decimal pl-5 mt-1 text-sm text-gray-600">
+                            <li>Set up your baseline (Section 1 & 2) and providers (Section 5).</li>
+                            <li>Save this as `my-base-setup.json`.</li>
+                            <li>Now, go to Section 3 and model a 10kWh battery. Run the analysis.</li>
+                            <li>Click <code class="bg-green-200 px-1 rounded text-sm">Save Current Settings</code> and save it as `scenario-10kwh-battery.json`.</li>
+                            <li>Change Section 3 to model a 20kWh battery. Run the analysis.</li>
+                            <li>Click <code class="bg-green-200 px-1 rounded text-sm">Save Current Settings</code> and save it as `scenario-20kwh-battery.json`.</li>
+                        </ol>
+                        <p class="mt-1 text-sm text-gray-600">You can now quickly load these different scenario files to compare them without re-entering all the data.</p>
+                    </li>
+                </ul>
+            </div>
+
+             <!-- Step 5: Related Feature: Reset All Providers -->
+            <div class="step border-t pt-4">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 5: Related Feature: Reset All Providers</h3>
+                <p>Also in this section is the <code class="bg-yellow-200 px-1 rounded text-sm">Reset All Providers</code> button. This is a quick way to restore the analyser's default provider list.</p>
+                 <div class="image-placeholder"><img src="images/savingandloading4.png" alt="Reset all providers and tariffs to defaults"></div>
+                 <div class="warning-note">
+                    <p><strong>Warning:</strong> This button is destructive. It will <span class="font-medium">permanently delete all your custom providers</span> and any edits you've made. It cannot be undone.</p>
+                    <p class="mt-2 font-semibold">Always use the <code class="bg-green-200 px-1 rounded text-sm">Save Current Settings</code> button to create a backup *before* using this reset button.</p>
+                </div>
+            </div>
+
+        </section>
+
+        <footer class="mt-12 text-center text-gray-500 text-sm">
+             <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Go Back</a>
+            <p>&copy; 2025 ROI Analyser Walkthroughs. Analyser by DaSando62.</p>
+        </footer>
+    </div>
+
+</body>
+</html>

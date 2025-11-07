@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Walkthrough: Scenario - Moving Controlled Load</title>
+    <!-- Link Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Link Custom CSS -->
+    <link rel="stylesheet" href="walkthrough_style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .step { margin-bottom: 2rem; }
+        .image-placeholder {
+            display: block;
+            margin-top: 0.75rem;
+            margin-bottom: 0.75rem;
+            padding: 2rem 1rem;
+            border: 2px dashed #9ca3af; /* gray-400 */
+            text-align: center;
+            color: #6b7280; /* gray-500 */
+            font-style: italic;
+            border-radius: 0.375rem; /* rounded-md */
+            background-color: #f9fafb; /* gray-50 */
+        }
+         .note {
+            background-color: #eff6ff; /* blue-50 */
+            border-left: 3px solid #3b82f6; /* blue-500 */
+            padding: 0.75rem;
+            border-radius: 0.25rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.9em;
+        }
+        .warning-note {
+            background-color: #fffbeb; /* yellow-50 */
+            border-left: 3px solid #f59e0b; /* yellow-500 */
+            padding: 0.75rem;
+            border-radius: 0.25rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.9em;
+        }
+        /* Style for linked section headers */
+        .section-link-header {
+            font-size: 1.0rem; /* Slightly smaller than h3 */
+            font-weight: 600; /* semibold */
+            color: #2563eb; /* blue-600 */
+        }
+        .section-link-header::after {
+            content: " →"; /* Add an arrow */
+            display: inline-block;
+            transition: transform 0.2s ease-in-out;
+        }
+        a:hover .section-link-header::after {
+            transform: translateX(3px); /* Move arrow slightly on hover */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto px-4 py-8 max-w-3xl">
+        <header class="mb-6">
+            <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Go Back</a>
+            <h1 class="text-3xl font-bold text-blue-700">Guide: Scenario - Moving Controlled Load</h1>
+        </header>
+
+        <section class="bg-white p-6 rounded-lg shadow-md">
+            <p class="mb-6 text-gray-600">This guide explains how to model the financial impact of moving your "Controlled Load" (like a hot water system or pool pump) from its dedicated, cheap tariff onto your main household circuit. The goal is to see if you can save more money by powering it with your "free" solar or battery energy instead.</p>
+
+            <!-- Step 1: Ensure You Have Controlled Load Data -->
+            <div class="step">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 1: Ensure You Have Controlled Load Data</h3>
+                <p>This feature will only work if the analyser knows how much controlled load energy you use. You must provide this data in Section 1:</p>
+                <ul class="list-disc pl-5 space-y-3 mt-3">
+                    <li>
+                        <strong>For NEM12 Mode:</strong>
+                        <p>No configuration is required as the file uses a standard format. You can check the file and see if there is "C1" or "C2" contained in the file.</p>
+                    </li>
+                    <li>
+                        <strong>For CSV Mode:</strong>
+                        <p>Ensure your usage file contains your controlled load data. In "Advanced Usage CSV Options", you must enter the correct <span class="font-medium">"Identifier for Controlled Load"</span> (e.g., "Controlled Load", "CL", "Off-Peak 2") that matches the text in your CSV file.</p>
+                        <div class="image-placeholder"><img src="images/controlledload1.png" alt="Controlled Load in CSV Mode"></div>
+                    </li>
+                    <li>
+                        <strong>For Manual Mode:</strong>
+                        <p>In each seasonal section, enter the total kWh from your bill into the <span class="font-medium">"Total Controlled Load for Period (kWh)"</span> field.</p>
+                        <div class="image-placeholder"><img src="images/controlledload2.png" alt="Controlled Load in Manual Mode"></div>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Step 2: Enable the Feature (Section 3) -->
+            <div class="step border-t pt-4">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 2: Enable the "Move Controlled Load" Option</h3>
+                <p>Go to <a href="section-3-new-system.html" class="text-blue-600 hover:underline"><strong class="section-link-header">Section 3: New System</strong></a>. Find and check the box labelled:</p>
+                <p class="font-medium my-2">"Move Controlled Load to main circuit"</p>
+                <div class="image-placeholder"><img src="images/controlledload3.png" alt="Moving the Controlled Load"></div>
+            </div>
+
+            <!-- Step 3: Understand the Simulation & Trade-Off -->
+            <div class="step border-t pt-4">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 3: Understand the Simulation & Trade-Off</h3>
+                <p>Checking this box fundamentally changes the simulation for your <b>New System</b>. Here is what happens:</p>
+                
+                <div class="note">
+                    <p><strong class="text-blue-700">Scenario 1: Checkbox is UNCHECKED (Default)</strong></p>
+                    <ul class="list-disc pl-5 mt-1 text-sm">
+                        <li>The analyser assumes your Controlled Load stays on its separate cheap tariff.</li>
+                        <li>Your solar/battery system will power your main household load, but you will <i>still pay</i> for your controlled load separately (at its cheap rate) in the "New System Cost".</li>
+                        <li><strong>Result:</strong> This is the safe, standard scenario.</li>
+                    </ul>
+                </div>
+
+                <div class="warning-note">
+                    <p><strong class="text-yellow-700">Scenario 2: Checkbox is CHECKED (You are testing this)</strong></p>
+                    <ul class="list-disc pl-5 mt-1 text-sm">
+                        <li>The analyser <span class="font-medium">removes</span> the separate, cheap controlled load cost.</li>
+                        <li>It <i>adds</i> your controlled load energy usage directly to your main household consumption profile (distributing it overnight for hot water, or as defined in the data).</li>
+                        <li>Your solar/battery system now tries to cover this new, <i>much larger</i> combined load.</li>
+                        <li>Any grid import needed to cover this combined load is now billed at your <i>expensive</i> main tariff rates (Peak, Shoulder, or Off-Peak).</li>
+                    </ul>
+                </div>
+                
+                <p class="mt-4 font-semibold">This is a financial trade-off:</p>
+                <p>Are the savings from powering your hot water with "free" solar/battery energy <span class="font-medium">greater than</span> the new cost of sometimes running it on expensive Peak/Shoulder grid power when your battery is empty?</p>
+            </div>
+
+            <!-- Step 4: Configure Other Sections -->
+            <div class="step border-t pt-4">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 4: Configure Other Sections</h3>
+                 <p>Ensure the rest of your analyser setup is complete. This feature interacts heavily with your new system size and provider tariffs.</p>
+                <ul class="list-disc pl-5 space-y-2 mt-2">
+                    <li><a href="section-2-existing-system.html" class="text-blue-600 hover:underline"><strong class="section-link-header">Section 2: Existing System</strong></a></li>
+                    <li><a href="section-3-new-system.html" class="text-blue-600 hover:underline"><strong class="section-link-header">Section 3: New System</strong></a> <i>Check that your battery & inverter are large enough for the new load!</i></li>
+                    <li><a href="section-4-financial-inputs.html" class="text-blue-600 hover:underline"><strong class="section-link-header">Section 4: Financial Inputs</strong></a></li>
+                    <li><a href="section-5-providers-tariffs.html" class="text-blue-600 hover:underline"><strong class="section-link-header">Section 5: Providers & Tariffs</strong></a> <i>Your main tariff rates are now critical to this calculation</i>.</li>
+                    <li><a href="section-6-analysis-period.html" class="text-blue-600 hover:underline"><strong class="section-link-header">Section 6: Analysis Period</strong></a></li>
+                </ul>
+            </div>
+
+            <!-- Step 5: Run Analysis & Interpret Results -->
+            <div class="step border-t pt-4">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 5: Run Analysis & Interpret Results</h3>
+                <p>Click the <code class="bg-blue-200 px-1 rounded text-sm">Run ROI Analysis</code> button. To see if this scenario is worth it, you should run the analysis twice:</p>
+                <ul class="list-decimal pl-5 space-y-1 mt-2">
+                    <li><strong>Run 1:</strong> Leave the "Move Controlled Load" box <span class="font-medium">UNCHECKED</span>. Note the final "NPV" or "Cumulative Net Cash Flow" for your best provider.</li>
+                    <li><strong>Run 2:</strong> Check the "Move Controlled Load" box. Run the analysis again.</li>
+                </ul>
+                <p class="mt-2">Compare the results. If the final NPV or Savings in Run 2 are <span class="font-medium">higher</span> than in Run 1, moving your controlled load is financially beneficial for your setup.</p>
+            </div>
+
+        </section>
+
+        <footer class="mt-12 text-center text-gray-500 text-sm">
+             <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Go Back</a>
+            <p>&copy; 2025 ROI Analyser Walkthroughs. Analyser by DaSando62.</p>
+        </footer>
+    </div>
+
+</body>
+</html>

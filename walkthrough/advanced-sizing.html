@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Walkthrough: Understanding the Sizing Recommendations</title>
+    <!-- Link Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Link Custom CSS -->
+    <link rel="stylesheet" href="walkthrough_style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .step { margin-bottom: 2rem; }
+        .image-placeholder {
+            display: block;
+            margin-top: 0.75rem;
+            margin-bottom: 0.75rem;
+            padding: 2rem 1rem;
+            border: 2px dashed #9ca3af; /* gray-400 */
+            text-align: center;
+            color: #6b7280; /* gray-500 */
+            font-style: italic;
+            border-radius: 0.375rem; /* rounded-md */
+            background-color: #f9fafb; /* gray-50 */
+        }
+         .note {
+            background-color: #eff6ff; /* blue-50 */
+            border-left: 3px solid #3b82f6; /* blue-500 */
+            padding: 0.75rem;
+            border-radius: 0.25rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.9em;
+        }
+        .warning-note {
+            background-color: #fffbeb; /* yellow-50 */
+            border-left: 3px solid #f59e0b; /* yellow-500 */
+            padding: 0.75rem;
+            border-radius: 0.25rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.9em;
+        }
+        /* Style for linked section headers */
+        .section-link-header {
+            font-size: 1.0rem; /* Slightly smaller than h3 */
+            font-weight: 600; /* semibold */
+            color: #2563eb; /* blue-600 */
+        }
+        .section-link-header::after {
+            content: " →"; /* Add an arrow */
+            display: inline-block;
+            transition: transform 0.2s ease-in-out;
+        }
+        a:hover .section-link-header::after {
+            transform: translateX(3px); /* Move arrow slightly on hover */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto px-4 py-8 max-w-3xl">
+        <header class="mb-6">
+            <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Go Back</a>
+            <h1 class="text-3xl font-bold text-blue-700">Guide: Understanding the Sizing Recommendations</h1>
+        </header>
+
+        <section class="bg-white p-6 rounded-lg shadow-md">
+            <p class="mb-6 text-gray-600">This feature, located in <a href="section-3-new-system.html" class="text-blue-600 hover:underline">Section 3</a>, helps you estimate what size solar panels, battery, and inverter might be appropriate for your needs <i>before</i> you run the full financial analysis. It provides two different types of recommendations.</p>
+
+            <!-- Step 1: How to Run the Calculation -->
+            <div class="step">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 1: How to Run the Calculation</h3>
+                <p>Before using this tool, you must first complete <span class="font-medium">Section 1: Data Input</span> (either CSV/NEM12 or Manual Mode).</p>
+                <p>Once your data is loaded, go to <a href="section-3-new-system.html" class="text-blue-600 hover:underline"><strong class="section-link-header">Section 3: New System</strong></a> and click the <code class="bg-blue-200 px-1 rounded text-sm">Calculate Sizing Recommendation</code> button.</p>
+                <div class="image-placeholder"><img src="images/sizing1.png" alt="Battery sizing calculations"></div>
+                <p>The results will appear in a new sub-section just below the button.</p>
+            </div>
+
+            <!-- Step 2: Understanding "Simple Sizing" (All Modes) -->
+            <div class="step border-t pt-4">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 2: Understanding "Simple Sizing" (All Modes)</h3>
+                <p>This is a basic, "top-down" estimate based on your <span class="font-medium">total annual energy consumption</span>.</p>
+                <div class="image-placeholder"><img src="images/sizing2.png" alt="Simple sizing calculation"></div>
+                <ul class="list-disc pl-5 space-y-2 mt-2">
+                    <li><strong>Recommended Solar (kW):</strong> This size is calculated based on the <span class="font-medium">"Energy Self-Sufficiency (%)"</span> target you set in Section 3. For example, a 90% target aims to size a solar system large enough to generate 90% of your total annual electricity usage.</li>
+                    <li><strong>Recommended Battery (kWh):</strong> This is a rough heuristic (general guess) based on your average daily consumption patterns (Peak vs. Off-Peak).</li>
+                    <li><strong>Recommended Inverter (kW):</strong> This is a simple estimate based on the recommended solar size.</li>
+                    <li><strong>"Apply Simple Sizing" Button:</strong> Clicking this button will copy these three recommended values into the "Additional Solar Panel Size", "Additional Battery Size", and "Additional Battery Inverter" fields for you.</li>
+                </ul>
+            </div>
+
+            <!-- Step 3: Understanding "Detailed Sizing" (CSV/NEM12 Mode Only) -->
+            <div class="step border-t pt-4">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 3: Understanding "Detailed Sizing" (CSV/NEM12 Mode Only)</h3>
+                <p>This powerful recommendation only appears if you have uploaded your interval data (CSV or NEM12). It performs a "bottom-up" analysis of your <span class="font-medium">actual daily habits</span>.</p>
+                <div class="image-placeholder"><img src="images/sizing3.png" alt="Detailed sizing calculation"></div>
+                <ul class="list-disc pl-5 space-y-2 mt-2">
+                    <li>
+                        <strong>Recommended Battery Capacity (kWh):</strong> This is based on your <span class="font-medium">Daily Peak Period Load</span>. The analyser finds your typical "high-usage" day (e.g., the 90th percentile) and recommends a battery large enough to cover the energy you used during the expensive peak tariff hours on that day.
+                    </li>
+                    <li>
+                        <strong>Recommended Inverter Power (kW):</strong> This is based on your <span class="font-medium">Daily Maximum Hourly Load</span>. The analyser finds the single hour of highest power (kW) you pulled from the grid (after solar) on your "high-usage" days. This recommends an inverter powerful enough to handle your peak demand spikes without tripping.
+                    </li>
+                    <li>
+                        <strong>The Histograms (Charts):</strong> These charts visualize the data:
+                        <ul class="list-circle pl-5 mt-1 text-sm">
+                            <li><strong>Peak Period Load Distribution:</strong> Shows how many days you have "low" vs. "high" peak energy needs. A long tail to the right suggests a larger battery will be more beneficial.</li>
+                            <li><strong>Maximum Hourly Load Distribution:</strong> Shows how often you have high power spikes. A few tall bars on the far right suggest a more powerful (higher kW) inverter is necessary.</li>
+                        </ul>
+                    </li>
+                    <li><strong>"Apply Detailed Sizing" Button:</strong> Clicking this copies the <i>Battery</i> and <i>Inverter</i> values. (Solar size is left for you to decide, as it's more dependent on roof space and budget).</li>
+                </ul>
+            </div>
+            
+            <!-- Step 4: Understanding "Blackout Protection Sizing" -->
+            <div class="step border-t pt-4">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 4: Understanding "Blackout Protection Sizing"</h3>
+                <p>This is an optional add-on to the "Detailed Sizing" recommendation, enabled by a checkbox in Section 3.</p>
+                <div class="image-placeholder"><img src="images/sizing4.png" alt="Blackout protection calculation"></div>
+                 <ul class="list-disc pl-5 space-y-2 mt-2">
+                    <li>This calculation finds your <span class="font-medium">worst-case energy usage</span> (highest consumption period) in your historical data that matches the "Blackout Duration" you set.</li>
+                    <li>It then calculates the <i>additional</i> battery capacity (a "reserve") needed to cover the "Usage Coverage" percentage you specified for that worst-case scenario.</li>
+                    <li>The final recommendation shows you: <br>
+                        <code class="text-sm">(Detailed Daily Battery Size) + (Blackout Reserve Size) = Total Recommended Practical Size</code></li>
+                </ul>
+            </div>
+
+            <!-- Step 5: What to do next -->
+            <div class="step border-t pt-4">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 5: What To Do Next</h3>
+                <p>The sizing recommendations are a guide, not a final answer. A good workflow is:</p>
+                <ol class="list-decimal pl-5 space-y-1 mt-2">
+                    <li>Run the Sizing calculation.</li>
+                    <li>Click "Apply Simple Sizing" or "Apply Detailed Sizing" to populate the inputs in Section 3.</li>
+                    <li>Manually adjust the "Additional Solar Panel Size" and costs based on quotes you have received.</li>
+                    <li>Configure the rest of the analyser (Sections 4, 5, 6).</li>
+                    <li>Run the main <code class="bg-blue-200 px-1 rounded text-sm">Run ROI Analysis</code> button to see the full financial breakdown for that recommended system.</li>
+                </ol>
+            </div>
+
+        </section>
+
+        <footer class="mt-12 text-center text-gray-500 text-sm">
+             <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Go Back</a>
+            <p>&copy; 2025 ROI Analyser Walkthroughs. Analyser by DaSando62.</p>
+        </footer>
+    </div>
+
+</body>
+</html>

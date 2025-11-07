@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Walkthrough: Using the Advanced Debugging Tools</title>
+    <!-- Link Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Link Custom CSS -->
+    <link rel="stylesheet" href="walkthrough_style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .step { margin-bottom: 2rem; }
+        .image-placeholder {
+            display: block;
+            margin-top: 0.75rem;
+            margin-bottom: 0.75rem;
+            padding: 2rem 1rem;
+            border: 2px dashed #9ca3af; /* gray-400 */
+            text-align: center;
+            color: #6b7280; /* gray-500 */
+            font-style: italic;
+            border-radius: 0.375rem; /* rounded-md */
+            background-color: #f9fafb; /* gray-50 */
+        }
+         .note {
+            background-color: #eff6ff; /* blue-50 */
+            border-left: 3px solid #3b82f6; /* blue-500 */
+            padding: 0.75rem;
+            border-radius: 0.25rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto px-4 py-8 max-w-3xl">
+        <header class="mb-6">
+            <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Go Back</a>
+            <h1 class="text-3xl font-bold text-blue-700">Guide: Using the Advanced Debugging Tools</h1>
+        </header>
+
+        <section class="bg-white p-6 rounded-lg shadow-md">
+            <p class="mb-6 text-gray-600">The analyser includes a set of optional "Debug Tables" that show you the intermediate data and calculations. These are useful for advanced users who want to verify the simulation's inputs and outputs in detail.</p>
+
+            <!-- Step 1: Enable Debug Tools -->
+            <div class="step">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 1: Enable Debug Tools</h3>
+                <p>In Section 1: Data Input, check the box labelled <span class="font-medium">"Enable/Disable Debug Tools"</span>.</p>
+                <div class="image-placeholder"><img src="images/debug1.png" alt="Enabling the debug tables"></div>
+                <p>Checking this box will make a red <code class="bg-red-200 px-1 rounded text-sm">Show Debug Table</code> button appear at the bottom of most sections (Sections 1-6).</p>
+            </div>
+
+            <!-- Step 2: Accessing the Debug Tables -->
+            <div class="step border-t pt-4">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 2: Accessing the Debug Tables</h3>
+                <p>Click the <code class="bg-red-200 px-1 rounded text-sm">Show Debug Table</code> button within any section to view the data relevant to that section. Clicking the button again will hide the table.</p>
+                <div class="note">
+                    <p><strong>Tip:</strong> The tables show data based on the *current* inputs in the UI. If you run a new analysis, some tables (like the Provider debug table) will automatically refresh with the latest simulation results if they are left open.</p>
+                </div>
+            </div>
+
+            <!-- Step 3: What Each Table Shows -->
+            <div class="step border-t pt-4">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 3: What Each Table Shows</h3>
+                <p>Here is a breakdown of what each debug table displays:</p>
+                <ul class="list-none space-y-4 mt-3">
+                    <li>
+                        <strong class="font-medium text-gray-700">Section 1: Data Input Debug Table</strong>
+                        <p class="text-sm text-gray-600 pl-4">Shows the raw hourly data (Consumption, Feed In, Solar) that the analyser is using for its simulation. In CSV mode, it shows the first 100 days of data. In Manual Mode, it shows the calculated hourly profiles based on your total inputs.</p>
+                         <div class="image-placeholder"><img src="images/debug2.png" alt="The Data Input debug table"></div>
+                    </li>
+                    <li>
+                        <strong class="font-medium text-gray-700">Section 2: Existing System Debug Table</strong>
+                        <p class="text-sm text-gray-600 pl-4">Displays the "Existing System Inputs" you've entered. More importantly, it shows a "Baseline Data Analysis" (annualised totals for Consumption, Generation, Self-Consumption, etc.) calculated from your provided data (CSV or Manual Totals).</p>
+                         <div class="image-placeholder"><img src="images/debug3.png" alt="The Existing System debug table"></div>
+                    </li>
+                     <li>
+                        <strong class="font-medium text-gray-700">Section 4: Financial Inputs Debug Tables</strong>
+                        <p class="text-sm text-gray-600 pl-4">Shows the year-by-year calculation for your loan amortization schedule (if enabled) and the future value of your capital based on the discount rate (if enabled).</p>
+                         <div class="image-placeholder"><img src="images/debug4.png" alt="The Financial Loan table "></div>
+                         <div class="image-placeholder"><img src="images/debug5.png" alt="The Financial Opportunity Cost table "></div>
+                    </li>
+                    <li>
+                        <strong class="font-medium text-gray-700">Section 5: Providers Debug Table</strong>
+                        <p class="text-sm text-gray-600 pl-4">This is one of the most useful tables. It shows the calculated "Total Household Consumption" averages (Peak, Shoulder, etc.) based on your baseline provider's rules. It then shows the <i>simulated</i> battery performance (Avg. Solar Charge, Avg. Grid Charge, Avg. SOC at 6am) for each provider you've selected.</p>
+                         <div class="image-placeholder"><img src="images/debug6.png" alt="The Providers and Tariff table"></div>
+                    </li>
+                    <li>
+                        <strong class="font-medium text-gray-700">Section 6: Analysis Period Debug Table</strong>
+                        <p class="text-sm text-gray-600 pl-4">Shows a year-by-year schedule of the degraded performance (Total kW and Total kWh) for your solar panels and batteries based on the degradation rates you've set.</p>
+                         <div class="image-placeholder"><img src="images/debug7.png" alt="The Analysis Period Inputs table"></div>
+                    </li>
+                     <li>
+                        <strong class="font-medium text-gray-700">Section 7: Raw Data Tables (Results)</strong>
+                        <p class="text-sm text-gray-600 pl-4">This button (labelled "Show Raw Data Tables") appears with your results. It shows the final seasonal and annual totals for Year 1 performance, comparing your Baseline scenario to each of your selected Provider (New System) scenarios.</p>
+                         <div class="image-placeholder"><img src="images/debug8.png" alt="The Raw Data tables"></div>
+                    </li>
+                </ul>
+            </div>
+
+        </section>
+
+        <footer class="mt-12 text-center text-gray-500 text-sm">
+             <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Go Back</a>
+            <p>&copy; 2025 ROI Analyser Walkthroughs. Analyser by DaSando62.</p>
+        </footer>
+    </div>
+
+</body>
+</html>

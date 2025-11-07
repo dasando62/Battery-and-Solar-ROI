@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Walkthrough: Scenario - Adding EV Charging</title>
+    <!-- Link Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Link Custom CSS -->
+    <link rel="stylesheet" href="walkthrough_style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .step { margin-bottom: 2rem; }
+        .image-placeholder {
+            display: block;
+            margin-top: 0.75rem;
+            margin-bottom: 0.75rem;
+            padding: 2rem 1rem;
+            border: 2px dashed #9ca3af; /* gray-400 */
+            text-align: center;
+            color: #6b7280; /* gray-500 */
+            font-style: italic;
+            border-radius: 0.375rem; /* rounded-md */
+            background-color: #f9fafb; /* gray-50 */
+        }
+         .note {
+            background-color: #eff6ff; /* blue-50 */
+            border-left: 3px solid #3b82f6; /* blue-500 */
+            padding: 0.75rem;
+            border-radius: 0.25rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.9em;
+        }
+        /* Style for linked section headers */
+        .section-link-header {
+            font-size: 1.0rem; /* Slightly smaller than h3 */
+            font-weight: 600; /* semibold */
+            color: #2563eb; /* blue-600 */
+        }
+        .section-link-header::after {
+            content: " →"; /* Add an arrow */
+            display: inline-block;
+            transition: transform 0.2s ease-in-out;
+        }
+        a:hover .section-link-header::after {
+            transform: translateX(3px); /* Move arrow slightly on hover */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto px-4 py-8 max-w-3xl">
+        <header class="mb-6">
+            <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Go Back</a>
+            <h1 class="text-3xl font-bold text-blue-700">Guide: Scenario - Modelling EV Charging</h1>
+        </header>
+
+        <section class="bg-white p-6 rounded-lg shadow-md">
+            <p class="mb-6 text-gray-600">This guide explains how to use the "Electric Vehicle (EV) Charging" feature. This allows you to simulate the financial impact of adding an EV to your household, showing how a solar and battery system can help offset the new charging costs.</p>
+            <div class="note">
+                <p><strong>Prerequisite:</strong> Before starting, you should have already set up your main household data (either via CSV/NEM12 upload or Manual Mode bill entry). The EV charging load will be <span class="font-medium">added on top</span> of this existing household load.</p>
+            </div>
+
+            <!-- Step 1: Enable & Configure the EV (Section 1) -->
+            <div class="step">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 1: Enable & Configure the EV</h3>
+                <p>Go to the collapsible section titled <span class="font-medium">"Electric Vehicle (EV) Charging"</span> (located just below Section 1: Data Input).</p>
+                <div class="image-placeholder"><img src="images/evcharge1.png" alt="Enable EV Charging"></div>
+                <ul class="list-disc pl-5 space-y-2 mt-2">
+                    <li>
+                        <strong>Enable EV Charging Simulation:</strong> Check this box to turn the feature on. This will add the simulated charging load to both your "Baseline" cost and your "New System" cost calculations.
+                    </li>
+                    <li>
+                        <strong>Average Daily Driving (km):</strong> Enter the average number of kilometres you drive (or plan to drive) each day.
+                    </li>
+                    <li>
+                        <strong>EV Efficiency (kWh / 100km):</strong> Enter your EV's energy efficiency.
+                        <div class="note text-sm">
+                            <p>You can find this on your car's dashboard or by a quick search. Typical values are <strong>15-18 kWh/100km</strong> for efficient models (like a Tesla Model 3) or <strong>20-25 kWh/100km</strong> for larger electric SUVs.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <strong>Minimum Solar Battery % for EV Charging:</strong> This is a crucial setting to protect your home's battery. It sets a "reserve" level. The EV will <span class="font-medium">not</span> be allowed to charge from the home battery (using a "From Battery" rule) if the battery's charge is below this percentage. This ensures you save enough power for your household's evening peak usage.
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Step 2: Set Up Charging Rules (Section 5) -->
+            <div class="step border-t pt-4">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 2: Set Up Charging Rules (in Section 5)</h3>
+                <p>This is the most important part, as it defines <i>how</i> and <i>>when</i> your EV charges. The analyser lets you set different charging strategies for each provider, which is configured in <a href="section-5-providers-tariffs.html" class="text-blue-600 hover:underline"><strong class="section-link-header">Section 5: Providers & Tariffs</strong></a>.</p>
+                <p>Go to a provider's details and find the <span class="font-medium">"EV Charging Rules"</span> section.</p>
+                <div class="image-placeholder"><img src="images/evcharge2.png" alt="EV Charging rules"></div>
+                
+                <p class="mt-2 font-medium">The analyser processes these rules in <span class="font-semibold text-red-600">Priority Order</span> (top to bottom). It tries to fulfill the day's total EV charging need (calculated from Step 1) using the first rule. Any remaining need is passed to the second rule, and so on.</p>
+                <p class="mt-2 font-medium">For each rule, you set the Source and Time:</p>
+                <ul class="list-disc pl-5 space-y-2 mt-2">
+                    <li>
+                        <strong>Source: "From Excess Solar"</strong><br>
+                        This is "smart charging". The EV will only charge during the specified hours (e.g., "9am-4pm") and only using solar power that would have otherwise been exported to the grid. This is the cheapest way to charge.
+                    </li>
+                    <li>
+                        <strong>Source: "From Battery"</strong><br>
+                        This allows the EV to charge from your home battery during the specified hours. This is useful if the EV arrives home *after* the sun has gone down but you still want to use stored solar. It respects the "Minimum Solar Battery %" you set in Step 1.
+                    </li>
+                    <li>
+                        <strong>Source: "From Grid"</strong><br>
+                        This is "dumb charging" from the grid. The EV will pull its required power from the grid during the specified hours. This is your "last resort" rule to ensure the car is charged by morning.
+                    </li>
+                </ul>
+
+                <div class="note">
+                    <p class="font-semibold">Recommended Strategy Example:</p>
+                    <ul class="list-decimal pl-5 mt-2 text-sm">
+                        <li><strong>Rule 1:</strong> Source: <code>From Excess Solar</code>, Hours: <code>9am-4pm</code> (Charges from free solar first)</li>
+                        <li><strong>Rule 2:</strong> Source: <code>From Grid</code>, Hours: <code>11pm-6am</code> (Tops up from cheap off-peak grid power)</li>
+                    </ul>
+                    <p class="mt-2 text-sm">This strategy ensures the EV prioritises solar and only uses the grid during the cheapest off-peak times, maximizing your savings.</p>
+                </div>
+            </div>
+
+            <!-- Step 3: Configure Other Sections -->
+            <div class="step border-t pt-4">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 3: Configure Other Sections</h3>
+                 <p>Ensure the rest of your analyser setup is complete. The EV simulation will interact with all other parts of your configuration (your battery size, inverter limits, etc.).</p>
+                <ul class="list-disc pl-5 space-y-2 mt-2">
+                    <li><a href="section-2-existing-system.html" class="text-blue-600 hover:underline"><strong class="section-link-header">Section 2: Existing System</strong></a></li>
+                    <li><a href="section-3-new-system.html" class="text-blue-600 hover:underline"><strong class="section-link-header">Section 3: New System</strong></a></li>
+                    <li><a href="section-4-financial-inputs.html" class="text-blue-600 hover:underline"><strong class="section-link-header">Section 4: Financial Inputs</strong></a></li>
+                    <li><a href="section-6-analysis-period.html" class="text-blue-600 hover:underline"><strong class="section-link-header">Section 6: Analysis Period</strong></a></li>
+                </ul>
+            </div>
+
+            <!-- Step 4: Run Analysis & Interpret Results -->
+            <div class="step border-t pt-4">
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">Step 4: Run Analysis & Interpret Results</h3>
+                <p>Click the <code class="bg-blue-200 px-1 rounded text-sm">Run ROI Analysis</code> button. When you enable EV charging, the simulated EV load is added to <i>both</i> your "Baseline Cost" and your "New System Cost".</p>
+                <ul class="list-disc pl-5 space-y-1 mt-2">
+                    <li>Your <b>Baseline Cost</b> will be higher (reflecting charging the EV from the grid).</li>
+                    <li>Your <b>New System Cost</b> will also be higher (reflecting the EV charging), but your <b>Total Savings</b> should be much larger, as the solar/battery system is now offsetting these new, expensive charging costs in addition to your normal household load.</li>
+                </ul>
+                <p class="mt-2">This allows you to accurately model the <i>additional</i> value a solar & battery system provides specifically for an EV owner.</p>
+            </div>
+
+        </section>
+
+        <footer class="mt-12 text-center text-gray-500 text-sm">
+             <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800 hover:underline mb-4 inline-block">&larr; Go Back</a>
+            <p>&copy; 2025 ROI Analyser Walkthroughs. Analyser by DaSando62.</p>
+        </footer>
+    </div>
+
+</body>
+</html>

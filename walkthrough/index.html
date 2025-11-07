@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale-1.0">
     <title>ROI Analyser Walkthroughs</title>
     <!-- Link Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -18,45 +18,48 @@
 <body class="bg-gray-100 text-gray-800">
 
     <div class="container mx-auto px-4 py-8 max-w-3xl">
-        <header class="mb-8 text-center">
-            <h1 class="text-3xl font-bold text-blue-700">Home Solar & Battery ROI Analyser Walkthroughs</h1>
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-blue-700 mb-2">ROI Analyser Walkthroughs</h1>
+            <p class="text-lg text-gray-600">Guides to help you get the most out of the Home Battery & Solar ROI Analyser.</p>
+            <a href="../index.html" class="mt-4 inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg transition duration-200 shadow">
+                Go to the ROI Analyser
+            </a>
         </header>
 
         <section class="bg-white p-6 rounded-lg shadow-md mb-8">
-            <h2 class="text-2xl font-semibold mb-4 text-gray-700">About the Analyser</h2>
-            <p class="mb-4">
-                This analyser helps you estimate the return on investment (ROI) for installing a home solar panel and battery system. It uses your actual energy usage data (or estimates you provide) to simulate performance over time, considering system degradation, changing tariffs, and financing options.
-            </p>
-            <p class="mb-4">
-                The goal is to provide a detailed, data-driven comparison of different system configurations and electricity providers, helping you make informed decisions when evaluating quotes.
-            </p>
-            <div class="text-center mt-6">
-                 <a href="../index.html" target="_blank" rel="noopener noreferrer" class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg transition duration-200 shadow">
-                    Go to the ROI Analyser
-                </a>
-            </div>
-        </section>
-
-        <section class="bg-white p-6 rounded-lg shadow-md">
-            <h2 class="text-2xl font-semibold mb-4 text-gray-700">Walkthrough Guides</h2>
-            <p class="mb-4 text-gray-600">Choose a guide below to learn how to use specific features of the analyser:</p>
-            <ul class="list-disc pl-5 space-y-3">
-                <!-- Links will eventually point to separate HTML pages for each walkthrough -->
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4 border-b pb-2">Getting Started: Data Input Guides</h2>
+            <ul class="list-disc pl-5 space-y-2">
                 <li><a href="manual-tou.html" class="text-blue-600 hover:text-blue-800 hover:underline">Entering Bill Data (Manual Mode - ToU Tariff)</a></li>
                 <li><a href="manual-flat.html" class="text-blue-600 hover:text-blue-800 hover:underline">Entering Bill Data (Manual Mode - Flat Rate Tariff)</a></li>
                 <li><a href="csv.html" class="text-blue-600 hover:text-blue-800 hover:underline">Importing Data (Advanced CSV Option)</a></li>
                 <li><a href="nem12.html" class="text-blue-600 hover:text-blue-800 hover:underline">Importing Data (NEM12 Option)</a></li>
-                <li><a href="no_solar.html" class="text-blue-600 hover:text-blue-800 hover:underline">Scenario: No Existing Solar/Battery System</a></li>
-                <li><a href="#" class="text-blue-600 hover:text-blue-800 hover:underline">Scenario: Adding EV Charging</a></li>
-                <li><a href="#" class="text-blue-600 hover:text-blue-800 hover:underline">Scenario: Moving Controlled Load</a></li>
-                <!-- Add more list items as you create more walkthroughs -->
             </ul>
         </section>
+
+        <section class="bg-white p-6 rounded-lg shadow-md mb-8">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4 border-b pb-2">Common Scenarios</h2>
+            <ul class="list-disc pl-5 space-y-2">
+                <li><a href="no-solar.html" class="text-blue-600 hover:text-blue-800 hover:underline">Scenario: No Existing Solar/Battery System</a></li>
+                <li><a href="ev-charging.html" class="text-blue-600 hover:text-blue-800 hover:underline">Scenario: Modelling EV Charging</a></li>
+                <li><a href="moving-controlled-load.html" class="text-blue-600 hover:text-blue-800 hover:underline">Scenario: Modelling Moving Your Controlled Load</a></li>
+            </ul>
+        </section>
+
+        <!-- ** NEW SECTION ** -->
+        <section class="bg-white p-6 rounded-lg shadow-md mb-8">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4 border-b pb-2">Advanced Features</h2>
+            <ul class="list-disc pl-5 space-y-2">
+                <li><a href="advanced-debugging.html" class="text-blue-600 hover:text-blue-800 hover:underline">Using the Debugging Tools</a></li>
+                <li><a href="advanced-exporting.html" class="text-blue-600 hover:text-blue-800 hover:underline">Exporting to PDF and CSV</a></li>
+                <li><a href="advanced-saving-loading.html" class="text-blue-600 hover:text-blue-800 hover:underline">Saving & Loading Your Configuration</a></li>
+                <li><a href="advanced-sizing.html" class="text-blue-600 hover:text-blue-800 hover:underline">Understanding the Sizing Recommendations</a></li>
+            </ul>
+        </section>
+        <!-- ** END NEW SECTION ** -->
 
         <footer class="mt-12 text-center text-gray-500 text-sm">
             <p>&copy; 2025 ROI Analyser Walkthroughs. Analyser by DaSando62.</p>
         </footer>
-
     </div>
 
 </body>
