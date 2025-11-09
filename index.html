@@ -232,7 +232,10 @@ Walkthroughs and User guides are available <a href="walkthrough/index.html" clas
 </section>
 
 <section>
-    <h2>2. Existing System</h2>
+    <div class="section-header-container">
+        <h2>2. Existing System</h2>
+        <a href="walkthrough/section-2-existing-system.html" class="help-link" target="_blank" title="Go to the guide for Section 2">?</a>
+    </div>
 	<label title="Add any existing solar panels in this field, they will be degraded by the &quot;Solar Degradation (% per year):&quot; for the &quot;Existing System Age (Years):&quot;.">Existing Solar Panel Size (kW): <input type="number" step="0.1" id="existingSolarKW" value="0"></label>
     <label title="For a hybrid inverter, enter its total power rating here. For a standard system, enter the rating of the solar-only inverter.">
 	Existing Solar Inverter Size (kW): <input type="number" step="0.1" id="existingSolarInverter" value="0"></label>
@@ -251,7 +254,10 @@ Walkthroughs and User guides are available <a href="walkthrough/index.html" clas
 </section>
 
 <section>
-    <h2>3. New System</h2>
+    <div class="section-header-container">
+        <h2>3. New System</h2>
+        <a href="walkthrough/section-3-new-system.html" class="help-link" target="_blank" title="Go to the guide for Section 3">?</a>
+    </div>
     
     <label title="Enter the size of any NEW solar panels you are adding to your system. Do not include the size of your existing panels here.">Additional Solar Panel Size (kW): <input type="number" step="0.1" id="newSolarKW" value="4"></label>
 	
@@ -325,7 +331,10 @@ Walkthroughs and User guides are available <a href="walkthrough/index.html" clas
     </section>
 </section>
 
-<h2>4. Financial Inputs</h2>
+    <div class="section-header-container">
+        <h2>4. Financial Inputs</h2>
+        <a href="walkthrough/section-4-financial-inputs.html" class="help-link" target="_blank" title="Go to the guide for Section 4">?</a>
+    </div>
 <label title="Enable this option to include the cost of a loan in the financial analysis. For each year of the loan term, the annual loan repayment amount will be subtracted from your yearly savings, giving you a more accurate net cash flow and payback period."><input type="checkbox" id="enableLoan" checked > Enable Loan Financing</label>
 <div id="loanSettingsContainer" class="subsettings">
     <label>Loan Amount ($): <input type="number" step="100" id="loanAmount" value="12000"></label>
@@ -346,7 +355,10 @@ Walkthroughs and User guides are available <a href="walkthrough/index.html" clas
 </section>
 
 <section>
-<h2>5. Providers & Tariffs</h2>
+<div class="section-header-container">
+    <h2>5. Providers & Tariffs</h2>
+    <a href="walkthrough/section-5-providers-tariffs.html" class="help-link" target="_blank" title="Go to the guide for Section 5">?</a>
+</div>
 <p>Enter all Feed-in Tariffs (FIT) as positive numbers. They will be treated as a credit and subtracted from your bill.</p>
 <label title="This is an estimate of the per annum increase in tariffs (import and daily charges)">Annual Tariff Escalation (% per year): <input type="number" step="0.1" id="tariffEscalation" value="2" ></label>
 <label title="Used to specify the year that Feed In Tariff will start to decrease.">Start of FIT Degradation Year: <input type="number" id="fitDegradationStartYear" value="1" ></label>
@@ -365,7 +377,10 @@ Walkthroughs and User guides are available <a href="walkthrough/index.html" clas
 </section>
 
 <section>
-<h2>6. Analysis Period</h2>
+<div class="section-header-container">
+    <h2>6. Analysis Period</h2>
+    <a href="walkthrough/section-6-analysis-period.html" class="help-link" target="_blank" title="Go to the guide for Section 6">?</a>
+</div>
 <label>Analysis Years (System Lifespan): <input type="number" id="numYears" value="15" placeholder="e.g., 15"></label>
 <label title="Enter the annual percentage that your solar panels' power output will decrease (degrade). This rate is applied to both your new panels and your existing panels. For example, if your existing system is 5 years old, its power output will be reduced by 5 years' worth of degradation from the start of the analysis.">Solar Degradation (% per year): <input type="number" step="0.1" id="solarDegradation" value="0.5"></label>
 <label title="Enter the annual percentage that your battery's storage capacity (kWh) will decrease (degrade). The calculator applies this to both new and existing batteries. For example, if your existing system is 5 years old, its capacity will be reduced by 5 years' worth of degradation from the start of the analysis.">Battery Degradation (% per year): <input type="number" step="0.1" id="batteryDegradation" value="2" ></label>

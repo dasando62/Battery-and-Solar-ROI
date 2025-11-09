@@ -234,3 +234,47 @@ body.pdf-export-mode #pdf-report-generator {
     font-size: 0.9em;
     color: #555;
 }
+
+/* --- Styles for Section Header Help Links --- */
+
+/* 1. Make the new wrapper a flex container */
+.section-header-container {
+    display: flex;
+    justify-content: space-between; /* Pushes H2 and Link apart */
+    align-items: center;        /* Vertically centers them */
+    /* This ensures the container has the same spacing as the original H2 */
+    margin-bottom: 30px; 
+}
+
+/* 2. Remove margin from the H2 *inside* this container */
+.section-header-container h2 {
+   margin: 0;
+}
+
+/* 3. Style the help link */
+.help-link {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    
+    width: 24px;   /* Small circle */
+    height: 24px;  /* Small circle */
+    
+    background-color: #007BFF; /* Blue, matches .run-button */
+    color: #fff;                /* White text */
+    
+    font-size: 16px;
+    font-weight: bold;
+    text-decoration: none;
+    border-radius: 50%;      /* Makes it a circle */
+    
+    /* Smooth transition for hover */
+    transition: background-color 0.2s ease;
+}
+
+/* 4. Add the hover effect */
+.help-link:hover {
+    background-color: #0056b3; /* Darker blue, matches .run-button:hover */
+    color: #fff;
+    text-decoration: none;
+}
