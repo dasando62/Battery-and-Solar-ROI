@@ -1,5 +1,5 @@
 // js/uiRender.js
-// Version 1.3.5
+// Version 1.3.6
 // This module is responsible for all UI rendering that occurs AFTER a calculation
 // or analysis is complete. This includes displaying financial results tables,
 // rendering charts, and showing system sizing recommendations.

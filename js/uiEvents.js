@@ -1,5 +1,5 @@
 // js/uiEvents.js 
-// Version 1.3.5
+// Version 1.3.6
 // This module serves as the central hub for handling all user interactions.
 // It attaches event listeners to UI elements and calls the appropriate business logic
 // from other modules in response to user actions (e.g., clicks, changes).

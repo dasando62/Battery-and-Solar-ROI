@@ -278,3 +278,37 @@ body.pdf-export-mode #pdf-report-generator {
     color: #fff;
     text-decoration: none;
 }
+
+/* --- Analyser Footer Styles --- */
+.analyser-footer {
+    margin-top: 10px;      /* Add space above the footer */
+    padding-top: 5px;
+    border-top: 1px solid #eee; /* Light separator line */
+    font-size: 0.85em;     /* Smaller text */
+    color: #777;           /* Grey text */
+    text-align: center;
+}
+
+.analyser-footer p {
+    margin-bottom: 10px;
+}
+
+/* Style the list for the privacy points */
+.analyser-footer ul {
+    list-style-type: disc; /* 1. Use standard bullets */
+    padding-left: 20px;  /* 2. Add standard indentation for bullets */
+    margin-left: auto;
+    margin-right: auto;
+    text-align: left;    /* 3. Align list items to the left */
+    max-width: 500px;    /* 4. Constrain width for better centering */
+}
+
+/* Use flexbox to make list items sit side-by-side on larger screens */
+@media (min-width: 640px) {
+    .analyser-footer ul {
+    }
+}
+
+.analyser-footer li {
+    margin-bottom: 5px;
+}f
